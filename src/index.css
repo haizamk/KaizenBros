@@ -1,0 +1,547 @@
+@import "tailwindcss";
+
+body {
+  background-color: #0A0C10;
+  color: #E2E8F0;
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer utilities {
+  .animate-fadeIn {
+    animation: fadeIn 0.22s ease-out forwards;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Custom CSS Print Rules for Medical PDF Generation */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+
+  /* Hide header controls, dark overlays, buttons */
+  .print\:hidden,
+  button,
+  .fixed.top-2 {
+    display: none !important;
+  }
+
+  /* Reset fixed positioning so browser prints content inline smoothly */
+  .fixed {
+    position: static !important;
+    background: transparent !important;
+  }
+
+  .overflow-y-auto {
+    overflow: visible !important;
+  }
+
+  .shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm, .shadow-xs {
+    box-shadow: none !important;
+  }
+
+  .bg-\[\#0A0C10\]\/80, .backdrop-blur-xs {
+    background: transparent !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Page break utilities */
+  .page-break-after-always {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .page-break-before-always {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .page-break-inside-avoid, tr, tbody {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Force background colors and border colors in print mode */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ensure text is dark and readable for print */
+  .text-slate-900, .text-slate-800, .text-slate-700 {
+    color: #0f172a !important;
+  }
+}
+
+/* ==========================================
+   THEME 1: PUTIH DAN FOOTER HITAM (light-black-footer)
+   ========================================== */
+html.theme-light-black-footer,
+body.theme-light-black-footer,
+.theme-light-black-footer {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Light background remapping for containers & cards */
+.theme-light-black-footer .app-body,
+.theme-light-black-footer main,
+.theme-light-black-footer .bg-\[\#0A0C10\],
+.theme-light-black-footer .bg-\[\#0F172A\],
+.theme-light-black-footer .bg-\[\#111827\],
+.theme-light-black-footer .bg-\[\#0B1120\] {
+  background-color: #ffffff !important;
+}
+
+.theme-light-black-footer .bg-\[\#131F30\],
+.theme-light-black-footer .bg-\[\#1E293B\],
+.theme-light-black-footer .bg-\[\#1F2937\] {
+  background-color: #f1f5f9 !important;
+}
+
+/* Modal backgrounds */
+.theme-light-black-footer .bg-\[\#111827\]\/95,
+.theme-light-black-footer .bg-\[\#0F172A\]\/95,
+.theme-light-black-footer .fixed .bg-\[\#0F172A\],
+.theme-light-black-footer .fixed .bg-\[\#111827\] {
+  background-color: #ffffff !important;
+}
+
+/* Input fields, dropdowns & textareas in light mode */
+.theme-light-black-footer input:not([type="checkbox"]):not([type="radio"]),
+.theme-light-black-footer select,
+.theme-light-black-footer textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+  font-weight: 600 !important;
+}
+
+.theme-light-black-footer select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+/* Borders */
+.theme-light-black-footer .border-\[\#1F2937\],
+.theme-light-black-footer .border-\[\#374151\],
+.theme-light-black-footer .border-\[\#111827\] {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text color remapping for light card surfaces */
+.theme-light-black-footer .text-white {
+  color: #0f172a !important;
+}
+
+.theme-light-black-footer .text-slate-100,
+.theme-light-black-footer .text-slate-200,
+.theme-light-black-footer .text-slate-300 {
+  color: #1e293b !important;
+}
+
+.theme-light-black-footer .text-slate-400 {
+  color: #475569 !important;
+}
+
+.theme-light-black-footer .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* HIGH CONTRAST & ATTRACTIVE CLINICAL TABS & BUTTONS FOR LIGHT MODES */
+.theme-light-black-footer button.bg-emerald-500,
+.theme-light-black-footer button.bg-emerald-600,
+.theme-light-black-footer button.bg-emerald-400,
+.theme-light-black-footer a.bg-emerald-500,
+.theme-light-black-footer .bg-emerald-500,
+.theme-light-professional button.bg-emerald-500,
+.theme-light-professional button.bg-emerald-600,
+.theme-light-professional button.bg-emerald-400,
+.theme-light-professional a.bg-emerald-500,
+.theme-light-professional .bg-emerald-500 {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+  border-color: #047857 !important;
+  font-weight: 900 !important;
+}
+
+.theme-light-black-footer button.bg-emerald-500 *,
+.theme-light-black-footer button.bg-emerald-600 *,
+.theme-light-black-footer button.bg-emerald-400 *,
+.theme-light-black-footer a.bg-emerald-500 *,
+.theme-light-black-footer .bg-emerald-500 *,
+.theme-light-professional button.bg-emerald-500 *,
+.theme-light-professional button.bg-emerald-600 *,
+.theme-light-professional button.bg-emerald-400 *,
+.theme-light-professional a.bg-emerald-500 *,
+.theme-light-professional .bg-emerald-500 * {
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+
+.theme-light-black-footer button.bg-[#1F2937],
+.theme-light-black-footer button.bg-slate-800,
+.theme-light-black-footer button.bg-slate-900,
+.theme-light-black-footer button.bg-slate-700,
+.theme-light-black-footer .bg-[#1F2937],
+.theme-light-black-footer .bg-slate-800,
+.theme-light-black-footer .bg-slate-900,
+.theme-light-professional button.bg-[#1F2937],
+.theme-light-professional button.bg-slate-800,
+.theme-light-professional button.bg-slate-900,
+.theme-light-professional button.bg-slate-700,
+.theme-light-professional .bg-[#1F2937],
+.theme-light-professional .bg-slate-800,
+.theme-light-professional .bg-slate-900 {
+  background-color: #f0fdf4 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+  font-weight: 800 !important;
+}
+
+.theme-light-black-footer button.bg-[#1F2937]:hover,
+.theme-light-black-footer button.bg-slate-800:hover,
+.theme-light-black-footer button.bg-slate-900:hover,
+.theme-light-professional button.bg-[#1F2937]:hover,
+.theme-light-professional button.bg-slate-800:hover,
+.theme-light-professional button.bg-slate-900:hover {
+  background-color: #d1fae5 !important;
+  color: #047857 !important;
+  border-color: #6ee7b7 !important;
+}
+
+.theme-light-black-footer button.bg-[#1F2937] *,
+.theme-light-black-footer button.bg-slate-800 *,
+.theme-light-black-footer button.bg-slate-900 *,
+.theme-light-black-footer button.bg-slate-700 *,
+.theme-light-black-footer .bg-[#1F2937] *,
+.theme-light-black-footer .bg-slate-800 *,
+.theme-light-black-footer .bg-slate-900 *,
+.theme-light-professional button.bg-[#1F2937] *,
+.theme-light-professional button.bg-slate-800 *,
+.theme-light-professional button.bg-slate-900 *,
+.theme-light-professional button.bg-slate-700 *,
+.theme-light-professional .bg-[#1F2937] *,
+.theme-light-professional .bg-slate-800 *,
+.theme-light-professional .bg-slate-900 * {
+  color: #065f46 !important;
+  font-weight: 800 !important;
+}
+
+.theme-light-black-footer [class*="bg-emerald-950"],
+.theme-light-black-footer [class*="bg-emerald-900"],
+.theme-light-professional [class*="bg-emerald-950"],
+.theme-light-professional [class*="bg-emerald-900"] {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+
+.theme-light-black-footer [class*="bg-emerald-950"] *,
+.theme-light-black-footer [class*="bg-emerald-900"] *,
+.theme-light-professional [class*="bg-emerald-950"] *,
+.theme-light-professional [class*="bg-emerald-900"] * {
+  color: #065f46 !important;
+}
+
+.theme-light-black-footer [class*="bg-amber-950"],
+.theme-light-black-footer [class*="bg-amber-900"],
+.theme-light-professional [class*="bg-amber-950"],
+.theme-light-professional [class*="bg-amber-900"] {
+  background-color: #fffbeb !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+
+.theme-light-black-footer [class*="bg-amber-950"] *,
+.theme-light-black-footer [class*="bg-amber-900"] *,
+.theme-light-professional [class*="bg-amber-950"] *,
+.theme-light-professional [class*="bg-amber-900"] * {
+  color: #92400e !important;
+}
+
+.theme-light-black-footer [class*="bg-cyan-950"],
+.theme-light-black-footer [class*="bg-cyan-900"],
+.theme-light-professional [class*="bg-cyan-950"],
+.theme-light-professional [class*="bg-cyan-900"] {
+  background-color: #ecfeff !important;
+  color: #155e75 !important;
+  border-color: #a5f3fc !important;
+}
+
+.theme-light-black-footer [class*="bg-cyan-950"] *,
+.theme-light-black-footer [class*="bg-cyan-900"] *,
+.theme-light-professional [class*="bg-cyan-950"] *,
+.theme-light-professional [class*="bg-cyan-900"] * {
+  color: #155e75 !important;
+}
+
+.theme-light-black-footer [class*="bg-rose-950"],
+.theme-light-black-footer [class*="bg-rose-900"],
+.theme-light-professional [class*="bg-rose-950"],
+.theme-light-professional [class*="bg-rose-900"] {
+  background-color: #fff1f2 !important;
+  color: #9f1239 !important;
+  border-color: #fecdd3 !important;
+}
+
+.theme-light-black-footer [class*="bg-rose-950"] *,
+.theme-light-black-footer [class*="bg-rose-900"] *,
+.theme-light-professional [class*="bg-rose-950"] *,
+.theme-light-professional [class*="bg-rose-900"] * {
+  color: #9f1239 !important;
+}
+
+.theme-light-black-footer [class*="bg-blue-950"],
+.theme-light-black-footer [class*="bg-blue-900"],
+.theme-light-professional [class*="bg-blue-950"],
+.theme-light-professional [class*="bg-blue-900"] {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border-color: #bfdbfe !important;
+}
+
+.theme-light-black-footer [class*="bg-blue-950"] *,
+.theme-light-black-footer [class*="bg-blue-900"] *,
+.theme-light-professional [class*="bg-blue-950"] *,
+.theme-light-professional [class*="bg-blue-900"] * {
+  color: #1e40af !important;
+}
+
+/* EXCEPTIONS: Footer is STRICTLY BLACK with White Text */
+.theme-light-black-footer footer,
+.theme-light-black-footer footer .bg-\[\#0A0C10\],
+.theme-light-black-footer footer.bg-black-footer {
+  background-color: #090d16 !important;
+  color: #e2e8f0 !important;
+  border-color: #1e293b !important;
+}
+
+.theme-light-black-footer footer .text-white {
+  color: #ffffff !important;
+}
+
+.theme-light-black-footer footer .text-slate-100,
+.theme-light-black-footer footer .text-slate-200,
+.theme-light-black-footer footer .text-slate-300 {
+  color: #e2e8f0 !important;
+}
+
+.theme-light-black-footer footer .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* ==========================================
+   THEME 2: PROFESIONAL TEMA PUTIH (light-professional)
+   ========================================== */
+html.theme-light-professional,
+body.theme-light-professional,
+.theme-light-professional {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Clean clinical white card & background remapping */
+.theme-light-professional .app-body,
+.theme-light-professional main,
+.theme-light-professional .bg-\[\#0A0C10\],
+.theme-light-professional .bg-\[\#0F172A\],
+.theme-light-professional .bg-\[\#111827\],
+.theme-light-professional .bg-\[\#0B1120\] {
+  background-color: #ffffff !important;
+}
+
+.theme-light-professional .bg-\[\#131F30\],
+.theme-light-professional .bg-\[\#1E293B\],
+.theme-light-professional .bg-\[\#1F2937\] {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-light-professional .fixed .bg-\[\#0F172A\],
+.theme-light-professional .fixed .bg-\[\#111827\] {
+  background-color: #ffffff !important;
+}
+
+.theme-light-professional input:not([type="checkbox"]):not([type="radio"]),
+.theme-light-professional select,
+.theme-light-professional textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+  font-weight: 600 !important;
+}
+
+.theme-light-professional select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+/* Borders */
+.theme-light-professional .border-\[\#1F2937\],
+.theme-light-professional .border-\[\#374151\],
+.theme-light-professional .border-\[\#111827\] {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text color remapping */
+.theme-light-professional .text-white {
+  color: #0f172a !important;
+}
+
+.theme-light-professional .text-slate-100,
+.theme-light-professional .text-slate-200,
+.theme-light-professional .text-slate-300 {
+  color: #1e293b !important;
+}
+
+.theme-light-professional .text-slate-400 {
+  color: #475569 !important;
+}
+
+.theme-light-professional .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Gradient Hero Banner remapping for Light Themes (Rich Clinical Emerald Teal - No Black!) */
+.theme-light-black-footer .from-\[\#111827\],
+.theme-light-professional .from-\[\#111827\] {
+  --tw-gradient-from: #022c22 var(--tw-gradient-from-position, ) !important;
+}
+
+.theme-light-black-footer .via-\[\#0F172A\],
+.theme-light-professional .via-\[\#0F172A\] {
+  --tw-gradient-via: #064e3b var(--tw-gradient-via-position, ) !important;
+}
+
+.theme-light-black-footer .to-\[\#0A0C10\],
+.theme-light-professional .to-\[\#0A0C10\] {
+  --tw-gradient-to: #0f766e var(--tw-gradient-to-position, ) !important;
+}
+
+/* Ensure text inside dark containers, dark tabs, dark cards & dark banners is ALWAYS bright white/light in Light Mode */
+.theme-light-black-footer .bg-\[\#111827\] .text-white,
+.theme-light-black-footer .bg-\[\#0F172A\] .text-white,
+.theme-light-black-footer .bg-\[\#0A0C10\] .text-white,
+.theme-light-black-footer .bg-\[\#1F2937\] .text-white,
+.theme-light-black-footer .bg-slate-800 .text-white,
+.theme-light-black-footer .bg-slate-900 .text-white,
+.theme-light-black-footer .bg-black .text-white,
+.theme-light-black-footer .from-\[\#111827\] .text-white,
+.theme-light-professional .bg-\[\#111827\] .text-white,
+.theme-light-professional .bg-\[\#0F172A\] .text-white,
+.theme-light-professional .bg-\[\#0A0C10\] .text-white,
+.theme-light-professional .bg-\[\#1F2937\] .text-white,
+.theme-light-professional .bg-slate-800 .text-white,
+.theme-light-professional .bg-slate-900 .text-white,
+.theme-light-professional .bg-black .text-white,
+.theme-light-professional .from-\[\#111827\] .text-white {
+  color: #ffffff !important;
+}
+
+.theme-light-black-footer .bg-\[\#111827\] .text-slate-100,
+.theme-light-black-footer .bg-\[\#111827\] .text-slate-200,
+.theme-light-black-footer .bg-\[\#111827\] .text-slate-300,
+.theme-light-black-footer .bg-\[\#0F172A\] .text-slate-100,
+.theme-light-black-footer .bg-\[\#0F172A\] .text-slate-200,
+.theme-light-black-footer .bg-\[\#0F172A\] .text-slate-300,
+.theme-light-black-footer .bg-\[\#1F2937\] .text-slate-100,
+.theme-light-black-footer .bg-\[\#1F2937\] .text-slate-200,
+.theme-light-black-footer .bg-\[\#1F2937\] .text-slate-300,
+.theme-light-professional .bg-\[\#111827\] .text-slate-100,
+.theme-light-professional .bg-\[\#111827\] .text-slate-200,
+.theme-light-professional .bg-\[\#111827\] .text-slate-300,
+.theme-light-professional .bg-\[\#0F172A\] .text-slate-100,
+.theme-light-professional .bg-\[\#0F172A\] .text-slate-200,
+.theme-light-professional .bg-\[\#0F172A\] .text-slate-300,
+.theme-light-professional .bg-\[\#1F2937\] .text-slate-100,
+.theme-light-professional .bg-\[\#1F2937\] .text-slate-200,
+.theme-light-professional .bg-\[\#1F2937\] .text-slate-300 {
+  color: #e2e8f0 !important;
+}
+
+.theme-light-black-footer .bg-\[\#111827\] .text-slate-400,
+.theme-light-black-footer .bg-\[\#0F172A\] .text-slate-400,
+.theme-light-black-footer .bg-\[\#1F2937\] .text-slate-400,
+.theme-light-professional .bg-\[\#111827\] .text-slate-400,
+.theme-light-professional .bg-\[\#0F172A\] .text-slate-400,
+.theme-light-professional .bg-\[\#1F2937\] .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* Ensure text inside rich clinical hero banners is crisp white in Light Mode */
+.theme-light-black-footer .from-\[\#111827\] .text-white,
+.theme-light-professional .from-\[\#111827\] .text-white,
+.theme-light-black-footer .from-\[\#111827\] h1,
+.theme-light-professional .from-\[\#111827\] h1,
+.theme-light-black-footer .from-\[\#111827\] h2,
+.theme-light-professional .from-\[\#111827\] h2,
+.theme-light-black-footer .from-\[\#111827\] h3,
+.theme-light-professional .from-\[\#111827\] h3,
+.theme-light-black-footer .from-\[\#111827\] h4,
+.theme-light-professional .from-\[\#111827\] h4 {
+  color: #ffffff !important;
+}
+
+.theme-light-black-footer .from-\[\#111827\] .text-slate-300,
+.theme-light-professional .from-\[\#111827\] .text-slate-300,
+.theme-light-black-footer .from-\[\#111827\] .text-slate-400,
+.theme-light-professional .from-\[\#111827\] .text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
+.theme-light-professional footer {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light-professional footer .text-white {
+  color: #0f172a !important;
+}
+
+.theme-light-professional footer .text-slate-100,
+.theme-light-professional footer .text-slate-200,
+.theme-light-professional footer .text-slate-300 {
+  color: #1e293b !important;
+}
+
+.theme-light-professional footer .text-slate-400 {
+  color: #475569 !important;
+}
+
+/* Dark Mode Form Input Contrast Enhancements */
+select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+

@@ -1,0 +1,6 @@
+{
+  "name": "KaizenBros Dialysis Centre",
+  "description": "Production dialysis centre management platform with dedicated Patient Portal, Nurse Clinical Workflow, Admin Control, and Public Website.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
