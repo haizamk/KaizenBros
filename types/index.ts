@@ -13,10 +13,42 @@ export interface User {
 }
 
 export type SchedulePattern = 'ISNIN_RABU_JUMAAT' | 'SELASA_KHAMIS_SABTU';
-export type ShiftSlot = 'PAGI' | 'TENGAHARI' | 'PETANG'; // 6-10am, 10am-2pm, 2-6pm
-export type SessionStatus = 'BELUM_HADIR' | 'SUDAH_HADIR' | 'SEDANG_DIALISIS' | 'SUDAH_SELESAI' | 'BATAL' | 'TIDAK_HADIR';
+
+// Syif Rawatan Pesakit Dialisis (3 Sesi Rawatan):
+// 1. Syif 1: 6:00 AM - 10:00 AM (Sesi Pagi Awal)
+// 2. Syif 2: 10:30 AM - 2:30 PM (Sesi Tengah Hari)
+// 3. Syif 3: 3:00 PM - 7:00 PM (Sesi Petang)
+export type PatientShiftSlot = 'SYIF_1' | 'SYIF_2' | 'SYIF_3' | 'PAGI' | 'TENGAH_HARI' | 'PETANG';
+export type ShiftSlot = PatientShiftSlot;
+
+// Syif Jadual Bertugas Jururawat Klinikal (2 Syif Staf):
+// 1. Syif Pagi: 5:30 AM - 3:00 PM
+// 2. Syif Petang: 12:00 PM - 8:00 PM
+export type NurseShiftSlot = 'PAGI' | 'PETANG';
+export type SessionStatus = 'BELUM_HADIR' | 'SUDAH_HADIR' | 'MENUNGGU_GILIRAN' | 'SEDANG_DIALISIS' | 'SUDAH_SELESAI' | 'BATAL' | 'TIDAK_HADIR';
 export type VascularAccess = 'AVF' | 'AVG' | 'PERMACATH' | 'CVC_TEMPORARY';
 export type SponsorType = 'PERKESO_SOCSO' | 'JPA_KWAP' | 'ZAKAT_SELANGOR' | 'BAITULMAL_MAIWP' | 'NKF' | 'INSURANS_SWASTA' | 'PERSENDIRIAN';
+
+export interface PatientCheckIn {
+  id: string;
+  patient_id: number;
+  patient_id_code: string;
+  patient_name: string;
+  queue_number: string; // e.g. 'Q-01', 'Q-02' (FCFS)
+  check_in_time: string; // e.g. '01:45 PM'
+  check_in_timestamp: number;
+  shift: ShiftSlot;
+  status: 'MENUNGGU_GILIRAN' | 'DITUGASKAN_STESEN' | 'SEDANG_DIALISIS' | 'SUDAH_SELESAI';
+  assigned_chair?: string; // e.g. 'B-04' (Ditugaskan secara manual / fleksibel)
+  assigned_machine_model?: string;
+  pre_weight_kg?: number;
+  dry_weight_kg?: number;
+  pre_bp?: string;
+  assigned_nurse_name?: string;
+  called_at?: string;
+  session_id?: number;
+  notes?: string;
+}
 
 export interface DialysisChair {
   id: number;
@@ -33,9 +65,33 @@ export interface DialysisMachine {
   chair_id: number;
   chair_number?: string;
   online_hdf_capable: boolean;
-  status: 'OPERATIONAL' | 'IN_USE' | 'MAINTENANCE';
+  status: 'OPERATIONAL' | 'IN_USE' | 'MAINTENANCE' | 'BREAKDOWN';
   last_service_date: string;
   next_service_date: string;
+  notes?: string;
+}
+
+export interface CentreProfile {
+  name: string;
+  brand: string;
+  slogan: string;
+  kkm_license: string;
+  established_date: string;
+  address: string;
+  city?: string;
+  postcode?: string;
+  state?: string;
+  phone_main: string;
+  hotline_24h: string;
+  whatsapp_number: string;
+  email: string;
+  operating_hours: { days: string; time: string }[];
+  capacity_machines: number;
+  machine_model: string;
+  water_system: string;
+  medical_director?: string;
+  head_nurse?: string;
+  panels: string[];
 }
 
 export interface Patient {
@@ -70,6 +126,12 @@ export interface Patient {
     hiv: 'NEGATIF' | 'POSITIF';
   };
   is_active: boolean;
+  next_dialysis_date?: string;
+  next_dialysis_day?: string;
+  next_dialysis_time?: string;
+  next_dialysis_shift?: string;
+  next_dialysis_iso?: string;
+  next_dialysis_status?: string;
   created_at: string;
 }
 

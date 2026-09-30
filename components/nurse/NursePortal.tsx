@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useSyncExternalStore } from 'react';
 import { 
   Users, 
   Stethoscope, 
@@ -30,35 +30,188 @@ import {
   Pill,
   ShieldCheck,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  RotateCcw,
+  Edit3,
+  AlertTriangle,
+  Send,
+  CalendarDays,
+  Moon,
+  Sun,
+  TrendingUp
 } from 'lucide-react';
+import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
+import { TreatmentScheduleManager } from '@/components/schedule/TreatmentScheduleManager';
+import { parseMalaysianIC } from '@/lib/ic-utils';
+import { useMalaysiaTime } from '@/hooks/useMalaysiaTime';
+import { calculateNextDialysis } from '@/lib/malaysia-time';
 import { 
   DialysisSession, 
   Patient, 
   ActionableAlert, 
   DailyReportSummary, 
   SessionStatus,
-  Nurse 
+  Nurse,
+  PatientCheckIn,
+  DialysisChair,
+  CentreProfile,
+  ShiftSlot
 } from '@/types';
-import { INITIAL_TODAY_SESSIONS, INITIAL_PATIENTS, INITIAL_ACTIONABLE_ALERTS, INITIAL_DAILY_SUMMARY } from '@/lib/mock-data';
+import { 
+  INITIAL_TODAY_SESSIONS, 
+  INITIAL_PATIENTS, 
+  INITIAL_ACTIONABLE_ALERTS, 
+  INITIAL_DAILY_SUMMARY,
+  INITIAL_CHECK_INS,
+  INITIAL_CHAIRS,
+  INITIAL_MACHINES,
+  INITIAL_NURSES,
+  VERIFIED_CENTRE_INFO
+} from '@/lib/mock-data';
 
 interface NursePortalProps {
   currentNurseName?: string;
+  patients?: Patient[];
   onAuditLog?: (action: string, details: string) => void;
+  checkInQueue?: PatientCheckIn[];
+  onCheckInPatient?: (patientId: number, preWeight: number, preBp: string, notes?: string) => void;
+  onAssignStation?: (patientId: number, chairNumber: string, machineModel: string) => void;
+  onClearQueue?: () => void;
+  onStaffLogout?: () => void;
 }
 
 export function NursePortal({
   currentNurseName = 'Sister Siti Fatimah',
-  onAuditLog
+  patients: propPatients,
+  onAuditLog,
+  checkInQueue: propQueue,
+  onCheckInPatient,
+  onAssignStation,
+  onClearQueue,
+  onStaffLogout
 }: NursePortalProps) {
   // Navigation tabs:
-  // 🏠 Hari Ini, 👥 Pesakit, 🩺 Sesi Dialisis, 📋 Rekod, 📊 Laporan, ⚙️ Tetapan
-  const [activeNav, setActiveNav] = useState<'hari_ini' | 'pesakit' | 'sesi' | 'rekod' | 'laporan' | 'tetapan'>('hari_ini');
+  // 🏠 Hari Ini, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 📋 Rekod, 📊 Laporan, ⚙️ Tetapan
+  const [activeNav, setActiveNav] = useState<'hari_ini' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'laporan' | 'tetapan'>('hari_ini');
 
-  // Sessions state (24 patients today)
-  const [sessions, setSessions] = useState<DialysisSession[]>(INITIAL_TODAY_SESSIONS);
+  const [sessions, setSessions] = useState<DialysisSession[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kaizenbros_sessions');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return INITIAL_TODAY_SESSIONS;
+  });
+
+  const malaysiaTime = useMalaysiaTime();
+
+  // Dynamic clinical shift calculation based on real Malaysian hour
+  const nurseShiftDisplay = useMemo(() => {
+    const totalMinutes = malaysiaTime.hour * 60 + malaysiaTime.minute;
+    if (totalMinutes >= (5 * 60 + 30) && totalMinutes < (15 * 60)) {
+      return 'Syif Jururawat Bertugas: Syif Pagi (5:30 AM - 3:00 PM)';
+    } else if (totalMinutes >= (12 * 60) && totalMinutes < (20 * 60)) {
+      return 'Syif Jururawat Bertugas: Syif Petang (12:00 PM - 8:00 PM)';
+    } else {
+      return 'Pusat Rawatan Ditutup (Panggilan Kecemasan Atas Panggilan Sahaja)';
+    }
+  }, [malaysiaTime.hour, malaysiaTime.minute]);
+
   const [alerts, setAlerts] = useState<ActionableAlert[]>(INITIAL_ACTIONABLE_ALERTS);
-  const [patientsList, setPatientsList] = useState<Patient[]>(INITIAL_PATIENTS);
+  const [patientsList, setPatientsList] = useState<Patient[]>(() => {
+    if (propPatients && propPatients.length > 0) return propPatients;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kaizenbros_patients');
+        if (stored !== null) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return INITIAL_PATIENTS;
+  });
+
+  const [prevPropPatients, setPrevPropPatients] = useState<Patient[] | undefined>(propPatients);
+  if (propPatients !== prevPropPatients) {
+    setPrevPropPatients(propPatients);
+    if (propPatients && propPatients.length > 0) {
+      setPatientsList(propPatients);
+    }
+  }
+
+  // FCFS Live Check-In Queue (Pruned against valid registered patients)
+  const [internalQueue, setInternalQueue] = useState<PatientCheckIn[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedPatients = localStorage.getItem('kaizenbros_patients');
+        const currentPatients: Patient[] = storedPatients ? JSON.parse(storedPatients) : INITIAL_PATIENTS;
+        const validIds = new Set(currentPatients.filter(p => p.is_active).map(p => p.id));
+        
+        const stored = localStorage.getItem('kaizenbros_queue');
+        if (stored) {
+          const parsed: PatientCheckIn[] = JSON.parse(stored);
+          const valid = parsed.filter(q => validIds.has(q.patient_id));
+          return valid;
+        }
+      } catch {}
+    }
+    return INITIAL_CHECK_INS;
+  });
+
+  // Strictly filter queue so ghost / deleted patients can NEVER appear
+  const queueList = useMemo(() => {
+    const rawQueue = propQueue !== undefined ? propQueue : internalQueue;
+    const validPatientIds = new Set(patientsList.filter(p => p.is_active).map(p => p.id));
+    return rawQueue.filter(q => validPatientIds.has(q.patient_id));
+  }, [propQueue, internalQueue, patientsList]);
+
+  const setQueueList = (updater: PatientCheckIn[] | ((prev: PatientCheckIn[]) => PatientCheckIn[])) => {
+    setInternalQueue(updater);
+  };
+
+  // WhatsApp Reminder State
+  const [whatsAppPatient, setWhatsAppPatient] = useState<Patient | null>(null);
+
+  // State for nurses roster per shift
+  const [nursesList, setNursesList] = useState<Nurse[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kaizenbros_nurses');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return INITIAL_NURSES;
+  });
+
+  // State for centre profile info
+  const [centreProfile, setCentreProfile] = useState<CentreProfile>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kaizenbros_centre_profile');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return VERIFIED_CENTRE_INFO;
+  });
+
+  const [selectedShiftForNurseTetapan, setSelectedShiftForNurseTetapan] = useState<ShiftSlot>('PETANG');
+
+  // Station Allocation Modal State
+  const [assigningPatient, setAssigningPatient] = useState<PatientCheckIn | null>(null);
+  const [selectedChairNumber, setSelectedChairNumber] = useState<string>('B-01');
+  const [selectedMachineModel, setSelectedMachineModel] = useState<string>('Fresenius 4008S NG');
+  const [selectedDialyzer, setSelectedDialyzer] = useState<string>('Fresenius FX80 Cordiax');
+  const [selectedAnticoagulant, setSelectedAnticoagulant] = useState<string>('Heparin 2000 IU bolus, 1000 IU/hr');
+
+  // Assisted Counter Check-In Modal State
+  const [showCounterCheckInModal, setShowCounterCheckInModal] = useState<boolean>(false);
+  const [counterPatientId, setCounterPatientId] = useState<number>(0);
+  const [counterWeight, setCounterWeight] = useState<string>('70.0');
+  const [counterBp, setCounterBp] = useState<string>('');
+  const [counterNotes, setCounterNotes] = useState<string>('');
 
   // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +246,41 @@ export function NursePortal({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Helper to extract last 9 dialysis session weights for a patient
+  const getPatientWeightHistory = (patientId: number, dryWeight: number) => {
+    // Find all actual sessions for this patient that have pre_weight_kg
+    const actualPatientSessions = sessions
+      .filter(s => s.patient_id === patientId && s.pre_weight_kg)
+      .map(s => ({
+        date: s.scheduled_date ? s.scheduled_date.slice(5) : 'Hari Ini', // mm-dd format
+        weight: Number(s.pre_weight_kg),
+        isActual: true,
+      }));
+
+    // Pad with realistic historical sessions to complete 9 points
+    const needed = 9 - actualPatientSessions.length;
+    const history = [...actualPatientSessions];
+
+    for (let i = 1; i <= needed; i++) {
+      // Fluctuate weights around target dry weight + (1.2 to 2.8 kg)
+      const seed = (Math.sin(i * 1.7) * 1.1) + 1.8;
+      const date = new Date();
+      date.setDate(date.getDate() - (i * 2.5)); // 2.5 days spacing approx
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      const dateStr = `${month}-${day}`;
+
+      history.push({
+        date: dateStr,
+        weight: Number((dryWeight + seed).toFixed(1)),
+        isActual: false,
+      });
+    }
+
+    // Sort chronologically (oldest to newest)
+    return history.slice(0, 9).reverse();
+  };
+
   // Computed Real-Time Counters (Mandatory 24 / 18 / 14 / 4 / 6)
   const stats = useMemo(() => {
     const total = sessions.length;
@@ -116,6 +304,244 @@ export function NursePortal({
       return s.status === statusFilter;
     });
   }, [sessions, searchQuery, statusFilter]);
+
+  // ACTION: MANUAL STATION & MACHINE ALLOCATION (FCFS WORKFLOW)
+  const handleManualStationAllocation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assigningPatient) return;
+
+    const currentTimeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    // Update queue list
+    const updatedQueue = queueList.map(item => {
+      if (item.id === assigningPatient.id) {
+        return {
+          ...item,
+          status: 'SEDANG_DIALISIS' as const,
+          assigned_chair: selectedChairNumber,
+          assigned_machine_model: selectedMachineModel,
+          assigned_nurse_name: currentNurseName,
+          called_at: currentTimeStr
+        };
+      }
+      return item;
+    });
+    setQueueList(updatedQueue);
+    try {
+      localStorage.setItem('kaizenbros_queue', JSON.stringify(updatedQueue));
+    } catch {}
+
+    // Update or create active session
+    setSessions(prev => {
+      const existing = prev.find(s => s.patient_id === assigningPatient.patient_id);
+      const preW = assigningPatient.pre_weight_kg || 70.0;
+      const dryW = assigningPatient.dry_weight_kg || 68.0;
+      const targetUf = +(Math.max(0, preW - dryW) + 0.3).toFixed(1);
+
+      if (existing) {
+        return prev.map(s => {
+          if (s.id === existing.id) {
+            return {
+              ...s,
+              chair_number: selectedChairNumber,
+              machine_model: selectedMachineModel,
+              dialyzer_type: selectedDialyzer,
+              anticoagulant: selectedAnticoagulant,
+              status: 'SEDANG_DIALISIS' as const,
+              actual_start_time: currentTimeStr,
+              pre_weight_kg: preW,
+              target_uf_litres: targetUf,
+              actual_uf_litres: 0.1,
+              nurse_in_charge: currentNurseName
+            };
+          }
+          return s;
+        });
+      } else {
+        const newSession: DialysisSession = {
+          id: Date.now(),
+          session_code: `SES-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${selectedChairNumber.replace('B-', '')}`,
+          patient_id: assigningPatient.patient_id,
+          patient_id_code: assigningPatient.patient_id_code,
+          patient_name: assigningPatient.patient_name,
+          chair_id: parseInt(selectedChairNumber.replace('B-', ''), 10) || 1,
+          chair_number: selectedChairNumber,
+          machine_id: parseInt(selectedChairNumber.replace('B-', ''), 10) || 1,
+          machine_model: selectedMachineModel,
+          scheduled_date: new Date().toISOString().slice(0, 10),
+          scheduled_shift: 'PETANG',
+          scheduled_time: '2:00 PM',
+          actual_start_time: currentTimeStr,
+          status: 'SEDANG_DIALISIS',
+          dry_weight_kg: dryW,
+          pre_weight_kg: preW,
+          target_uf_litres: targetUf,
+          actual_uf_litres: 0.1,
+          pre_bp: assigningPatient.pre_bp || '140/80',
+          current_bp: assigningPatient.pre_bp || '140/80',
+          dialyzer_type: selectedDialyzer,
+          anticoagulant: selectedAnticoagulant,
+          nurse_in_charge: currentNurseName,
+          vital_signs: [
+            {
+              id: Date.now(),
+              dialysis_session_id: Date.now(),
+              recorded_at: currentTimeStr,
+              phase: 'PRE_DIALYSIS',
+              systolic_bp: parseInt((assigningPatient.pre_bp || '140/80').split('/')[0], 10) || 140,
+              diastolic_bp: parseInt((assigningPatient.pre_bp || '140/80').split('/')[1], 10) || 80,
+              pulse_rate: 76,
+              nurse_name: currentNurseName
+            }
+          ],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        return [newSession, ...prev];
+      }
+    });
+
+    if (onAuditLog) {
+      onAuditLog(
+        'PENUGASAN_STESEN_FCFS',
+        `Jururawat ${currentNurseName} menugaskan Stesen Kerusi ${selectedChairNumber} (${selectedMachineModel}) kepada pesakit ${assigningPatient.patient_name} (Giliran ${assigningPatient.queue_number}). Rawatan dialisis dimulakan.`
+      );
+    }
+
+    if (onAssignStation) {
+      onAssignStation(assigningPatient.patient_id, selectedChairNumber, selectedMachineModel);
+    }
+
+    showToast(`✓ Pesakit ${assigningPatient.patient_name} berjaya ditugaskan ke Kerusi ${selectedChairNumber}.`);
+    setAssigningPatient(null);
+  };
+
+  // ACTION: CLEAR ALL PATIENT QUEUE (KOSONGKAN PAPAN GILIRAN)
+  const handleClearQueue = () => {
+    if (confirm('Adakah anda pasti ingin mengosongkan semua senarai giliran ketibaan pesakit hari ini?')) {
+      setQueueList([]);
+      setSessions(prev => prev.map(s => ({
+        ...s,
+        status: 'BELUM_HADIR' as SessionStatus,
+        pre_weight_kg: undefined,
+        pre_bp: undefined,
+        current_bp: undefined,
+        chair_number: '',
+        machine_model: ''
+      })));
+      try {
+        localStorage.setItem('kaizenbros_queue', JSON.stringify([]));
+        localStorage.setItem('kaizenbros_sessions', JSON.stringify([]));
+      } catch {}
+      if (onClearQueue) {
+        onClearQueue();
+      }
+      if (onAuditLog) {
+        onAuditLog('RESET_PAPAN_GILIRAN', `Jururawat ${currentNurseName} telah mengosongkan semua senarai giliran ketibaan pesakit.`);
+      }
+      showToast('✓ Papan giliran ketibaan pesakit telah berjaya dikosongkan.');
+    }
+  };
+
+  // ACTION: REMOVE SINGLE ITEM FROM QUEUE
+  const handleRemoveFromQueue = (queueId: string, patientName: string) => {
+    const updated = queueList.filter(q => q.id !== queueId);
+    setQueueList(updated);
+    try {
+      localStorage.setItem('kaizenbros_queue', JSON.stringify(updated));
+    } catch {}
+    if (onAuditLog) {
+      onAuditLog('KELUARKAN_GILIRAN', `Jururawat ${currentNurseName} mengeluarkan ${patientName} daripada giliran.`);
+    }
+    showToast(`✓ Rekod giliran ${patientName} telah dikeluarkan.`);
+  };
+
+  // ACTION: NURSE SHIFT ASSIGNMENT IN NURSE PORTAL
+  const handleAssignNurseToShift = (nurseId: number, shift: ShiftSlot, bay: string, onDuty: boolean = true) => {
+    const updated = nursesList.map(n => n.id === nurseId ? {
+      ...n,
+      shift_today: shift,
+      assigned_bay: bay,
+      is_on_duty: onDuty
+    } : n);
+    setNursesList(updated);
+    try {
+      localStorage.setItem('kaizenbros_nurses', JSON.stringify(updated));
+    } catch {}
+    const nurse = nursesList.find(n => n.id === nurseId);
+    if (nurse && onAuditLog) {
+      onAuditLog('TETAPAN_SYIF_JURURAWAT', `Sister/Jururawat menetapkan ${nurse.name} bagi Syif ${shift} di ${bay}.`);
+    }
+    showToast(`✓ Syif ${shift} dikemaskini untuk ${nurse?.name || 'Jururawat'}.`);
+  };
+
+  const handleToggleNurseDuty = (nurseId: number) => {
+    const updated = nursesList.map(n => n.id === nurseId ? { ...n, is_on_duty: !n.is_on_duty } : n);
+    setNursesList(updated);
+    try {
+      localStorage.setItem('kaizenbros_nurses', JSON.stringify(updated));
+    } catch {}
+    const nurse = nursesList.find(n => n.id === nurseId);
+    if (nurse && onAuditLog) {
+      onAuditLog('STATUS_TUGAS_JURURAWAT', `Status bertugas ${nurse.name}: ${!nurse.is_on_duty ? 'On Duty' : 'Off Duty'}`);
+    }
+    showToast(`✓ Status ${nurse?.name} ditukar kepada ${!nurse?.is_on_duty ? 'On Duty' : 'Off Duty'}.`);
+  };
+
+  // ACTION: NURSE FRONT-DESK ASSISTED CHECK-IN
+  const handleNursePerformCounterCheckIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    const patient = patientsList.find(p => p.id === counterPatientId);
+    if (!patient) return;
+
+    const preW = parseFloat(counterWeight);
+    if (isNaN(preW) || preW <= 20) {
+      alert('Sila masukkan berat badan yang sah.');
+      return;
+    }
+
+    const nextQNum = `Q-${(queueList.length + 1).toString().padStart(2, '0')}`;
+    const currentTimeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const finalBp = counterBp.trim() || '-';
+
+    const newCheckIn: PatientCheckIn = {
+      id: `CHK-${Date.now()}`,
+      patient_id: patient.id,
+      patient_id_code: patient.patient_id_code,
+      patient_name: patient.name,
+      queue_number: nextQNum,
+      check_in_time: currentTimeStr,
+      check_in_timestamp: Date.now(),
+      shift: 'PETANG',
+      status: 'MENUNGGU_GILIRAN',
+      pre_weight_kg: preW,
+      dry_weight_kg: patient.dry_weight_kg,
+      pre_bp: finalBp,
+      notes: counterNotes || 'Check-in di kaunter jururawat (FCFS).'
+    };
+
+    const updatedQueue = [...queueList, newCheckIn];
+    setQueueList(updatedQueue);
+    try {
+      localStorage.setItem('kaizenbros_queue', JSON.stringify(updatedQueue));
+    } catch {}
+
+    if (onAuditLog) {
+      onAuditLog(
+        'CHECK_IN_KAUNTER_FCFS',
+        `Pendaftaran ketibaan (Check-In) pesakit ${patient.name} (${patient.patient_id_code}) diterima di kaunter. No. Giliran: ${nextQNum}. Berat: ${preW}kg, BP: ${finalBp}`
+      );
+    }
+
+    if (onCheckInPatient) {
+      onCheckInPatient(patient.id, preW, finalBp, counterNotes);
+    }
+
+    showToast(`✓ ${patient.name} berjaya didaftar masuk (No Giliran: ${nextQNum}).`);
+    setShowCounterCheckInModal(false);
+    setCounterNotes('');
+  };
 
   // ACTION 1: CHECK-IN PESAKIT
   const handlePerformCheckIn = (e: React.FormEvent) => {
@@ -322,11 +748,32 @@ export function NursePortal({
                 LJM Diiktiraf
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white mt-0.5">
-              SELAMAT DATANG, <span className="text-cyan-400">{currentNurseName.toUpperCase()}</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 font-medium">
-              HARI INI: {new Date().toLocaleDateString('ms-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} | Syif Petang (2:00 PM - 6:00 PM)
+            <div className="flex items-center justify-between gap-2">
+              <h1 className="text-2xl sm:text-3xl font-black text-white mt-0.5">
+                SELAMAT DATANG, <span className="text-cyan-400">{currentNurseName.toUpperCase()}</span>
+              </h1>
+
+              {onStaffLogout && (
+                <button
+                  onClick={onStaffLogout}
+                  className="sm:hidden px-3 py-1.5 bg-rose-950/90 hover:bg-rose-900 text-rose-200 border border-rose-700/80 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center space-x-1 flex-shrink-0"
+                  title="Log Keluar daripada sesi jururawat"
+                >
+                  <X className="w-3.5 h-3.5 text-rose-300" />
+                  <span>Log Keluar</span>
+                </button>
+              )}
+            </div>
+            <p suppressHydrationWarning className="text-xs sm:text-sm text-slate-400 font-medium">
+              🇲🇾 {malaysiaTime.formattedDate}
+              {' • '}
+              <span suppressHydrationWarning className="text-cyan-300 font-mono font-semibold">
+                {malaysiaTime.formattedTime12 ? `${malaysiaTime.formattedTime12} MYT` : '--:--:-- MYT'}
+              </span>
+              {' • '}
+              <strong suppressHydrationWarning className="text-emerald-300">
+                {malaysiaTime.isMounted ? nurseShiftDisplay : 'Syif Jururawat Bertugas'}
+              </strong>
             </p>
           </div>
 
@@ -343,6 +790,21 @@ export function NursePortal({
             </div>
           )}
         </div>
+
+        {/* Automatic Rollover Notice for Nurses when past 7:00 PM */}
+        {malaysiaTime.isAfter7pm && (
+          <div className="mt-4 bg-indigo-950/90 border-2 border-indigo-500 rounded-2xl p-4 flex items-start space-x-3 text-indigo-100 shadow-xl">
+            <Moon className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5 animate-pulse" />
+            <div className="text-xs space-y-1">
+              <strong className="block text-cyan-300 font-bold text-sm">
+                🌙 PEMBERITAHUAN KLINIKAL AUTOMATIK (LEPAS JAM 7:00 PM)
+              </strong>
+              <p className="text-slate-200 leading-relaxed">
+                Waktu rawatan hemodialisis bagi syif hari ini telah tamat pada jam 7:00 PM. Sistem telah menyelaraskan tarikh dan waktu dialisis bagi setiap pesakit secara automatik kepada <strong>sesi dialisis seterusnya</strong> mengikut giliran tetap masing-masing (Isnin/Rabu/Jumaat atau Selasa/Khamis/Sabtu).
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* NURSE NAVIGATION BAR (Only 6 Clean Items as Requested) */}
@@ -358,6 +820,18 @@ export function NursePortal({
           >
             <Home className="w-4 h-4" />
             <span>🏠 Hari Ini</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('jadual')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              activeNav === 'jadual'
+                ? 'bg-cyan-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-850'
+            }`}
+          >
+            <CalendarDays className="w-4 h-4" />
+            <span>📅 Jadual Rawatan</span>
           </button>
 
           <button
@@ -487,7 +961,191 @@ export function NursePortal({
               </div>
             </div>
 
-            {/* ACTIONABLE ALERTS BOX (As specified in prompt) */}
+            {/* FCFS LIVE ARRIVAL QUEUE & DYNAMIC STATION ASSIGNMENT DASHBOARD */}
+            <div className="bg-slate-900 border-2 border-indigo-500/80 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-indigo-950 text-indigo-300 text-xs font-black px-3 py-1 rounded-full border border-indigo-700 uppercase tracking-wider flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping mr-1.5" />
+                      Sistem Giliran Fleksibel (First Come, First Served)
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {queueList.filter(q => q.status === 'MENUNGGU_GILIRAN').length} Menunggu Stesen / {queueList.length} Tiba
+                    </span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-white mt-1 flex items-center">
+                    📋 Papan Giliran Ketibaan Pesakit Hari Ini
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Pesakit yang sampai dahulu dipanggil mengikut susunan masa tiba. Stesen kerusi dan mesin dialisis ditugaskan secara manual mengikut kekosongan semasa.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {queueList.length > 0 && (
+                    <button
+                      onClick={handleClearQueue}
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-rose-950 active:bg-rose-900 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-800 font-bold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+                      title="Kosongkan semua pesakit dalam papan giliran"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Kosongkan Giliran</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setShowCounterCheckInModal(true)}
+                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Check-In Pesakit Kaunter</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Queue Cards / Empty State */}
+              {queueList.length === 0 ? (
+                <div className="bg-slate-950/80 border border-dashed border-slate-800 rounded-3xl p-10 text-center space-y-3">
+                  <div className="w-12 h-12 bg-slate-900 text-slate-500 rounded-2xl flex items-center justify-center mx-auto border border-slate-800">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-white font-bold text-base">Papan Giliran Ketibaan Kosong</h4>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Tiada pesakit dalam giliran ketibaan hari ini. Pendaftaran masuk (check-in) dikendalikan sepenuhnya oleh jururawat di kaunter. Sila klik <strong>{'+ Check-In Pesakit Kaunter'}</strong> untuk mendaftar pesakit yang tiba.
+                  </p>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setShowCounterCheckInModal(true)}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition-all inline-flex items-center space-x-2 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>+ Check-In Pesakit Pertama</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {queueList.map((item, idx) => {
+                    const isWaiting = item.status === 'MENUNGGU_GILIRAN';
+                    const isOnDialysis = item.status === 'SEDANG_DIALISIS';
+
+                    const qPre = item.pre_weight_kg ? Number(item.pre_weight_kg) : 0;
+                    const qDry = item.dry_weight_kg ? Number(item.dry_weight_kg) : 0;
+                    const qExcess = qPre && qDry ? qPre - qDry : 0;
+                    const qUrgent = qExcess > 2.0;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`bg-slate-950 border-2 rounded-2xl p-4 flex flex-col justify-between space-y-3 transition-all shadow-md ${
+                          qUrgent
+                            ? 'border-rose-600 shadow-rose-950/40 bg-gradient-to-br from-rose-950/20 to-slate-950'
+                            : isWaiting
+                            ? 'border-amber-500/90 shadow-amber-950/20 bg-gradient-to-br from-amber-950/20 to-slate-950'
+                            : isOnDialysis
+                            ? 'border-emerald-600/70 bg-gradient-to-br from-emerald-950/20 to-slate-950'
+                            : 'border-slate-800 opacity-80'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center space-x-2.5">
+                            <span className={`w-9 h-9 rounded-xl font-mono font-black text-xs flex items-center justify-center shrink-0 border ${
+                              isWaiting 
+                                ? 'bg-amber-500 text-slate-950 border-amber-400' 
+                                : isOnDialysis 
+                                ? 'bg-emerald-600 text-white border-emerald-400' 
+                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                            }`}>
+                              {item.queue_number}
+                            </span>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <h4 className="font-black text-white text-sm leading-tight">{item.patient_name}</h4>
+                                {qUrgent && (
+                                  <span className="animate-pulse bg-rose-950 text-rose-300 border border-rose-600 text-[10px] font-black px-1.5 py-0.5 rounded flex items-center space-x-1 uppercase tracking-wider shrink-0">
+                                    <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                                    <span>Urgent (+{qExcess.toFixed(1)}kg)</span>
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-400 block">{item.patient_id_code}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-1.5 shrink-0">
+                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                              isWaiting
+                                ? 'bg-amber-950 text-amber-300 border-amber-700 animate-pulse'
+                                : isOnDialysis
+                                ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                                : 'bg-teal-950 text-teal-300 border-teal-800'
+                            }`}>
+                              {isWaiting ? 'Menunggu Kerusi' : isOnDialysis ? `Di Kerusi ${item.assigned_chair}` : 'Selesai'}
+                            </span>
+
+                            <button
+                              onClick={() => handleRemoveFromQueue(item.id, item.patient_name)}
+                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-900 rounded-lg cursor-pointer"
+                              title="Keluarkan pesakit daripada senarai giliran"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80">
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Masa Tiba (FCFS)</span>
+                            <span className="font-mono font-bold text-amber-300 text-xs">{item.check_in_time}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Berat Semasa</span>
+                            <span className="font-mono font-bold text-emerald-400 text-xs">{item.pre_weight_kg ? `${item.pre_weight_kg} kg` : '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Tekanan Darah (BP)</span>
+                            <span className="font-mono font-bold text-cyan-400 text-xs">{item.pre_bp || '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Stesen Ditugaskan</span>
+                            <span className="font-mono font-bold text-white text-xs">{item.assigned_chair || 'Belum Dipilih'}</span>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        {isWaiting ? (
+                          <button
+                            onClick={() => {
+                              setAssigningPatient(item);
+                              // Find first available chair
+                              const activeChairs = new Set(sessions.filter(s => s.status === 'SEDANG_DIALISIS').map(s => s.chair_number));
+                              const firstFree = INITIAL_CHAIRS.find(c => !activeChairs.has(c.chair_number));
+                              if (firstFree) setSelectedChairNumber(firstFree.chair_number);
+                            }}
+                            className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+                          >
+                            <Stethoscope className="w-3.5 h-3.5" />
+                            <span>Panggil & Tugaskan Stesen (Kerusi/Mesin)</span>
+                          </button>
+                        ) : isOnDialysis ? (
+                          <button
+                            onClick={() => {
+                              const target = sessions.find(s => s.patient_id === item.patient_id);
+                              if (target) setSelectedSessionForActive(target);
+                            }}
+                            className="w-full py-2 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                            <span>Buka Pemantauan Sesi ({item.assigned_chair})</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {alerts.length > 0 && (
               <div className="bg-amber-950/40 border-2 border-amber-600/70 rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center space-x-2 text-amber-400 font-black text-sm uppercase tracking-wider">
@@ -584,11 +1242,18 @@ export function NursePortal({
                   const isBelum = s.status === 'BELUM_HADIR';
                   const isHadir = s.status === 'SUDAH_HADIR';
 
+                  const preWeight = s.pre_weight_kg ? Number(s.pre_weight_kg) : 0;
+                  const dryWeight = s.dry_weight_kg ? Number(s.dry_weight_kg) : 0;
+                  const weightExcess = preWeight && dryWeight ? preWeight - dryWeight : 0;
+                  const isExcessiveWeight = weightExcess > 2.0;
+
                   return (
                     <div
                       key={s.id}
                       className={`bg-slate-950 border-2 rounded-2xl p-4 sm:p-5 transition-all flex flex-col justify-between space-y-4 ${
-                        isSedang 
+                        isExcessiveWeight
+                          ? 'border-rose-600 shadow-lg shadow-rose-950/50 ring-1 ring-rose-500/30'
+                          : isSedang 
                           ? 'border-emerald-500 shadow-md shadow-emerald-950/30' 
                           : isSelesai 
                           ? 'border-teal-700/60 opacity-90' 
@@ -601,9 +1266,17 @@ export function NursePortal({
                         {/* Header: Name, ID, Chair */}
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="text-lg font-black text-white leading-tight">
-                              {s.patient_name.toUpperCase()}
-                            </h3>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <h3 className="text-lg font-black text-white leading-tight">
+                                {s.patient_name.toUpperCase()}
+                              </h3>
+                              {isExcessiveWeight && (
+                                <span className="animate-pulse inline-flex items-center text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-600 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 mr-1 shrink-0" />
+                                  <span>URGENT (+{weightExcess.toFixed(1)}kg)</span>
+                                </span>
+                              )}
+                            </div>
                             <span className="text-xs font-mono font-bold text-slate-400">
                               {s.patient_id_code}
                             </span>
@@ -709,8 +1382,20 @@ export function NursePortal({
 
                         <button
                           onClick={() => {
+                            const foundPatient = patientsList.find(p => p.id === s.patient_id);
+                            if (foundPatient) setWhatsAppPatient(foundPatient);
+                          }}
+                          className="px-3 min-h-[48px] bg-emerald-950/80 hover:bg-emerald-900 text-emerald-400 hover:text-emerald-300 rounded-xl text-xs font-bold border border-emerald-800 flex items-center justify-center space-x-1 cursor-pointer"
+                          title="Hantar Peringatan Sesi (WhatsApp)"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">WhatsApp</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
                             const foundPatient = patientsList.find(p => p.id === s.patient_id) || INITIAL_PATIENTS[0];
-                            setSelectedPatientForDetail(foundPatient);
+                            if (foundPatient) setSelectedPatientForDetail(foundPatient);
                           }}
                           className="px-3 min-h-[48px] bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 flex items-center justify-center cursor-pointer"
                           title="Profil Pesakit"
@@ -724,6 +1409,37 @@ export function NursePortal({
               </div>
             </div>
           </div>
+        )}
+
+        {/* VIEW 1.5: JADUAL RAWATAN (DAILY & WEEKLY TREATMENT SCHEDULE) */}
+        {activeNav === 'jadual' && (
+          <TreatmentScheduleManager
+            sessions={sessions}
+            patients={patientsList}
+            nurses={nursesList}
+            onUpdateSession={(updated) => {
+              setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
+              try {
+                localStorage.setItem('kaizenbros_sessions', JSON.stringify(sessions.map(s => s.id === updated.id ? updated : s)));
+              } catch {}
+            }}
+            onAddSession={(newSess) => {
+              const newId = sessions.length > 0 ? Math.max(...sessions.map(s => s.id)) + 1 : 1;
+              const newObj: DialysisSession = { ...newSess, id: newId };
+              setSessions(prev => [newObj, ...prev]);
+              try {
+                localStorage.setItem('kaizenbros_sessions', JSON.stringify([newObj, ...sessions]));
+              } catch {}
+            }}
+            onDeleteSession={(sessionId) => {
+              setSessions(prev => prev.filter(s => s.id !== sessionId));
+              try {
+                localStorage.setItem('kaizenbros_sessions', JSON.stringify(sessions.filter(s => s.id !== sessionId)));
+              } catch {}
+            }}
+            onAuditLog={onAuditLog}
+            isNurseView={true}
+          />
         )}
 
         {/* VIEW 2: PESAKIT DIRECTORY */}
@@ -742,7 +1458,7 @@ export function NursePortal({
                   <thead className="bg-slate-950 text-slate-400 text-xs uppercase border-b border-slate-800">
                     <tr>
                       <th className="px-5 py-3.5">ID / Nama Pesakit</th>
-                      <th className="px-5 py-3.5">No. Kad Pengenalan</th>
+                      <th className="px-5 py-3.5">No. Kad Pengenalan & Umur</th>
                       <th className="px-5 py-3.5">Corak Jadual</th>
                       <th className="px-5 py-3.5">Stesen & Akses</th>
                       <th className="px-5 py-3.5">Berat Kering</th>
@@ -751,37 +1467,67 @@ export function NursePortal({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {patientsList.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-850/50 transition-colors">
-                        <td className="px-5 py-4 font-medium">
-                          <strong className="text-white block font-bold text-base">{p.name}</strong>
-                          <span className="text-xs font-mono text-cyan-400">{p.patient_id_code}</span>
-                        </td>
-                        <td className="px-5 py-4 font-mono text-xs">{p.ic_number}</td>
-                        <td className="px-5 py-4 text-xs">
-                          <span className="font-semibold text-white block">{p.schedule_pattern.replace(/_/g, ' ')}</span>
-                          <span className="text-slate-400">Syif {p.preferred_shift}</span>
-                        </td>
-                        <td className="px-5 py-4 text-xs">
-                          <strong className="text-cyan-400 block font-bold">{p.assigned_chair}</strong>
-                          <span>{p.vascular_access}</span>
-                        </td>
-                        <td className="px-5 py-4 font-bold text-emerald-400 text-base">{p.dry_weight_kg} kg</td>
-                        <td className="px-5 py-4 text-xs">
-                          <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-medium">
-                            {p.sponsor.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <button
-                            onClick={() => setSelectedPatientForDetail(p)}
-                            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold cursor-pointer"
-                          >
-                            Buka Profil
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {patientsList.map((p) => {
+                      const icData = parseMalaysianIC(p.ic_number);
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-850/50 transition-colors">
+                          <td className="px-5 py-4 font-medium">
+                            <strong className="text-white block font-bold text-base">{p.name}</strong>
+                            <span className="text-xs font-mono text-cyan-400">{p.patient_id_code}</span>
+                          </td>
+                          <td className="px-5 py-4 font-mono text-xs">
+                            <span className="text-slate-200 block font-semibold">{p.ic_number}</span>
+                            <span className="text-emerald-400 font-bold font-sans text-[11px] block mt-0.5">
+                              {icData.ageDisplay || `${p.age} Tahun`}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-xs">
+                            <span className="font-semibold text-white block">{p.schedule_pattern.replace(/_/g, ' ')}</span>
+                            <span className="text-slate-400">Syif {p.preferred_shift}</span>
+                            {p.next_dialysis_date ? (
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800 mt-1">
+                                Seterusnya: {p.next_dialysis_day}, {p.next_dialysis_time}
+                              </span>
+                            ) : (
+                              (() => {
+                                const next = calculateNextDialysis(p, malaysiaTime.effectiveDate);
+                                return (
+                                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 mt-1">
+                                    Seterusnya: {next.dayName}, {next.timeRange}
+                                  </span>
+                                );
+                              })()
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-xs">
+                            <strong className="text-cyan-400 block font-bold">{p.assigned_chair}</strong>
+                            <span>{p.vascular_access}</span>
+                          </td>
+                          <td className="px-5 py-4 font-bold text-emerald-400 text-base">{p.dry_weight_kg} kg</td>
+                          <td className="px-5 py-4 text-xs">
+                            <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-medium">
+                              {p.sponsor.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right space-x-2 whitespace-nowrap">
+                            <button
+                              onClick={() => setWhatsAppPatient(p)}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer inline-flex items-center space-x-1 shadow"
+                              title="Hantar Peringatan Sesi (WhatsApp)"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Peringatan Sesi</span>
+                            </button>
+                            <button
+                              onClick={() => setSelectedPatientForDetail(p)}
+                              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                            >
+                              Buka Profil
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -916,25 +1662,181 @@ export function NursePortal({
           </div>
         )}
 
-        {/* VIEW 6: TETAPAN KLINIKAL */}
+        {/* VIEW 6: TETAPAN PUSAT & JADUAL BERTUGAS SYIF JURURAWAT */}
         {activeNav === 'tetapan' && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-black text-white">Tetapan Pusat Dialisis</h2>
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 max-w-xl">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 block">Jururawat Bertugas Semasa</label>
-                <input
-                  type="text"
-                  value={currentNurseName}
-                  disabled
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white mt-1 font-bold"
-                />
+                <div className="flex items-center space-x-2">
+                  <span className="bg-cyan-950 text-cyan-300 text-xs font-black px-2.5 py-0.5 rounded-full border border-cyan-800 uppercase">
+                    Tetapan Klinikal & Kakitangan
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">Pusat Dialisis KaizenBros</span>
+                </div>
+                <h2 className="text-2xl font-black text-white mt-1">Tetapan Pusat Dialisis & Syif Jururawat</h2>
+                <p className="text-xs text-slate-400">
+                  Urus penugasan jururawat bertugas mengikut 2 syif waktu operasi klinikal (5:30 AM - 3:00 PM & 12:00 PM - 8:00 PM).
+                </p>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-400 block">Syif Klinikal Aktif</label>
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-700 mt-1 text-sm font-semibold text-cyan-400">
-                  Syif 3 (Petang): 2:00 PM - 6:00 PM (12 Stesen Aktif)
+              <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-2xl flex items-center space-x-3 text-xs">
+                <span className="text-slate-400">Jururawat Log Masuk:</span>
+                <strong className="text-cyan-300">{currentNurseName}</strong>
+              </div>
+            </div>
+
+            {/* Shift Selector - 2 Clinical Shifts */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { id: 'PAGI', label: 'Syif 1: Pagi (5:30 AM - 3:00 PM)', time: '5:30 AM - 3:00 PM' },
+                { id: 'PETANG', label: 'Syif 2: Petang (12:00 PM - 8:00 PM)', time: '12:00 PM - 8:00 PM' }
+              ].map(shift => {
+                const isSelected = selectedShiftForNurseTetapan === shift.id;
+                const onDutyCount = nursesList.filter(n => n.shift_today === shift.id && n.is_on_duty).length;
+                const totalInShift = nursesList.filter(n => n.shift_today === shift.id).length;
+
+                return (
+                  <button
+                    key={shift.id}
+                    onClick={() => setSelectedShiftForNurseTetapan(shift.id as ShiftSlot)}
+                    className={`p-5 rounded-2xl text-left border-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-cyan-950/80 to-slate-900 border-cyan-500 shadow-xl shadow-cyan-950/40'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <strong className="text-white text-base font-bold">{shift.label}</strong>
+                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${
+                        isSelected ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'
+                      }`}>
+                        {onDutyCount} / {totalInShift} Bertugas
+                      </span>
+                    </div>
+                    <p className="text-sm text-cyan-300 font-mono font-bold mt-1.5">{shift.time}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Nurses In Selected Shift */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 className="text-base font-black text-white flex items-center space-x-2">
+                  <Users className="w-4 h-4 text-cyan-400" />
+                  <span>Jururawat Bertugas Bagi Syif {selectedShiftForNurseTetapan === 'PAGI' ? '1 (Pagi: 5:30 AM - 3:00 PM)' : '2 (Petang: 12:00 PM - 8:00 PM)'}:</span>
+                </h3>
+                <span className="text-xs text-slate-400 font-mono">
+                  {nursesList.filter(n => n.shift_today === selectedShiftForNurseTetapan).length} Jururawat
+                </span>
+              </div>
+
+              {nursesList.filter(n => n.shift_today === selectedShiftForNurseTetapan).length === 0 ? (
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 text-center space-y-2">
+                  <p className="text-white font-bold text-xs">Tiada Jururawat Ditugaskan Bagi Syif {selectedShiftForNurseTetapan === 'PAGI' ? '1 (Pagi)' : '2 (Petang)'}</p>
+                  <p className="text-slate-400 text-[11px]">Sila masukkan jururawat dari senarai di bawah ke dalam syif ini.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {nursesList
+                    .filter(n => n.shift_today === selectedShiftForNurseTetapan)
+                    .map((nurse) => (
+                      <div key={nurse.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+                              {nurse.staff_id_code}
+                            </span>
+                            <h4 className="font-bold text-white text-sm mt-1">{nurse.name}</h4>
+                            <p className="text-[11px] text-slate-400">{nurse.title}</p>
+                          </div>
+
+                          <button
+                            onClick={() => handleToggleNurseDuty(nurse.id)}
+                            className={`text-[10px] font-black px-2.5 py-1 rounded-xl border transition-all cursor-pointer ${
+                              nurse.is_on_duty
+                                ? 'bg-emerald-950 text-emerald-300 border-emerald-600'
+                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}
+                          >
+                            {nurse.is_on_duty ? '🟢 On Duty' : '⚪ Off Duty'}
+                          </button>
+                        </div>
+
+                        <div className="text-xs space-y-1.5 pt-2 border-t border-slate-800/80 text-slate-300">
+                          <p><strong>LJM:</strong> <span className="font-mono text-slate-200">{nurse.nursing_board_no}</span></p>
+                          
+                          {/* Bay Assignment Selector */}
+                          <div className="flex items-center space-x-2 pt-0.5">
+                            <span className="font-bold text-white text-[11px]">Bay:</span>
+                            <select
+                              value={nurse.assigned_bay || 'BAY_A'}
+                              onChange={(e) => handleAssignNurseToShift(nurse.id, nurse.shift_today, e.target.value, nurse.is_on_duty)}
+                              className="bg-slate-900 border border-slate-700 text-cyan-300 rounded-lg px-2 py-1 text-[11px] font-bold"
+                            >
+                              <option value="BAY_A">Bay A (B01 - B06)</option>
+                              <option value="BAY_B">Bay B (B07 - B11)</option>
+                              <option value="ISOLATION">Bilik Isolasi (B12)</option>
+                            </select>
+                          </div>
+
+                          {/* Shift Switcher */}
+                          <div className="flex items-center space-x-2 pt-0.5">
+                            <span className="font-bold text-white text-[11px]">Syif:</span>
+                            <select
+                              value={nurse.shift_today}
+                              onChange={(e) => handleAssignNurseToShift(nurse.id, e.target.value as ShiftSlot, nurse.assigned_bay || 'BAY_A', nurse.is_on_duty)}
+                              className="bg-slate-900 border border-slate-700 text-amber-300 rounded-lg px-2 py-1 text-[11px] font-bold"
+                            >
+                              <option value="PAGI">Syif 1: Pagi (5:30 AM - 3:00 PM)</option>
+                              <option value="PETANG">Syif 2: Petang (12:00 PM - 8:00 PM)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* Quick Add Other Nurses into this Shift */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                <span className="text-[11px] font-bold text-slate-300 block">
+                  + Masukkan Jururawat Lain ke Syif {selectedShiftForNurseTetapan === 'PAGI' ? '1 (5:30 AM - 3:00 PM)' : '2 (12:00 PM - 8:00 PM)'}:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {nursesList
+                    .filter(n => n.shift_today !== selectedShiftForNurseTetapan)
+                    .map(nurse => (
+                      <button
+                        key={nurse.id}
+                        onClick={() => handleAssignNurseToShift(nurse.id, selectedShiftForNurseTetapan, nurse.assigned_bay || 'BAY_A', true)}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-cyan-900 border border-slate-700 hover:border-cyan-600 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{nurse.name} [Kini: Syif {nurse.shift_today === 'PAGI' ? '1 (Pagi)' : '2 (Petang)'}]</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Centre Profile Summary Card */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 text-xs">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 className="text-base font-black text-white">{centreProfile.name}</h3>
+                <span className="text-emerald-400 font-mono font-bold">Lesen: {centreProfile.kkm_license}</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <p><strong>Alamat:</strong> <span className="text-slate-300">{centreProfile.address}</span></p>
+                  <p><strong>Telefon Utama:</strong> <span className="font-mono text-white">{centreProfile.phone_main}</span></p>
+                  <p><strong>Hotline Kecemasan 24 Jam:</strong> <span className="font-mono text-rose-400 font-bold">{centreProfile.hotline_24h}</span></p>
+                </div>
+                <div className="space-y-1.5">
+                  <p><strong>Pakar Nefrologi (PIC):</strong> <span className="text-cyan-300">{centreProfile.medical_director || 'Dr. Azman bin Khairuddin'}</span></p>
+                  <p><strong>Ketua Jururawat (Sister):</strong> <span className="text-amber-300">{centreProfile.head_nurse || 'Sister Siti Fatimah'}</span></p>
+                  <p><strong>Kapasiti Mesin:</strong> <span className="text-white font-bold">{centreProfile.capacity_machines} Stesen Mesin Fresenius</span></p>
                 </div>
               </div>
             </div>
@@ -1007,6 +1909,142 @@ export function NursePortal({
                 <p className="text-xs text-slate-400 mt-1">
                   Berat Kering: <strong className="text-emerald-400">{selectedSessionForCheckIn.dry_weight_kg} kg</strong>
                 </p>
+
+                {/* Patient Weight History Trend Chart (Last 9 Sessions) */}
+                <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 mt-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-slate-300 uppercase tracking-wider flex items-center">
+                      <TrendingUp className="w-3.5 h-3.5 mr-1.5 text-cyan-400 animate-pulse" />
+                      Trend Berat 9 Sesi Terakhir (kg)
+                    </span>
+                    <span className="text-[10px] bg-emerald-950/50 border border-emerald-900/60 px-2 py-0.5 rounded text-emerald-400 font-bold">
+                      Target: {selectedSessionForCheckIn.dry_weight_kg} kg
+                    </span>
+                  </div>
+
+                  <div className="h-[120px] w-full relative pt-2">
+                    {(() => {
+                      const historyData = getPatientWeightHistory(selectedSessionForCheckIn.patient_id, selectedSessionForCheckIn.dry_weight_kg);
+                      const dryW = selectedSessionForCheckIn.dry_weight_kg;
+                      
+                      // Calculate min & max for vertical scaling
+                      const weights = historyData.map(d => d.weight);
+                      const minW = Math.min(...weights, dryW) - 1.0;
+                      const maxW = Math.max(...weights, dryW) + 1.5;
+                      const range = maxW - minW || 1;
+
+                      // Map weights to SVG coordinates (width 400, height 80)
+                      const width = 400;
+                      const height = 80;
+                      const points = historyData.map((d, index) => {
+                        const x = (index / 8) * (width - 40) + 20;
+                        const y = height - ((d.weight - minW) / range) * (height - 25) - 10;
+                        return { x, y, ...d };
+                      });
+
+                      // Target line Y coordinate
+                      const dryY = height - ((dryW - minW) / range) * (height - 25) - 10;
+
+                      return (
+                        <svg viewBox={`0 0 ${width} ${height + 20}`} className="w-full h-full overflow-visible select-none">
+                          {/* Target Dry Weight Reference Line */}
+                          <line 
+                            x1="10" 
+                            y1={dryY} 
+                            x2={width - 10} 
+                            y2={dryY} 
+                            stroke="#10b981" 
+                            strokeWidth="1.5" 
+                            strokeDasharray="3,3" 
+                            opacity="0.8" 
+                          />
+                          <text 
+                            x={width - 10} 
+                            y={dryY - 3} 
+                            fill="#10b981" 
+                            fontSize="8" 
+                            fontWeight="bold" 
+                            textAnchor="end"
+                          >
+                            DRY TARGET
+                          </text>
+
+                          {/* Connection line with beautiful gradient */}
+                          <path
+                            d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+                            fill="none"
+                            stroke="url(#weightChartGradient)"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+
+                          {/* Color Gradient definitions */}
+                          <defs>
+                            <linearGradient id="weightChartGradient" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#06b6d4" />
+                              <stop offset="50%" stopColor="#3b82f6" />
+                              <stop offset="100%" stopColor="#f43f5e" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Plot circles & text tags */}
+                          {points.map((p, i) => {
+                            const isExcess = (p.weight - dryW) > 2.0;
+                            return (
+                              <g key={i}>
+                                {/* Glowing outer ring for urgent excessive variance */}
+                                <circle 
+                                  cx={p.x} 
+                                  cy={p.y} 
+                                  r={isExcess ? "8" : "5"} 
+                                  fill={isExcess ? '#f43f5e' : '#06b6d4'} 
+                                  opacity="0.25" 
+                                />
+                                <circle 
+                                  cx={p.x} 
+                                  cy={p.y} 
+                                  r="3.5" 
+                                  fill={isExcess ? '#f43f5e' : '#06b6d4'} 
+                                  stroke="#0f172a" 
+                                  strokeWidth="1" 
+                                />
+                                
+                                {/* Label representing the actual weight */}
+                                <text 
+                                  x={p.x} 
+                                  y={p.y - 7} 
+                                  fill={isExcess ? '#fb7185' : '#e2e8f0'} 
+                                  fontSize="8" 
+                                  fontWeight="black" 
+                                  textAnchor="middle"
+                                >
+                                  {p.weight}
+                                </text>
+
+                                {/* Date underneath the point */}
+                                <text 
+                                  x={p.x} 
+                                  y={height + 12} 
+                                  fill="#64748b" 
+                                  fontSize="7.5" 
+                                  fontWeight="bold" 
+                                  textAnchor="middle"
+                                >
+                                  {p.date}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      );
+                    })()}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 leading-normal pt-1.5 text-center">
+                    💡 <strong className="text-slate-300">Tip Klinikal:</strong> Bandingkan corak di atas untuk menentukan sama ada peningkatan berat &gt;2.0kg berlaku secara mengejut (*sudden*) atau sememangnya kronik (*chronic*).
+                  </p>
+                </div>
               </div>
 
               {/* Tekanan Darah */}
@@ -1317,6 +2355,295 @@ export function NursePortal({
       )}
 
       {/* ========================================================================= */}
+      {/* MODAL: MANUAL STATION & MACHINE ALLOCATION (FCFS WORKFLOW)               */}
+      {/* ========================================================================= */}
+      {assigningPatient && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-2xl w-full p-6 text-white space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-950 text-amber-400 flex items-center justify-center border border-amber-700 font-mono font-black text-sm">
+                  {assigningPatient.queue_number}
+                </div>
+                <div>
+                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                    Penugasan Stesen Fleksibel (First Come, First Served)
+                  </span>
+                  <h3 className="text-lg font-black text-white">
+                    Panggil Masuk: {assigningPatient.patient_name}
+                  </h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAssigningPatient(null)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleManualStationAllocation} className="space-y-4 text-xs">
+              {/* Patient Quick Vitals Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-mono">No. ID Pesakit</span>
+                  <strong className="text-white font-mono">{assigningPatient.patient_id_code}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-mono">Masa Tiba</span>
+                  <strong className="text-amber-300 font-mono">{assigningPatient.check_in_time}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-mono">Berat Tiba / Kering</span>
+                  <strong className="text-emerald-400 font-mono">
+                    {assigningPatient.pre_weight_kg || 70} kg / {assigningPatient.dry_weight_kg || 68} kg
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-mono">BP Semasa Tiba</span>
+                  <strong className="text-cyan-400 font-mono">{assigningPatient.pre_bp || '140/80'}</strong>
+                </div>
+              </div>
+
+              {/* 12-Chair Status & Selection Grid */}
+              <div>
+                <label className="block font-black text-sm text-slate-200 mb-2 flex items-center justify-between">
+                  <span>Pilih Kerusi Hemodialisis (12 Stesen) *</span>
+                  <span className="text-[11px] text-slate-400 font-normal">
+                    🟢 Hijau = Kosong/Sedia | 🔵 Biru = Sedang Digunakan
+                  </span>
+                </label>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                  {INITIAL_CHAIRS.map((chair) => {
+                    const activeSession = sessions.find(
+                      s => s.chair_number === chair.chair_number && s.status === 'SEDANG_DIALISIS'
+                    );
+                    const isOccupied = !!activeSession;
+                    const isSelected = selectedChairNumber === chair.chair_number;
+
+                    return (
+                      <button
+                        key={chair.id}
+                        type="button"
+                        disabled={isOccupied}
+                        onClick={() => {
+                          setSelectedChairNumber(chair.chair_number);
+                          const mach = INITIAL_MACHINES.find(m => m.chair_number === chair.chair_number);
+                          if (mach) setSelectedMachineModel(mach.brand_model);
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all relative ${
+                          isOccupied
+                            ? 'bg-slate-950/80 border-slate-800 opacity-60 cursor-not-allowed'
+                            : isSelected
+                            ? 'bg-amber-500/20 border-amber-400 shadow-lg ring-2 ring-amber-400/50'
+                            : 'bg-slate-950 hover:bg-slate-850 border-emerald-700/60 hover:border-emerald-500 cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className={`font-mono font-black text-sm ${isSelected ? 'text-amber-300' : 'text-white'}`}>
+                            {chair.chair_number}
+                          </span>
+                          <span className={`w-2 h-2 rounded-full ${isOccupied ? 'bg-blue-500' : 'bg-emerald-400'}`} />
+                        </div>
+                        <p className="text-[10px] text-slate-400 truncate">
+                          {chair.bay === 'ISOLATION' ? 'Isolasi Khas' : chair.bay.replace('_', ' ')}
+                        </p>
+                        <p className={`text-[10px] font-bold mt-1 truncate ${
+                          isOccupied ? 'text-blue-400' : isSelected ? 'text-amber-300' : 'text-emerald-400'
+                        }`}>
+                          {isOccupied ? `Diisi: ${activeSession?.patient_name?.split(' ')[0]}` : '● SEDIA / KOSONG'}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Machine & Dialysis Parameters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">Model Mesin Dialisis</label>
+                  <select
+                    value={selectedMachineModel}
+                    onChange={(e) => setSelectedMachineModel(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-semibold"
+                  >
+                    <option value="Fresenius 4008S NG">Fresenius 4008S NG (Standard HD)</option>
+                    <option value="Fresenius 5008S CorDiax (Online HDF)">Fresenius 5008S CorDiax (Online HDF)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">Jenis Dialyzer (Penapis)</label>
+                  <select
+                    value={selectedDialyzer}
+                    onChange={(e) => setSelectedDialyzer(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-semibold"
+                  >
+                    <option value="Fresenius FX80 Cordiax">Fresenius FX80 Cordiax (High Flux)</option>
+                    <option value="Fresenius FX60 Cordiax">Fresenius FX60 Cordiax (Low/Mid Flux)</option>
+                    <option value="Elisio 17M Polynephron">Elisio 17M Polynephron</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-300 mb-1">Preskripsi Antikoagulan (Heparin / LMWH)</label>
+                <input
+                  type="text"
+                  value={selectedAnticoagulant}
+                  onChange={(e) => setSelectedAnticoagulant(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-950/40 border border-amber-800/80 rounded-xl text-[11px] text-amber-200">
+                ⚠️ <strong>Pengesahan Stesen:</strong> Menekan butang di bawah akan menandakan Kerusi <strong>{selectedChairNumber}</strong> sebagai SEDANG DIGUNAKAN, memulakan pemasa rawatan, dan merekodkan giliran masuk pesakit secara rasmi.
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setAssigningPatient(null)}
+                  className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-sm rounded-xl transition-all shadow-xl cursor-pointer flex items-center justify-center space-x-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>Sahkan Penugasan Kerusi {selectedChairNumber} & Mula Dialisis</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: FRONT-DESK ASSISTED CHECK-IN                                       */}
+      {/* ========================================================================= */}
+      {showCounterCheckInModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-lg w-full p-6 text-white space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-950 text-emerald-400 flex items-center justify-center border border-emerald-800">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
+                    Kaunter Pendaftaran Masuk
+                  </span>
+                  <h3 className="text-lg font-black text-white">Check-In Pesakit Tiba</h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowCounterCheckInModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded-xl cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleNursePerformCounterCheckIn} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-200 mb-1">Pilih Pesakit yang Tiba *</label>
+                {patientsList.length === 0 ? (
+                  <div className="bg-slate-950 border border-amber-600/60 rounded-xl p-3 text-amber-300 text-xs">
+                    Tiada pesakit berdaftar lagi dalam sistem. Sila daftar pesakit baru terlebih dahulu di Portal Pentadbir.
+                  </div>
+                ) : (
+                  <select
+                    value={counterPatientId || patientsList[0]?.id}
+                    onChange={(e) => {
+                      const pid = parseInt(e.target.value, 10);
+                      setCounterPatientId(pid);
+                      const p = patientsList.find(pt => pt.id === pid);
+                      if (p) {
+                        setCounterWeight((p.latest_weight_kg || p.dry_weight_kg || 70).toString());
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-bold text-sm"
+                  >
+                    {patientsList.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.patient_id_code}) • Syif {p.preferred_shift} • Kering: {p.dry_weight_kg}kg
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-200 mb-1">Berat Semasa Tiba (kg) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    value={counterWeight}
+                    onChange={(e) => setCounterWeight(e.target.value)}
+                    className="w-full bg-slate-950 border-2 border-emerald-500 rounded-xl p-2.5 text-white font-mono font-bold text-lg"
+                    placeholder="Cth: 76.4"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block font-bold text-slate-200">Tekanan Darah (BP)</label>
+                    <span className="text-[10px] text-slate-400">Pilihan / Boleh Kosongkan</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={counterBp}
+                    onChange={(e) => setCounterBp(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-mono font-bold text-lg"
+                    placeholder="Cth: 148/82"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Catatan Tambahan (Pilihan)</label>
+                <input
+                  type="text"
+                  value={counterNotes}
+                  onChange={(e) => setCounterNotes(e.target.value)}
+                  placeholder="Cth: Rasa sedikit pening, fistula tiada bengkak"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white"
+                />
+              </div>
+
+              <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 rounded-xl text-[11px] text-emerald-200">
+                ✓ Pesakit akan diberikan Nombor Giliran mengikut susunan masa ketibaan sekarang (First Come, First Served) dan dimasukkan ke dalam Senarai Menunggu Stesen.
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCounterCheckInModal(false)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition-all shadow-lg cursor-pointer flex items-center space-x-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Daftar Masuk Pesakit</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL 3: PATIENT PROFILE — NURSE (AS EXPLICITLY SPECIFIED IN PROMPT)      */}
       {/* Organise into:                                                            */}
       {/* RINGKASAN, MAKLUMAT PESAKIT, JADUAL DIALISIS, REKOD DIALISIS,             */}
@@ -1390,8 +2717,16 @@ export function NursePortal({
                   </div>
 
                   <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Umur & Jantina</span>
-                    <strong className="text-white text-base block">{selectedPatientForDetail.age} Thn ({selectedPatientForDetail.gender})</strong>
+                    <span className="text-[11px] text-slate-400 block font-semibold">Umur (Tahun & Hari)</span>
+                    {(() => {
+                      const icData = parseMalaysianIC(selectedPatientForDetail.ic_number);
+                      return (
+                        <div>
+                          <strong className="text-emerald-400 text-sm font-black block">{icData.ageDisplay || `${selectedPatientForDetail.age} Tahun`}</strong>
+                          <span className="text-[10px] text-slate-400">({selectedPatientForDetail.gender}) • Lahir: {icData.birthDateFormatted || '-'}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
@@ -1491,6 +2826,15 @@ export function NursePortal({
           </div>
         </div>
       )}
+
+      {/* WhatsApp Reminder Modal */}
+      <WhatsAppReminderModal
+        isOpen={!!whatsAppPatient}
+        onClose={() => setWhatsAppPatient(null)}
+        patient={whatsAppPatient}
+        onLogAudit={onAuditLog}
+        onNavigateToSettings={() => setActiveNav('tetapan')}
+      />
     </div>
   );
 }

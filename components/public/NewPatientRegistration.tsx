@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { VERIFIED_CENTRE_INFO } from '@/lib/mock-data';
 import { NewRegistration, PatientRegistrationDoc } from '@/types';
+import { parseMalaysianIC, ICParsedData } from '@/lib/ic-utils';
 
 interface NewPatientRegistrationProps {
   onBackToPublic?: () => void;
@@ -48,6 +49,27 @@ export function NewPatientRegistration({
     patientType: 'Pesakit Baru Dialisis',
     medicalNotes: ''
   });
+
+  const [icParsed, setIcParsed] = useState<ICParsedData | null>(null);
+
+  const handleIcChange = (inputVal: string) => {
+    const parsed = parseMalaysianIC(inputVal);
+    if (parsed.isValid) {
+      setFormData(prev => ({
+        ...prev,
+        icNumber: parsed.formattedIC,
+        age: parsed.years.toString(),
+        gender: parsed.gender === 'LELAKI' ? 'Lelaki' : 'Perempuan'
+      }));
+      setIcParsed(parsed);
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        icNumber: inputVal
+      }));
+      setIcParsed(null);
+    }
+  };
 
   const [uploadedDoc, setUploadedDoc] = useState<PatientRegistrationDoc | null>(null);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
@@ -259,10 +281,22 @@ export function NewPatientRegistration({
                 type="text"
                 required
                 value={formData.icNumber}
-                onChange={(e) => setFormData({ ...formData, icNumber: e.target.value })}
+                onChange={(e) => handleIcChange(e.target.value)}
                 placeholder="Contoh: 700512-10-5432"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 transition-colors"
               />
+              {icParsed && icParsed.isValid && (
+                <div className="mt-2 bg-emerald-950/80 border border-emerald-800/80 rounded-xl p-2.5 text-xs space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 font-medium">Umur Pesakit (Auto):</span>
+                    <strong className="text-emerald-300 font-black">{icParsed.ageDisplay}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400 font-medium">Tarikh Lahir MyKad:</span>
+                    <span className="text-slate-200">{icParsed.birthDateFormatted}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig([
   {
-    ignores: ["src/**", "laravel/**", "dist/**", ".next/**"],
+    ignores: ["src/**", "legacy_src/**", "laravel/**", "dist/**", ".next/**"],
   },
   ...next
 ]);
