@@ -136,7 +136,7 @@ export function QuickStatusModal({
                 Kemasukan Status Sesi Pantas (Jururawat)
               </span>
               <h3 className="text-xl font-black text-white">
-                {session.patient_name.toUpperCase()}
+                {(session?.patient_name || 'PESAKIT').toUpperCase()}
               </h3>
             </div>
           </div>

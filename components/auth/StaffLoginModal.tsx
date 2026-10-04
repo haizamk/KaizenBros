@@ -110,7 +110,8 @@ export function StaffLoginModal({
       return;
     }
 
-    onAuditLog?.('LOGIN_BERJAYA', `Kakitangan ${result.staff!.name} (${result.staff!.role.toUpperCase()}) berjaya log masuk.`);
+    const roleStr = (result.staff?.role || 'STAFF').toUpperCase();
+    onAuditLog?.('LOGIN_BERJAYA', `Kakitangan ${result.staff?.name || 'Staf'} (${roleStr}) berjaya log masuk.`);
     setLoginSuccessMsg(result.message);
 
     setTimeout(() => {

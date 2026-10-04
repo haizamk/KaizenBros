@@ -11,7 +11,7 @@
 }
 
 .light {
-  --main-bg: #F5F7FA;
+  --main-bg: #EEF2F6;
   --main-color: #0F172A;
   color: #0F172A;
 }
@@ -23,98 +23,630 @@
   }
 }
 
-/* LIGHT MODE: Main application, dashboard & portal background patch (#F5F7FA) */
+/* ========================================================================= */
+/* GLOBAL LIGHT MODE CONTRAST FIX — MEDICAL OFF-WHITE & HIGH CONTRAST TEXT  */
+/* Dark Mode (.dark) remains 100% untouched and unchanged.                   */
+/* ========================================================================= */
+
+/* 1. Main Page Background in Light Mode: Soft, medical off-white (#EEF2F6) */
 .light,
 .light.min-h-screen,
-.light.bg-slate-950,
-.light .min-h-screen.bg-slate-950,
+.light .min-h-screen,
 .light > .flex-1,
-.light > .flex-1 > div.min-h-screen {
-  background-color: #F5F7FA !important;
+.light main {
+  background-color: #EEF2F6 !important;
+  color: #0F172A;
 }
 
-/* ========================================================================= */
-/* LIGHT MODE TEXT CONTRAST PATCH — STRICTLY TEXT COLOR ONLY                */
-/* Primary text: #0F172A | Secondary text: #475569 | Muted text: #64748B   */
-/* ========================================================================= */
+/* 2. Light Mode White Cards & Light Panels */
+.light .bg-white,
+.light .light-card {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
 
-/* 1. Page/Section Headings directly on light background */
-.light main > div > div > div > h2.text-white,
-.light main > div > div > h2.text-white,
-.light main > div > h2.text-white,
-.light main > div > div > div > h1.text-white,
-.light main > div > div > h1.text-white,
-.light main > div > h1.text-white,
-.light main > div > div > div > h3.text-white,
-.light section.bg-slate-950 h2.text-white,
-.light section.bg-slate-950 h1.text-white {
+.light .bg-white h1,
+.light .bg-white h2,
+.light .bg-white h3,
+.light .bg-white h4,
+.light .bg-white h5,
+.light .bg-white h6,
+.light .light-card h1,
+.light .light-card h2,
+.light .light-card h3,
+.light .light-card h4 {
   color: #0F172A !important;
 }
 
-/* 2. Subtitles & Descriptions directly on light background */
-.light main > div > div > div > p.text-slate-400,
-.light main > div > div > p.text-slate-400,
-.light main > div > p.text-slate-400,
-.light main > div > div > div > p.text-slate-300,
-.light main > div > div > p.text-slate-300,
-.light main > div > p.text-slate-300,
-.light section.bg-slate-950 p.text-slate-400,
-.light section.bg-slate-950 p.text-slate-300 {
+.light .bg-white p,
+.light .bg-white span,
+.light .bg-white div,
+.light .bg-white label,
+.light .light-card p,
+.light .light-card span,
+.light .light-card div {
+  color: #1E293B;
+}
+
+.light .bg-white .text-slate-400,
+.light .bg-white .text-slate-500,
+.light .light-card .text-slate-400,
+.light .light-card .text-slate-500 {
   color: #475569 !important;
 }
 
-/* 3. Metadata, badges, counts & timestamps directly on light background */
-.light main > div > div > div > div > span.text-slate-400,
-.light main > div > div > div > span.text-slate-400,
-.light main > div > div > span.text-slate-400,
-.light main > div > span.text-slate-400,
-.light footer.bg-slate-950 p.text-slate-500 {
-  color: #64748B !important;
+/* 3. CRITICAL RULE FOR ALL DARK-BACKGROUND CONTAINERS IN LIGHT MODE         */
+/* Whenever a section/card/panel/overlay/hero/modal/navbar has a dark        */
+/* background in Light Mode, FORCE ALL TEXT inside it to be HIGH-CONTRAST.  */
+
+/* Hero Section High Contrast in Light Mode */
+.light .public-hero-section,
+.light .public-hero-section section {
+  background: linear-gradient(to bottom, #0F172A, #1E293B, #0F172A) !important;
+  border-color: #334155 !important;
 }
 
-/* 4. GUARANTEE: Text inside ALL dark cards, headers, navigation, buttons, and modals ALWAYS keeps white/light text */
-.light [class*="bg-slate-900"] h1,
-.light [class*="bg-slate-900"] h2,
-.light [class*="bg-slate-900"] h3,
-.light [class*="bg-slate-900"] h4,
-.light [class*="bg-slate-900"] .text-white,
-.light [class*="bg-slate-850"] .text-white,
-.light [class*="bg-slate-800"] .text-white,
-.light [class*="bg-indigo-"] .text-white,
-.light [class*="bg-cyan-"] .text-white,
-.light [class*="bg-emerald-"] .text-white,
-.light [class*="bg-amber-"] .text-white,
-.light [class*="bg-rose-"] .text-white,
-.light [class*="bg-blue-"] .text-white,
-.light [class*="bg-teal-"] .text-white,
-.light [class*="bg-purple-"] .text-white,
-.light [class*="bg-gradient-"] .text-white,
+/* Map Overlay Location Card High Contrast in Light Mode */
+.light .map-overlay-location-card {
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Patient Dark Cards High Contrast in Light Mode */
+.light .patient-dark-card {
+  border-color: #334155 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* HEADINGS & PRIMARY TEXT INSIDE ANY DARK CONTAINER IN LIGHT MODE -> CRISP WHITE */
+.light .public-hero-section h1,
+.light .public-hero-section h2,
+.light .public-hero-section h3,
+.light .public-hero-section h4,
+.light .public-hero-section .text-white,
+.light .map-overlay-location-card h1,
+.light .map-overlay-location-card h2,
+.light .map-overlay-location-card h3,
+.light .map-overlay-location-card h4,
+.light .map-overlay-location-card .text-white,
+.light .patient-dark-card h1,
+.light .patient-dark-card h2,
+.light .patient-dark-card h3,
+.light .patient-dark-card h4,
 .light .patient-dark-card .text-white,
+.light header h1,
+.light header h2,
+.light header h3,
 .light header .text-white,
+.light nav h1,
+.light nav h2,
+.light nav h3,
 .light nav .text-white,
-.light button.text-white,
-.light button .text-white,
-.light .fixed .text-white,
-.light [role="dialog"] .text-white {
-  color: #ffffff !important;
+.light .bg-slate-950 h1,
+.light .bg-slate-950 h2,
+.light .bg-slate-950 h3,
+.light .bg-slate-950 h4,
+.light .bg-slate-950 .text-white,
+.light .bg-slate-900 h1,
+.light .bg-slate-900 h2,
+.light .bg-slate-900 h3,
+.light .bg-slate-900 h4,
+.light .bg-slate-900 .text-white,
+.light .bg-slate-850 h1,
+.light .bg-slate-850 h2,
+.light .bg-slate-850 h3,
+.light .bg-slate-850 .text-white,
+.light .bg-slate-800 h1,
+.light .bg-slate-800 h2,
+.light .bg-slate-800 h3,
+.light .bg-slate-800 .text-white,
+.light .bg-emerald-950 h1,
+.light .bg-emerald-950 h2,
+.light .bg-emerald-950 h3,
+.light .bg-emerald-950 .text-white,
+.light .bg-cyan-950 h1,
+.light .bg-cyan-950 h2,
+.light .bg-cyan-950 h3,
+.light .bg-cyan-950 .text-white,
+.light .bg-indigo-950 h1,
+.light .bg-indigo-950 h2,
+.light .bg-indigo-950 h3,
+.light .bg-indigo-950 .text-white,
+.light .bg-rose-950 h1,
+.light .bg-rose-950 h2,
+.light .bg-rose-950 h3,
+.light .bg-rose-950 .text-white,
+.light .fixed.inset-0 h1,
+.light .fixed.inset-0 h2,
+.light .fixed.inset-0 h3,
+.light .fixed.inset-0 h4,
+.light .fixed.inset-0 .text-white {
+  color: #FFFFFF !important;
 }
 
-.light [class*="bg-slate-900"] .text-slate-300,
-.light [class*="bg-slate-850"] .text-slate-300,
-.light [class*="bg-slate-800"] .text-slate-300,
-.light [class*="bg-gradient-"] .text-slate-300,
-.light .patient-dark-card .text-slate-300 {
-  color: #cbd5e1 !important;
+/* BODY & PARAGRAPH TEXT INSIDE ANY DARK CONTAINER IN LIGHT MODE -> LIGHT GREY */
+.light .public-hero-section p,
+.light .public-hero-section span:not([class*="bg-clip-text"]),
+.light .public-hero-section div,
+.light .public-hero-section label,
+.light .map-overlay-location-card p,
+.light .map-overlay-location-card span,
+.light .map-overlay-location-card div,
+.light .patient-dark-card p,
+.light .patient-dark-card span:not([class*="bg-clip-text"]),
+.light .patient-dark-card div,
+.light header p,
+.light header span,
+.light header div,
+.light nav p,
+.light nav span,
+.light nav div,
+.light .bg-slate-950 p,
+.light .bg-slate-950 span:not([class*="bg-clip-text"]),
+.light .bg-slate-950 div,
+.light .bg-slate-950 label,
+.light .bg-slate-900 p,
+.light .bg-slate-900 span:not([class*="bg-clip-text"]),
+.light .bg-slate-900 div,
+.light .bg-slate-900 label,
+.light .bg-slate-850 p,
+.light .bg-slate-850 span:not([class*="bg-clip-text"]),
+.light .bg-slate-850 div,
+.light .bg-slate-800 p,
+.light .bg-slate-800 span:not([class*="bg-clip-text"]),
+.light .bg-slate-800 div,
+.light .bg-emerald-950 p,
+.light .bg-emerald-950 span,
+.light .bg-emerald-950 div,
+.light .bg-cyan-950 p,
+.light .bg-cyan-950 span,
+.light .bg-cyan-950 div,
+.light .bg-indigo-950 p,
+.light .bg-indigo-950 span,
+.light .bg-indigo-950 div,
+.light .bg-rose-950 p,
+.light .bg-rose-950 span,
+.light .bg-rose-950 div,
+.light .fixed.inset-0 p,
+.light .fixed.inset-0 span,
+.light .fixed.inset-0 div,
+.light .fixed.inset-0 label {
+  color: #F1F5F9;
 }
 
-.light [class*="bg-slate-900"] .text-slate-400,
-.light [class*="bg-slate-850"] .text-slate-400,
-.light [class*="bg-slate-800"] .text-slate-400,
-.light [class*="bg-gradient-"] .text-slate-400,
-.light .patient-dark-card .text-slate-400 {
-  color: #94a3b8 !important;
+/* SECONDARY SLATE TEXT INSIDE ANY DARK CONTAINER IN LIGHT MODE */
+.light .public-hero-section .text-slate-200,
+.light .public-hero-section .text-slate-300,
+.light .public-hero-section .text-slate-400,
+.light .public-hero-section .text-slate-500,
+.light .map-overlay-location-card .text-slate-200,
+.light .map-overlay-location-card .text-slate-300,
+.light .map-overlay-location-card .text-slate-400,
+.light .map-overlay-location-card .text-slate-500,
+.light .patient-dark-card .text-slate-200,
+.light .patient-dark-card .text-slate-300,
+.light .patient-dark-card .text-slate-400,
+.light .patient-dark-card .text-slate-500,
+.light header .text-slate-300,
+.light header .text-slate-400,
+.light nav .text-slate-300,
+.light nav .text-slate-400,
+.light .bg-slate-950 .text-slate-200,
+.light .bg-slate-950 .text-slate-300,
+.light .bg-slate-950 .text-slate-400,
+.light .bg-slate-950 .text-slate-500,
+.light .bg-slate-900 .text-slate-200,
+.light .bg-slate-900 .text-slate-300,
+.light .bg-slate-900 .text-slate-400,
+.light .bg-slate-900 .text-slate-500,
+.light .bg-emerald-950 .text-slate-200,
+.light .bg-emerald-950 .text-slate-300,
+.light .bg-emerald-950 .text-slate-400,
+.light .bg-cyan-950 .text-slate-200,
+.light .bg-cyan-950 .text-slate-300,
+.light .bg-cyan-950 .text-slate-400,
+.light .fixed.inset-0 .text-slate-200,
+.light .fixed.inset-0 .text-slate-300,
+.light .fixed.inset-0 .text-slate-400,
+.light .fixed.inset-0 .text-slate-500 {
+  color: #CBD5E1 !important;
 }
 
-.patient-dark-card {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+/* 4. HIGH-CONTRAST COLOR ACCENTS INSIDE DARK CONTAINERS IN LIGHT MODE */
+.light .text-emerald-300,
+.light .text-emerald-400,
+.light .text-emerald-500 {
+  color: #34D399 !important;
+}
+
+.light .text-cyan-300,
+.light .text-cyan-400,
+.light .text-cyan-500 {
+  color: #38BDF8 !important;
+}
+
+.light .text-amber-300,
+.light .text-amber-400,
+.light .text-amber-500 {
+  color: #FCD34D !important;
+}
+
+.light .text-rose-300,
+.light .text-rose-400,
+.light .text-rose-500 {
+  color: #FB7185 !important;
+}
+
+.light .text-indigo-300,
+.light .text-indigo-400,
+.light .text-indigo-500 {
+  color: #A78BFA !important;
+}
+
+.light .text-teal-300,
+.light .text-teal-400,
+.light .text-teal-500 {
+  color: #2DD4BF !important;
+}
+
+/* 5. INPUT FIELDS & TEXTAREAS INSIDE DARK CONTAINERS IN LIGHT MODE */
+.light .bg-slate-950 input,
+.light .bg-slate-950 textarea,
+.light .bg-slate-950 select,
+.light .bg-slate-900 input,
+.light .bg-slate-900 textarea,
+.light .bg-slate-900 select,
+.light .fixed.inset-0 input,
+.light .fixed.inset-0 textarea,
+.light .fixed.inset-0 select {
+  background-color: #020617 !important;
+  color: #FFFFFF !important;
+  border-color: #475569 !important;
+}
+
+.light .bg-slate-950 input::placeholder,
+.light .bg-slate-950 textarea::placeholder,
+.light .bg-slate-900 input::placeholder,
+.light .bg-slate-900 textarea::placeholder,
+.light .fixed.inset-0 input::placeholder,
+.light .fixed.inset-0 textarea::placeholder {
+  color: #94A3B8 !important;
+  opacity: 1 !important;
+}
+
+/* 6. BUTTONS IN LIGHT MODE */
+/* Dark slate buttons in Light Mode -> E2E8F0 background with 0F172A text */
+.light button.bg-slate-800,
+.light button.bg-slate-900,
+.light button.bg-slate-950 {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+.light button.bg-slate-800:hover,
+.light button.bg-slate-900:hover,
+.light button.bg-slate-950:hover {
+  background-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+/* Solid Fill Buttons in Light Mode -> Maintain High Contrast Dark Charcoal Text on Bright Fills */
+.light button.bg-emerald-500,
+.light button.bg-emerald-400,
+.light button.bg-cyan-500,
+.light button.bg-cyan-400,
+.light button.bg-amber-500,
+.light button.bg-teal-400,
+.light .bg-emerald-500,
+.light .bg-emerald-400,
+.light .bg-cyan-500,
+.light .bg-cyan-400,
+.light .bg-amber-500 {
+  color: #0F172A !important;
+}
+
+.light button.bg-emerald-500 span,
+.light button.bg-emerald-400 span,
+.light button.bg-cyan-500 span,
+.light button.bg-cyan-400 span,
+.light button.bg-amber-500 span,
+.light .bg-emerald-500 span,
+.light .bg-cyan-500 span {
+  color: #0F172A !important;
+}
+
+.light button.bg-rose-600,
+.light button.bg-rose-500,
+.light button.bg-indigo-600,
+.light .bg-rose-600,
+.light .bg-rose-500,
+.light .bg-indigo-600 {
+  color: #FFFFFF !important;
+}
+
+.light button.bg-rose-600 span,
+.light button.bg-rose-500 span,
+.light button.bg-indigo-600 span,
+.light .bg-rose-600 span {
+  color: #FFFFFF !important;
+}
+
+/* 7. TABLES IN LIGHT MODE */
+.light table {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+}
+
+.light thead,
+.light thead tr,
+.light th {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+  font-weight: 700 !important;
+  border-bottom-color: #CBD5E1 !important;
+}
+
+.light tbody tr {
+  border-bottom-color: #E2E8F0 !important;
+  color: #1E293B !important;
+}
+
+.light tbody tr:hover {
+  background-color: #F1F5F9 !important;
+}
+
+.light td {
+  color: #1E293B !important;
+}
+
+/* 8. MODALS IN LIGHT MODE */
+.light .fixed.inset-0 > div {
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4) !important;
+}
+
+.light .fixed.inset-0 > div h1,
+.light .fixed.inset-0 > div h2,
+.light .fixed.inset-0 > div h3,
+.light .fixed.inset-0 > div h4 {
+  color: #FFFFFF !important;
+}
+
+.light .fixed.inset-0 > div p,
+.light .fixed.inset-0 > div span,
+.light .fixed.inset-0 > div label,
+.light .fixed.inset-0 > div div {
+  color: #F1F5F9;
+}
+
+/* Explicit Black Text for Active PORTAL PESAKIT button */
+.portal-pesakit-active-text,
+nav .portal-pesakit-active-text,
+.light nav .portal-pesakit-active-text,
+.dark nav .portal-pesakit-active-text,
+span.portal-pesakit-active-text,
+button span.portal-pesakit-active-text {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}
+
+/* Specific Patient Portal texts requested to be BLACK in Light Mode ONLY */
+.light .portal-light-black,
+.light .portal-light-black strong,
+.light h3.portal-light-black,
+.light p.portal-light-black,
+.light p.portal-light-black strong,
+.light span.portal-light-black,
+.light button.portal-light-black,
+.light .fixed.inset-0 button.portal-light-black {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}
+
+/* Explicit Black Text for Tutup & Faham button */
+.tutup-faham-btn,
+.tutup-faham-btn span,
+button.tutup-faham-btn,
+.light button.tutup-faham-btn,
+.dark button.tutup-faham-btn {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}
+
+/* ========================================================================= */
+/* FLUORESCENT (FLORECENT) BORDER LINES FOR ALL BUTTONS IN LIGHT MODE ONLY   */
+/* Mode Gelap (Dark Mode) tidak diubah sama sekali.                          */
+/* ========================================================================= */
+
+.light button {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.45) !important;
+}
+
+/* Butang Sian & Teal: Garisan sempadan electric fluorescent cyan (#00f0ff) dengan kesan cahaya bercahaya (neon glow) */
+.light button[class*="bg-cyan"],
+.light button[class*="bg-teal"],
+.light button[class*="border-cyan"],
+.light button[class*="border-teal"],
+.light button[class*="to-cyan"],
+.light button[class*="to-teal"],
+.light button[class*="from-cyan"],
+.light button[class*="from-teal"] {
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5) !important;
+}
+
+/* Butang Zamrud (Emerald): Garisan sempadan fluorescent green (#00ff88) */
+.light button[class*="bg-emerald"],
+.light button[class*="border-emerald"],
+.light button[class*="to-emerald"],
+.light button[class*="from-emerald"] {
+  border-color: #00ff88 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5) !important;
+}
+
+/* Butang Kecemasan (SOS / Rose): Garisan sempadan fluorescent neon rose (#ff1a53) */
+.light button[class*="bg-rose"],
+.light button[class*="border-rose"],
+.light button[class*="to-rose"],
+.light button[class*="from-rose"],
+.light button[class*="bg-red"],
+.light button[class*="border-red"] {
+  border-color: #ff1a53 !important;
+  box-shadow: 0 0 12px rgba(255, 26, 83, 0.55) !important;
+}
+
+/* Butang Ambar: Garisan sempadan fluorescent amber (#ffd000) */
+.light button[class*="bg-amber"],
+.light button[class*="border-amber"],
+.light button[class*="to-amber"],
+.light button[class*="from-amber"],
+.light button[class*="bg-yellow"] {
+  border-color: #ffd000 !important;
+  box-shadow: 0 0 10px rgba(255, 208, 0, 0.5) !important;
+}
+
+/* Butang Indigo: Garisan sempadan fluorescent purple (#b026ff) */
+.light button[class*="bg-indigo"],
+.light button[class*="border-indigo"],
+.light button[class*="to-indigo"],
+.light button[class*="from-indigo"],
+.light button[class*="bg-purple"] {
+  border-color: #b026ff !important;
+  box-shadow: 0 0 10px rgba(176, 38, 255, 0.5) !important;
+}
+
+/* Butang Standard / Tindakan Lain di semua bahagian & modal dalam Light Mode */
+.light button.bg-slate-800,
+.light button.bg-slate-900,
+.light button.bg-slate-950,
+.light button.bg-slate-200,
+.light button.bg-slate-100,
+.light button.bg-white,
+.light .fixed.inset-0 button {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.45) !important;
+}
+
+/* Re-apply specific color overrides for modal buttons if they have colors */
+.light .fixed.inset-0 button[class*="bg-emerald"],
+.light .fixed.inset-0 button[class*="border-emerald"] {
+  border-color: #00ff88 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5) !important;
+}
+
+.light .fixed.inset-0 button[class*="bg-rose"],
+.light .fixed.inset-0 button[class*="border-rose"] {
+  border-color: #ff1a53 !important;
+  box-shadow: 0 0 12px rgba(255, 26, 83, 0.55) !important;
+}
+
+/* Fluorescent hover state */
+.light button:hover {
+  filter: brightness(1.06);
+}
+
+/* ========================================================================= */
+/* FLUORESCENT (FLORECENT) BORDER LINES FOR ALL BUTTONS IN DARK MODE ONLY    */
+/* Mod Terang (Light Mode) dikekalkan sepenuhnya tanpa sebarang perubahan.   */
+/* ========================================================================= */
+
+.dark button {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.45) !important;
+}
+
+/* Butang Sian & Teal: Garisan sempadan electric fluorescent cyan (#00f0ff) dengan kesan neon glow (box-shadow: 0 0 10px rgba(0, 240, 255, 0.5)) */
+.dark button[class*="bg-cyan"],
+.dark button[class*="bg-teal"],
+.dark button[class*="border-cyan"],
+.dark button[class*="border-teal"],
+.dark button[class*="to-cyan"],
+.dark button[class*="to-teal"],
+.dark button[class*="from-cyan"],
+.dark button[class*="from-teal"] {
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5) !important;
+}
+
+/* Butang Zamrud (Emerald): Garisan sempadan fluorescent green (#00ff88) */
+.dark button[class*="bg-emerald"],
+.dark button[class*="border-emerald"],
+.dark button[class*="to-emerald"],
+.dark button[class*="from-emerald"] {
+  border-color: #00ff88 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5) !important;
+}
+
+/* Butang Kecemasan (SOS / Rose): Garisan sempadan fluorescent neon rose (#ff1a53) */
+.dark button[class*="bg-rose"],
+.dark button[class*="border-rose"],
+.dark button[class*="to-rose"],
+.dark button[class*="from-rose"],
+.dark button[class*="bg-red"],
+.dark button[class*="border-red"] {
+  border-color: #ff1a53 !important;
+  box-shadow: 0 0 12px rgba(255, 26, 83, 0.55) !important;
+}
+
+/* Butang Ambar: Garisan sempadan fluorescent amber (#ffd000) */
+.dark button[class*="bg-amber"],
+.dark button[class*="border-amber"],
+.dark button[class*="to-amber"],
+.dark button[class*="from-amber"],
+.dark button[class*="bg-yellow"] {
+  border-color: #ffd000 !important;
+  box-shadow: 0 0 10px rgba(255, 208, 0, 0.5) !important;
+}
+
+/* Butang Indigo: Garisan sempadan fluorescent purple (#b026ff) */
+.dark button[class*="bg-indigo"],
+.dark button[class*="border-indigo"],
+.dark button[class*="to-indigo"],
+.dark button[class*="from-indigo"],
+.dark button[class*="bg-purple"] {
+  border-color: #b026ff !important;
+  box-shadow: 0 0 10px rgba(176, 38, 255, 0.5) !important;
+}
+
+/* Butang Standard / Tindakan Lain di semua bahagian & modal dalam Dark Mode */
+.dark button.bg-slate-800,
+.dark button.bg-slate-900,
+.dark button.bg-slate-950,
+.dark button.bg-slate-700,
+.dark .fixed.inset-0 button {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.45) !important;
+}
+
+/* Re-apply specific color overrides for modal buttons in Dark Mode */
+.dark .fixed.inset-0 button[class*="bg-emerald"],
+.dark .fixed.inset-0 button[class*="border-emerald"] {
+  border-color: #00ff88 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5) !important;
+}
+
+.dark .fixed.inset-0 button[class*="bg-rose"],
+.dark .fixed.inset-0 button[class*="border-rose"] {
+  border-color: #ff1a53 !important;
+  box-shadow: 0 0 12px rgba(255, 26, 83, 0.55) !important;
+}
+
+/* Fluorescent hover state in Dark Mode */
+.dark button:hover {
+  filter: brightness(1.1);
 }

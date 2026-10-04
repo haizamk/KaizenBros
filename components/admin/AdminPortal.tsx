@@ -156,7 +156,7 @@ export function AdminPortal({
   onAuditLog,
   onStaffLogout
 }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'pendaftaran' | 'pesakit' | 'jadual' | 'pengguna' | 'jururawat' | 'ringkasan' | 'stesen' | 'audit' | 'tetapan'>('pendaftaran');
+  const [activeTab, setActiveTab] = useState<'jadual' | 'pesakit' | 'pendaftaran' | 'pengguna' | 'jururawat' | 'ringkasan' | 'stesen' | 'audit' | 'tetapan'>('jadual');
   const [searchLog, setSearchLog] = useState('');
   const [searchReg, setSearchReg] = useState('');
   const [searchPatient, setSearchPatient] = useState('');
@@ -790,46 +790,57 @@ export function AdminPortal({
   const pendingCount = regList.filter(r => r.status === 'BARU').length;
 
   const filteredRegistrations = regList.filter(reg => {
+    const sReg = (searchReg || '').toLowerCase();
     const matches = 
-      reg.id.toLowerCase().includes(searchReg.toLowerCase()) ||
-      reg.full_name.toLowerCase().includes(searchReg.toLowerCase()) ||
-      reg.ic_number.includes(searchReg) ||
-      reg.phone_number.includes(searchReg) ||
-      reg.patient_category.toLowerCase().includes(searchReg.toLowerCase());
+      (reg.id || '').toLowerCase().includes(sReg) ||
+      (reg.full_name || '').toLowerCase().includes(sReg) ||
+      (reg.ic_number || '').includes(searchReg || '') ||
+      (reg.phone_number || '').includes(searchReg || '') ||
+      (reg.patient_category || '').toLowerCase().includes(sReg);
     if (filterRegStatus === 'SEMUA') return matches;
     return matches && reg.status === filterRegStatus;
   });
 
   const filteredPatients = patientsList.filter(p => {
+    const sPat = (searchPatient || '').toLowerCase();
     const matches = 
-      p.name.toLowerCase().includes(searchPatient.toLowerCase()) ||
-      p.patient_id_code.toLowerCase().includes(searchPatient.toLowerCase()) ||
-      p.ic_number.includes(searchPatient) ||
-      p.phone.includes(searchPatient);
+      (p.name || '').toLowerCase().includes(sPat) ||
+      (p.patient_id_code || '').toLowerCase().includes(sPat) ||
+      (p.ic_number || '').includes(searchPatient || '') ||
+      (p.phone || '').includes(searchPatient || '');
     if (filterPatientStatus === 'AKTIF') return matches && p.is_active;
     if (filterPatientStatus === 'DIKELUARKAN') return matches && !p.is_active;
     return matches;
   });
 
-  const filteredUsers = usersList.filter(u => 
-    u.name.toLowerCase().includes(searchUser.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchUser.toLowerCase()) ||
-    u.role.toLowerCase().includes(searchUser.toLowerCase()) ||
-    u.phone.includes(searchUser)
-  );
+  const filteredUsers = usersList.filter(u => {
+    const sUser = (searchUser || '').toLowerCase();
+    return (
+      (u.name || '').toLowerCase().includes(sUser) ||
+      (u.email || '').toLowerCase().includes(sUser) ||
+      (u.role || '').toLowerCase().includes(sUser) ||
+      (u.phone || '').includes(searchUser || '')
+    );
+  });
 
-  const filteredNurses = nursesList.filter(n => 
-    n.name.toLowerCase().includes(searchNurse.toLowerCase()) ||
-    n.staff_id_code.toLowerCase().includes(searchNurse.toLowerCase()) ||
-    n.nursing_board_no.toLowerCase().includes(searchNurse.toLowerCase()) ||
-    n.phone.includes(searchNurse)
-  );
+  const filteredNurses = nursesList.filter(n => {
+    const sNurse = (searchNurse || '').toLowerCase();
+    return (
+      (n.name || '').toLowerCase().includes(sNurse) ||
+      (n.staff_id_code || '').toLowerCase().includes(sNurse) ||
+      (n.nursing_board_no || '').toLowerCase().includes(sNurse) ||
+      (n.phone || '').includes(searchNurse || '')
+    );
+  });
 
-  const filteredLogs = auditLogs.filter(log => 
-    log.user_name.toLowerCase().includes(searchLog.toLowerCase()) ||
-    log.action.toLowerCase().includes(searchLog.toLowerCase()) ||
-    log.details.toLowerCase().includes(searchLog.toLowerCase())
-  );
+  const filteredLogs = auditLogs.filter(log => {
+    const sLog = (searchLog || '').toLowerCase();
+    return (
+      (log.user_name || '').toLowerCase().includes(sLog) ||
+      (log.action || '').toLowerCase().includes(sLog) ||
+      (log.details || '').toLowerCase().includes(sLog)
+    );
+  });
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-16">
@@ -872,9 +883,9 @@ export function AdminPortal({
       <div className="bg-slate-900/90 border-b border-slate-800 sticky top-14 z-30 px-4 sm:px-8 backdrop-blur">
         <div className="max-w-7xl mx-auto flex space-x-2 overflow-x-auto py-2">
           {[
-            { id: 'pendaftaran', label: 'Kemasukan & Pendaftaran Baru', icon: UserPlus, badge: pendingCount },
-            { id: 'pesakit', label: 'Pengurusan Pesakit', icon: Users, badge: patientsList.filter(p => p.is_active).length },
             { id: 'jadual', label: 'Jadual Rawatan (Treatment Schedule)', icon: Calendar, badge: sessionsList.length },
+            { id: 'pesakit', label: 'Pengurusan Pesakit', icon: Users, badge: patientsList.filter(p => p.is_active).length },
+            { id: 'pendaftaran', label: 'Kemasukan & Pendaftaran Baru', icon: UserPlus, badge: pendingCount },
             { id: 'pengguna', label: 'Pentadbir & Pengguna (RBAC)', icon: Shield, badge: usersList.length },
             { id: 'jururawat', label: 'Jururawat Klinikal', icon: Stethoscope, badge: nursesList.length },
             { id: 'ringkasan', label: 'Ringkasan Sistem', icon: Activity },

@@ -163,7 +163,7 @@ export default function Home() {
 
     const matched = syncedPatients.find(p => {
       const matchId = p.id === authenticatedPatient.id;
-      const matchCode = p.patient_id_code.trim().toLowerCase() === cleanAuthCode;
+      const matchCode = (p.patient_id_code || '').trim().toLowerCase() === cleanAuthCode;
       const matchEmail = p.email && p.email.trim().toLowerCase() === cleanAuthEmail;
       const matchIc = cleanAuthIc && p.ic_number && p.ic_number.replace(/\D/g, '') === cleanAuthIc;
       return matchId || matchCode || matchEmail || matchIc;
@@ -256,7 +256,7 @@ export default function Home() {
       id: newPt.id,
       patientIdCode: newPt.patient_id_code,
       name: newPt.name,
-      email: newPt.email || `${newPt.patient_id_code.toLowerCase()}@kaizenbros.com.my`,
+      email: newPt.email || `${(newPt.patient_id_code || 'pt').toLowerCase()}@kaizenbros.com.my`,
       phone: newPt.phone || '012-3456789',
       icNumber: newPt.ic_number || '700101-10-5000',
       passwordHash: 'kaizen123',
@@ -625,7 +625,7 @@ export default function Home() {
   };
 
   return (
-    <div suppressHydrationWarning className={`min-h-screen flex flex-col ${theme === 'light' ? 'bg-[#F5F7FA] text-slate-900 light' : 'bg-slate-950 text-slate-100 dark'}`}>
+    <div suppressHydrationWarning className={`min-h-screen flex flex-col ${theme === 'light' ? 'bg-[#EEF2F6] text-slate-900 light' : 'bg-slate-950 text-slate-100 dark'}`}>
       <Header
         currentView={currentView}
         onViewChange={(view) => setCurrentView(view)}
@@ -715,13 +715,13 @@ export default function Home() {
             onSelectPatient={(selectedPt) => {
               setSelectedPatientId(selectedPt.id);
               const accounts = getPatientAccounts();
-              let matchedAcc = accounts.find(a => a.id === selectedPt.id || a.patientIdCode.toLowerCase() === selectedPt.patient_id_code.toLowerCase());
+              let matchedAcc = accounts.find(a => a.id === selectedPt.id || ((a.patientIdCode || '').toLowerCase() === (selectedPt.patient_id_code || '').toLowerCase()));
               if (!matchedAcc) {
                 matchedAcc = {
                   id: selectedPt.id,
                   patientIdCode: selectedPt.patient_id_code,
                   name: selectedPt.name,
-                  email: selectedPt.email || `${selectedPt.patient_id_code.toLowerCase()}@kaizenbros.com.my`,
+                  email: selectedPt.email || `${(selectedPt.patient_id_code || 'pt').toLowerCase()}@kaizenbros.com.my`,
                   phone: selectedPt.phone || '012-3456789',
                   icNumber: selectedPt.ic_number || '700101-10-5000',
                   passwordHash: 'kaizen123',
@@ -869,12 +869,17 @@ export default function Home() {
                 onClick={() => setCurrentView('patient')}
                 className={`min-h-[50px] rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
                   currentView === 'patient'
-                    ? 'bg-gradient-to-r from-cyan-600 to-teal-500 text-white font-extrabold shadow-lg shadow-teal-950/40 border border-teal-500'
+                    ? 'bg-gradient-to-r from-cyan-600 to-teal-500 font-extrabold shadow-lg shadow-teal-950/40 border border-teal-500'
                     : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
                 }`}
               >
-                <User className="w-5 h-5" />
-                <span className="text-[11px] mt-1 font-black">PORTAL PESAKIT</span>
+                <User className="w-5 h-5 text-white" />
+                <span 
+                  className={`text-[11px] mt-1 font-black ${currentView === 'patient' ? '!text-black portal-pesakit-active-text' : ''}`}
+                  style={currentView === 'patient' ? { color: '#000000', WebkitTextFillColor: '#000000' } : undefined}
+                >
+                  PORTAL PESAKIT
+                </span>
               </button>
 
               {/* Menu 3: Bantuan */}
@@ -961,9 +966,12 @@ export default function Home() {
 
             <button
               onClick={() => setShowGlobalHelpModal(false)}
-              className="w-full min-h-[48px] bg-slate-800 hover:bg-slate-750 text-white font-bold rounded-2xl cursor-pointer transition-colors text-sm"
+              style={{ color: '#000000' }}
+              className="w-full min-h-[48px] bg-slate-200 hover:bg-slate-300 text-black !text-black font-bold rounded-2xl cursor-pointer transition-colors text-sm tutup-faham-btn"
             >
-              Tutup & Faham
+              <span style={{ color: '#000000' }} className="text-black !text-black font-bold">
+                Tutup & Faham
+              </span>
             </button>
           </div>
         </div>

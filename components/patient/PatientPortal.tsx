@@ -281,7 +281,7 @@ export function PatientPortal({
 
   if (!patient || !isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans my-auto py-12">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans my-auto py-12 patient-portal-root">
         <div className="max-w-md w-full bg-slate-900 border-3 border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl">
           <div className="w-20 h-20 rounded-3xl bg-indigo-950/90 border-2 border-indigo-500 text-indigo-300 flex items-center justify-center mx-auto shadow-inner">
             <User className="w-10 h-10 stroke-[2.5]" />
@@ -340,18 +340,18 @@ export function PatientPortal({
               {onNavigateToRegistration && (
                 <button
                   onClick={onNavigateToRegistration}
-                  className="flex-1 min-h-[48px] py-3 px-3 bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer border border-slate-700"
+                  className="flex-1 min-h-[48px] py-3 px-3 bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer border border-slate-700 portal-light-black"
                 >
-                  <span>Daftar Pesakit Baru</span>
+                  <span className="portal-light-black">Daftar Pesakit Baru</span>
                 </button>
               )}
 
               {onNavigateToAdmin && (
                 <button
                   onClick={onNavigateToAdmin}
-                  className="flex-1 min-h-[48px] py-3 px-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer border border-slate-700"
+                  className="flex-1 min-h-[48px] py-3 px-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer border border-slate-700 portal-light-black"
                 >
-                  <span>Portal Admin</span>
+                  <span className="portal-light-black">Portal Admin</span>
                 </button>
               )}
             </div>
@@ -362,7 +362,7 @@ export function PatientPortal({
   }
 
   return (
-    <div suppressHydrationWarning className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-32 transition-colors">
+    <div suppressHydrationWarning className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-32 transition-colors patient-portal-root">
       
       {/* 1. ACCESSIBILITY TOOLBAR (FONT SIZE ADJUSTER) */}
       <div className="bg-slate-900 text-slate-200 border-b border-slate-800 px-4 py-2.5 transition-colors sticky top-0 z-30 shadow-md">
@@ -565,20 +565,13 @@ export function PatientPortal({
                   </div>
                 </div>
 
-                <div className="p-4 bg-slate-950/90 border-2 border-slate-800 rounded-2xl text-xs sm:text-sm text-slate-200 mb-4 space-y-1.5">
+                <div className="p-4 bg-slate-950/90 border-2 border-slate-800 rounded-2xl text-xs sm:text-sm text-slate-200 space-y-1.5">
                   <p className="font-bold text-cyan-300 flex items-center space-x-1.5">
                     <Info className="w-4 h-4 text-cyan-400 flex-shrink-0" />
                     <span>Panduan Ketibaan Pesakit:</span>
                   </p>
                   <p>• Sila tiba <strong>15 minit lebih awal</strong> di Kaunter Jururawat.</p>
                   <p>• Rutin tetap anda: <strong className="text-emerald-300">{schedulePatternLabel}</strong>.</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-950/90 border border-slate-800 rounded-xl flex items-center justify-between text-xs font-bold">
-                  <span className="text-slate-400">Status Temujanji Seterusnya:</span>
-                  <span className="text-cyan-300 px-3 py-1 bg-cyan-950 rounded-lg border border-cyan-800">
-                    ✓ Dijadualkan ({nextDialysis.relativeText})
-                  </span>
                 </div>
               </div>
             )}
@@ -601,8 +594,8 @@ export function PatientPortal({
                     <Stethoscope className="w-8 h-8 stroke-[2.5]" />
                   </div>
                   <div>
-                    <h3 className={`${fontTitleClass} font-black text-white`}>🩺 Sesi Dialisis Saya</h3>
-                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5`}>
+                    <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>🩺 Sesi Dialisis Saya</h3>
+                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black`}>
                       {isOnDialysis ? '🔴 Sedang berjalan' : isWaitingQueue ? '🟡 Menunggu giliran' : 'Lihat status & stesen mesin'}
                     </p>
                   </div>
@@ -617,8 +610,8 @@ export function PatientPortal({
                     <Calendar className="w-8 h-8 stroke-[2.5]" />
                   </div>
                   <div>
-                    <h3 className={`${fontTitleClass} font-black text-white`}>📅 Jadual Temujanji</h3>
-                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5`}>
+                    <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>📅 Jadual Temujanji</h3>
+                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black`}>
                       {schedulePatternLabel} ({patientShiftInfo.shortTime})
                     </p>
                   </div>
@@ -634,12 +627,12 @@ export function PatientPortal({
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between gap-1">
-                      <h3 className={`${fontTitleClass} font-black text-white`}>⚖️ Timbang & BP (Pra & After)</h3>
+                      <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>⚖️ Timbang & BP (Pra & After)</h3>
                       <span className="text-[10px] bg-teal-950 text-teal-300 border border-teal-700 px-2 py-0.5 rounded-full font-bold">
                         Boleh Masuk Data
                       </span>
                     </div>
-                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5`}>
+                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black`}>
                       Pra: <strong className="text-amber-300">{activePreWeight !== null ? `${activePreWeight}kg` : '--'}</strong> • Selepas: <strong className="text-cyan-300">{activePostWeight !== null ? `${activePostWeight}kg` : '--'}</strong> (Kering: <strong className="text-emerald-300">{patientDryWeight}kg</strong>)
                     </p>
                   </div>
@@ -654,8 +647,8 @@ export function PatientPortal({
                     <Pill className="w-8 h-8 stroke-[2.5]" />
                   </div>
                   <div>
-                    <h3 className={`${fontTitleClass} font-black text-white`}>💊 Senarai Ubat</h3>
-                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5`}>
+                    <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>💊 Senarai Ubat</h3>
+                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black`}>
                       {activePatientMedications.length} jenis ubat aktif
                     </p>
                   </div>
@@ -670,8 +663,8 @@ export function PatientPortal({
                     <FileText className="w-8 h-8 stroke-[2.5]" />
                   </div>
                   <div>
-                    <h3 className={`${fontTitleClass} font-black text-white`}>📋 Rekod Kesihatan Saya</h3>
-                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5`}>
+                    <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>📋 Rekod Kesihatan Saya</h3>
+                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black`}>
                       Sejarah rawatan, bacaan pra/pos dialisis & laporan klinikal
                     </p>
                   </div>
@@ -689,7 +682,7 @@ export function PatientPortal({
                 <AlertTriangle className="w-8 h-8 text-rose-200 animate-bounce" />
                 <span>🚨 PANGGIL PUSAT DIALISIS (24/7)</span>
               </button>
-              <p className="text-center text-xs sm:text-sm text-slate-300 font-bold">
+              <p className="text-center text-xs sm:text-sm text-slate-300 font-bold portal-light-black">
                 Hubungi jika mengalami pening teruk, sesak nafas, atau kecemasan di rumah.
               </p>
             </div>
@@ -1306,7 +1299,20 @@ export function PatientPortal({
             <span className="text-[11px] font-black uppercase mt-1">Jadual</span>
           </button>
 
-          {/* Item 3: TIMBANG */}
+          {/* Item 3: REKOD */}
+          <button
+            onClick={() => setActiveTab('rekod')}
+            className={`min-h-[58px] rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+              activeTab === 'rekod'
+                ? 'bg-indigo-500 text-slate-950 font-black shadow-lg border-2 border-indigo-300'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <FileText className="w-6 h-6 stroke-[2.5]" />
+            <span className="text-[11px] font-black uppercase mt-1">Rekod</span>
+          </button>
+
+          {/* Item 4: TIMBANG */}
           <button
             onClick={() => setActiveTab('timbang')}
             className={`min-h-[58px] rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
@@ -1317,19 +1323,6 @@ export function PatientPortal({
           >
             <Scale className="w-6 h-6 stroke-[2.5]" />
             <span className="text-[11px] font-black uppercase mt-1">Timbang</span>
-          </button>
-
-          {/* Item 4: UBAT */}
-          <button
-            onClick={() => setActiveTab('ubat')}
-            className={`min-h-[58px] rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
-              activeTab === 'ubat'
-                ? 'bg-amber-500 text-slate-950 font-black shadow-lg border-2 border-amber-300'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            <Pill className="w-6 h-6 stroke-[2.5]" />
-            <span className="text-[11px] font-black uppercase mt-1">Ubat</span>
           </button>
 
           {/* Item 5: PROFIL */}
@@ -1483,7 +1476,7 @@ export function PatientPortal({
 
             <button
               onClick={() => setShowHelpModal(false)}
-              className="w-full min-h-[50px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer text-base border border-slate-700"
+              className="w-full min-h-[50px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer text-base border border-slate-700 portal-light-black"
             >
               Kembali ke Aplikasi
             </button>

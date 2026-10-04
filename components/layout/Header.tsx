@@ -184,9 +184,9 @@ export function Header({
 
         {/* High-visibility active badge for staff context */}
         <div className="flex items-center space-x-3">
-          {currentView !== 'public' && currentView !== 'patient' && (
+          {Boolean(currentView && currentView !== 'public' && currentView !== 'patient') && (
             <span className="hidden md:inline-flex items-center bg-cyan-950 text-cyan-300 border border-cyan-800 px-3 py-1 rounded-full text-xs font-bold font-mono">
-              ⚡ AKTIF: {currentView.toUpperCase()}
+              ⚡ AKTIF: {String(currentView || '').toUpperCase()}
             </span>
           )}
 
@@ -214,8 +214,8 @@ export function Header({
                 title="Buka Portal Bertugas"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                <span suppressHydrationWarning className="hidden sm:inline">{authenticatedStaff.name.split(' ')[0]}</span>
-                <span className="text-[10px] bg-cyan-800/80 px-1.5 py-0.2 rounded font-mono uppercase">{authenticatedStaff.role}</span>
+                <span suppressHydrationWarning className="hidden sm:inline">{(authenticatedStaff?.name || 'Staf').split(' ')[0]}</span>
+                <span className="text-[10px] bg-cyan-800/80 px-1.5 py-0.2 rounded font-mono uppercase">{authenticatedStaff?.role || 'staf'}</span>
               </button>
 
               <button

@@ -77,7 +77,7 @@ export function formatSecondsToHms(totalSec: number): string {
 export function parseTimeStringToTodayMs(timeStr: string): number {
   try {
     const today = new Date();
-    const clean = timeStr.trim().toUpperCase();
+    const clean = (timeStr || '').trim().toUpperCase();
     const isPm = clean.includes('PM');
     const isAm = clean.includes('AM');
     const numPart = clean.replace(/[^0-9:]/g, '');

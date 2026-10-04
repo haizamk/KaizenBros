@@ -565,10 +565,11 @@ export function NursePortal({
   // Filtered Sessions List
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
+      const q = (searchQuery || '').toLowerCase();
       const matchQuery = 
-        s.patient_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.patient_id_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.chair_number.toLowerCase().includes(searchQuery.toLowerCase());
+        (s.patient_name || '').toLowerCase().includes(q) ||
+        (s.patient_id_code || '').toLowerCase().includes(q) ||
+        (s.chair_number || '').toLowerCase().includes(q);
 
       if (!matchQuery) return false;
       if (statusFilter === 'SEMUA') return true;
@@ -1128,7 +1129,7 @@ export function NursePortal({
             </div>
             <div className="flex items-center justify-between gap-2">
               <h1 className="text-2xl sm:text-3xl font-black text-white mt-0.5">
-                SELAMAT DATANG, <span className="text-cyan-400">{currentNurseName.toUpperCase()}</span>
+                SELAMAT DATANG, <span className="text-cyan-400">{(currentNurseName || 'JURURAWAT').toUpperCase()}</span>
               </h1>
 
               {onStaffLogout && (
@@ -1680,7 +1681,7 @@ export function NursePortal({
                           <div>
                             <div className="flex flex-wrap items-center gap-1.5">
                               <h3 className="text-lg font-black text-white leading-tight">
-                                {s.patient_name.toUpperCase()}
+                                {(s.patient_name || 'PESAKIT').toUpperCase()}
                               </h3>
                               {isExcessiveWeight && (
                                 <span className="animate-pulse inline-flex items-center text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-600 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
@@ -2340,7 +2341,7 @@ export function NursePortal({
                   CHECK-IN PESAKIT
                 </span>
                 <h3 className="text-2xl font-black text-white mt-0.5">
-                  {selectedSessionForCheckIn.patient_name.toUpperCase()}
+                  {(selectedSessionForCheckIn?.patient_name || 'PESAKIT').toUpperCase()}
                 </h3>
               </div>
               <button 
@@ -2604,7 +2605,7 @@ export function NursePortal({
             <div className="flex justify-between items-start border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-2xl sm:text-3xl font-black text-white">
-                  {selectedSessionForActive.patient_name.toUpperCase()}
+                  {(selectedSessionForActive?.patient_name || 'PESAKIT').toUpperCase()}
                 </h3>
                 <div className="flex items-center space-x-3 mt-1">
                   <span className="text-xs font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
@@ -3337,7 +3338,7 @@ export function NursePortal({
                     Kemasukan Data Klinikal Jururawat
                   </span>
                   <h3 className="text-2xl font-black text-white">
-                    {weightModalSession.patient_name.toUpperCase()}
+                    {(weightModalSession?.patient_name || 'PESAKIT').toUpperCase()}
                   </h3>
                 </div>
               </div>

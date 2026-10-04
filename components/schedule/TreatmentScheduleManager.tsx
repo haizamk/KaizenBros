@@ -147,10 +147,11 @@ export function TreatmentScheduleManager({
       const matchDate = s.scheduled_date === selectedDate;
       const normalizedSessShift = normalizePatientShift(s.shift);
       const matchShift = selectedShiftFilter === 'ALL' || normalizedSessShift === selectedShiftFilter;
+      const q = (searchQuery || '').toLowerCase();
       const matchQuery = 
-        s.patient_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.patient_id_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.chair_number.toLowerCase().includes(searchQuery.toLowerCase());
+        (s.patient_name || '').toLowerCase().includes(q) ||
+        (s.patient_id_code || '').toLowerCase().includes(q) ||
+        (s.chair_number || '').toLowerCase().includes(q);
       return matchDate && matchShift && matchQuery;
     });
   }, [sessions, selectedDate, selectedShiftFilter, searchQuery]);
