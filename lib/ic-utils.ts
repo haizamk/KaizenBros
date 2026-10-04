@@ -8,6 +8,7 @@ export interface ICParsedData {
   birthDate: Date | null;
   birthDateFormatted: string;
   years: number;
+  ageYears?: number;
   days: number;
   ageDisplay: string; // e.g., "46 Tahun 106 Hari"
   gender: 'LELAKI' | 'PEREMPUAN' | null;
@@ -113,6 +114,7 @@ export function parseMalaysianIC(icInput: string): ICParsedData {
     birthDate,
     birthDateFormatted,
     years: Math.max(0, years),
+    ageYears: Math.max(0, years),
     days,
     ageDisplay,
     gender,

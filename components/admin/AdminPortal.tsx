@@ -18,7 +18,9 @@ import {
   Layers, 
   Key, 
   HardDrive, 
+  Edit2,
   Edit3, 
+  Upload,
   Eye, 
   FileCheck, 
   X, 
@@ -53,7 +55,7 @@ import {
 import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
 import { TreatmentScheduleManager } from '@/components/schedule/TreatmentScheduleManager';
 import { parseMalaysianIC } from '@/lib/ic-utils';
-import { User, AuditLog, DialysisChair, DialysisMachine, Patient, Nurse, NewRegistration, CentreProfile, ShiftSlot, DialysisSession, PatientMedication } from '@/types';
+import { User, AuditLog, DialysisChair, DialysisMachine, Patient, Nurse, NewRegistration, CentreProfile, ShiftSlot, DialysisSession, PatientMedication, SponsorType, PatientRegistrationDoc } from '@/types';
 import { 
   INITIAL_CHAIRS, 
   INITIAL_MACHINES, 
@@ -267,7 +269,9 @@ export function AdminPortal({
   });
   const [editingReg, setEditingReg] = useState<NewRegistration | null>(null);
   const [deletingReg, setDeletingReg] = useState<NewRegistration | null>(null);
+  const [deletingDocReg, setDeletingDocReg] = useState<NewRegistration | null>(null);
   const [previewDocReg, setPreviewDocReg] = useState<NewRegistration | null>(null);
+  const [editingDocReg, setEditingDocReg] = useState<NewRegistration | null>(null);
 
   // --- STATE FOR PATIENTS (CRUD) ---
   const [patientsList, setPatientsList] = useState<Patient[]>(() => {
@@ -515,6 +519,49 @@ export function AdminPortal({
     }
     setDeletingReg(null);
     setEditingReg(null);
+  };
+
+  const executeDeleteRegistrationDocument = (regId: string) => {
+    const target = regList.find(r => r.id === regId);
+    if (!target || !target.document) return;
+    const docName = target.document.name;
+    const updated: NewRegistration = {
+      ...target,
+      document: undefined
+    };
+    const newList = regList.map(r => r.id === regId ? updated : r);
+    setRegList(newList);
+    try {
+      localStorage.setItem('kaizenbros_registrations', JSON.stringify(newList));
+    } catch {}
+    if (onUpdateRegistration) onUpdateRegistration(updated);
+    triggerLog('PADAM_DOKUMEN_PENDAFTARAN', `Admin memadam dokumen lampiran (${docName}) bagi ${target.full_name} (${target.id})`);
+  };
+
+  const handleDeleteRegistrationDocument = (regId: string) => {
+    const target = regList.find(r => r.id === regId);
+    if (!target) return;
+    setDeletingDocReg(target);
+  };
+
+  const handleUpdateRegistrationDocument = (regId: string, doc: PatientRegistrationDoc | undefined) => {
+    const target = regList.find(r => r.id === regId);
+    if (!target) return;
+    const updated: NewRegistration = {
+      ...target,
+      document: doc
+    };
+    const newList = regList.map(r => r.id === regId ? updated : r);
+    setRegList(newList);
+    try {
+      localStorage.setItem('kaizenbros_registrations', JSON.stringify(newList));
+    } catch {}
+    if (onUpdateRegistration) onUpdateRegistration(updated);
+    if (doc) {
+      triggerLog('KEMASKINI_DOKUMEN_PENDAFTARAN', `Admin mengemaskini dokumen lampiran (${doc.name}) bagi ${target.full_name} (${target.id})`);
+    } else {
+      triggerLog('PADAM_DOKUMEN_PENDAFTARAN', `Admin membuang dokumen lampiran bagi ${target.full_name} (${target.id})`);
+    }
   };
 
   // --- PATIENT CRUD ACTIONS ---
@@ -818,16 +865,6 @@ export function AdminPortal({
               Pengurusan Lengkap Pesakit, Pentadbir, Jururawat, Mesin Fresenius & Kemasukan Pendaftaran Baru
             </p>
           </div>
-
-          <div className="flex items-center space-x-3">
-            <div className="bg-slate-950 border border-slate-800 px-4 py-2 rounded-2xl flex items-center space-x-3">
-              <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
-              <div className="text-xs">
-                <span className="text-slate-400 block font-semibold">Pangkalan Data:</span>
-                <span className="font-bold text-emerald-400">Firebase Firestore (NoSQL)</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -993,15 +1030,45 @@ export function AdminPortal({
 
                           <td className="px-4 py-4">
                             {reg.document ? (
-                              <button
-                                onClick={() => setPreviewDocReg(reg)}
-                                className="inline-flex items-center space-x-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-[11px]"
-                              >
-                                <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
-                                <span className="truncate max-w-[110px]">{reg.document.name}</span>
-                              </button>
+                              <div className="flex items-center space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDocReg(reg)}
+                                  className="inline-flex items-center space-x-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer text-[11px]"
+                                  title="Klik untuk Lihat / Pratonton Dokumen"
+                                >
+                                  <Paperclip className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                  <span className="truncate max-w-[100px]">{reg.document.name}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDocReg(reg)}
+                                  className="p-1 bg-slate-800 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-700 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit / Ganti Dokumen ini"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRegistrationDocument(reg.id)}
+                                  className="p-1 bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-800 rounded-lg transition-colors cursor-pointer"
+                                  title="Padam / Buang Dokumen ini"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             ) : (
-                              <span className="text-slate-500 italic text-[11px]">Tiada dokumen</span>
+                              <button
+                                type="button"
+                                onClick={() => setEditingDocReg(reg)}
+                                className="inline-flex items-center space-x-1 bg-slate-800/80 hover:bg-emerald-950 text-slate-400 hover:text-emerald-300 border border-slate-700 hover:border-emerald-700/80 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                                title="Tambah Dokumen Rujukan / Laporan Perubatan"
+                              >
+                                <Plus className="w-3 h-3 text-emerald-400" />
+                                <span>+ Tambah Dokumen</span>
+                              </button>
                             )}
                           </td>
 
@@ -2392,7 +2459,14 @@ export function AdminPortal({
           registration={editingReg}
           onClose={() => setEditingReg(null)}
           onSave={handleSaveEditedRegistration}
-          onDelete={(id) => handleDeleteRegistration(id)}
+          onDelete={(id) => {
+            setEditingReg(null);
+            const target = regList.find(r => r.id === id);
+            if (target) setDeletingReg(target);
+          }}
+          onDeleteDoc={(id) => {
+            executeDeleteRegistrationDocument(id);
+          }}
         />
       )}
 
@@ -2440,11 +2514,89 @@ export function AdminPortal({
         </div>
       )}
 
+      {/* 1.6. MODAL CONFIRM DELETE DOKUMEN PENDAFTARAN */}
+      {deletingDocReg && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/60 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-in fade-in duration-150">
+            <div className="flex items-center space-x-3 text-rose-400 border-b border-slate-800 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-950/80 border border-rose-800/80 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Padam Dokumen Lampiran</h3>
+                <p className="text-xs text-slate-400">Tindakan ini akan memadam dokumen permohonan pesakit ini.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs space-y-1.5 text-slate-300">
+              <p><strong>Nama Pemohon:</strong> <span className="text-white font-bold">{deletingDocReg.full_name}</span></p>
+              <p><strong>No. Rujukan:</strong> <span className="font-mono text-emerald-400">{deletingDocReg.id}</span></p>
+              {deletingDocReg.document && (
+                <p><strong>Nama Fail Dokumen:</strong> <span className="font-mono text-rose-300 font-semibold">{deletingDocReg.document.name}</span></p>
+              )}
+            </div>
+
+            <p className="text-xs text-rose-300">
+              Adakah anda pasti ingin memadam fail dokumen lampiran ini?
+            </p>
+
+            <div className="flex justify-end space-x-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeletingDocReg(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = deletingDocReg.id;
+                  executeDeleteRegistrationDocument(targetId);
+                  setDeletingDocReg(null);
+                }}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow cursor-pointer transition-all flex items-center space-x-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Padam Dokumen</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 2. MODAL PREVIEW DOKUMEN */}
       {previewDocReg && previewDocReg.document && (
         <DocumentPreviewModal
           registration={previewDocReg}
           onClose={() => setPreviewDocReg(null)}
+          onEdit={() => {
+            const current = previewDocReg;
+            setPreviewDocReg(null);
+            setEditingDocReg(current);
+          }}
+          onDelete={() => {
+            const current = previewDocReg;
+            setPreviewDocReg(null);
+            handleDeleteRegistrationDocument(current.id);
+          }}
+        />
+      )}
+
+      {/* 2.1. MODAL URUS DOKUMEN (TAMBAH, EDIT, GANTI, BUANG) */}
+      {editingDocReg && (
+        <ManageDocumentModal
+          registration={editingDocReg}
+          onClose={() => setEditingDocReg(null)}
+          onSave={(doc) => {
+            handleUpdateRegistrationDocument(editingDocReg.id, doc);
+            setEditingDocReg(null);
+          }}
+          onDelete={() => {
+            const currentId = editingDocReg.id;
+            setEditingDocReg(null);
+            handleDeleteRegistrationDocument(currentId);
+          }}
         />
       )}
 
@@ -3278,17 +3430,38 @@ function PatientFormModal({ title, initialData, onClose, onSave }: PatientFormMo
                   />
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block font-semibold mb-1">Alamat Kediaman *</label>
-              <textarea
-                rows={2}
-                required
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
-              />
+              <div>
+                <label className="block font-semibold mb-1 text-emerald-400 flex items-center justify-between">
+                  <span>Jenis / Kumpulan Darah <span className="text-rose-400">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-mono font-normal">Sistem ABO & Rh</span>
+                </label>
+                <select
+                  value={formData.blood_group}
+                  onChange={(e) => setFormData({ ...formData, blood_group: e.target.value })}
+                  className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-xl px-3 py-2 text-white font-bold text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="O+">O+ (O Positif)</option>
+                  <option value="A+">A+ (A Positif)</option>
+                  <option value="B+">B+ (B Positif)</option>
+                  <option value="AB+">AB+ (AB Positif)</option>
+                  <option value="O-">O- (O Negatif)</option>
+                  <option value="A-">A- (A Negatif)</option>
+                  <option value="B-">B- (B Negatif)</option>
+                  <option value="AB-">AB- (AB Negatif)</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block font-semibold mb-1">Alamat Kediaman *</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
             </div>
           </div>
 
@@ -3713,9 +3886,10 @@ interface EditRegistrationModalProps {
   onClose: () => void;
   onSave: (updated: NewRegistration) => void;
   onDelete?: (id: string) => void;
+  onDeleteDoc?: (id: string) => void;
 }
 
-function EditRegistrationModal({ registration, onClose, onSave, onDelete }: EditRegistrationModalProps) {
+function EditRegistrationModal({ registration, onClose, onSave, onDelete, onDeleteDoc }: EditRegistrationModalProps) {
   const [formData, setFormData] = useState<NewRegistration>({ ...registration });
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -3842,14 +4016,176 @@ function EditRegistrationModal({ registration, onClose, onSave, onDelete }: Edit
             </div>
           </div>
 
+          {/* 2. PENGURUSAN DOKUMEN LAMPIRAN (EDIT, TAMBAH, BUANG) */}
+          <div className="bg-slate-950 border-2 border-emerald-500/60 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <h4 className="font-extrabold text-sm text-emerald-300 uppercase tracking-wide">
+                  2. Dokumen Rujukan & Laporan Perubatan
+                </h4>
+              </div>
+              {formData.document ? (
+                <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded font-bold">
+                  Dokumen Dilampirkan
+                </span>
+              ) : (
+                <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded font-bold">
+                  Tiada Dokumen
+                </span>
+              )}
+            </div>
+
+            {formData.document ? (
+              <div className="space-y-4 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center shrink-0">
+                      <Paperclip className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="font-bold text-white text-sm truncate">{formData.document.name}</h5>
+                      <p className="text-[11px] text-slate-400">
+                        Jenis: <span className="text-slate-300 font-mono">{formData.document.type}</span> • Saiz: <span className="text-slate-300 font-mono">{formData.document.size}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {formData.document.data_url && (
+                      <a
+                        href={formData.document.data_url}
+                        download={formData.document.name}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold transition-colors inline-flex items-center space-x-1"
+                        title="Muat Turun Fail"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Muat Turun</span>
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, document: undefined }));
+                        if (onDeleteDoc) {
+                          onDeleteDoc(formData.id);
+                        }
+                      }}
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-md inline-flex items-center space-x-1.5 cursor-pointer"
+                      title="Padam / Buang Dokumen ini"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Buang Dokumen</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-white mb-1">
+                      Ubah / Kemaskini Nama Dokumen:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.document.name}
+                      onChange={(e) => {
+                        if (formData.document) {
+                          setFormData({
+                            ...formData,
+                            document: { ...formData.document, name: e.target.value }
+                          });
+                        }
+                      }}
+                      placeholder="Nama fail dokumen..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white mb-1">
+                      Ganti dengan Fail Baru (Pilih Fail):
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const sizeFormatted = file.size >= 1024 * 1024 
+                          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+                          : `${(file.size / 1024).toFixed(1)} KB`;
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          setFormData({
+                            ...formData,
+                            document: {
+                              name: file.name,
+                              type: file.type || 'application/pdf',
+                              size: sizeFormatted,
+                              data_url: evt.target?.result as string
+                            }
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-950 file:text-emerald-300 hover:file:bg-emerald-900 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-5 text-center space-y-3">
+                <div className="w-10 h-10 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                  <Upload className="w-5 h-5 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-200 font-bold">Tiada Dokumen Rujukan Dilampirkan</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Admin boleh memuat naik surat rujukan pakar, keputusan darah atau dokumen sokongan.
+                  </p>
+                </div>
+                <div>
+                  <label className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs rounded-xl cursor-pointer shadow-lg transition-all">
+                    <Plus className="w-4 h-4" />
+                    <span>+ Muat Naik / Tambah Dokumen</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const sizeFormatted = file.size >= 1024 * 1024 
+                          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+                          : `${(file.size / 1024).toFixed(1)} KB`;
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          setFormData({
+                            ...formData,
+                            document: {
+                              name: file.name,
+                              type: file.type || 'application/pdf',
+                              size: sizeFormatted,
+                              data_url: evt.target?.result as string
+                            }
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
             {onDelete ? (
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`Adakah anda pasti ingin memadam permohonan pendaftaran ${formData.full_name} (${formData.id})?`)) {
-                    onDelete(formData.id);
-                  }
+                  onDelete(formData.id);
                 }}
                 className="px-4 py-2.5 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center space-x-1.5"
               >
@@ -3887,9 +4223,11 @@ function EditRegistrationModal({ registration, onClose, onSave, onDelete }: Edit
 interface DocumentPreviewModalProps {
   registration: NewRegistration;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-function DocumentPreviewModal({ registration, onClose }: DocumentPreviewModalProps) {
+function DocumentPreviewModal({ registration, onClose, onEdit, onDelete }: DocumentPreviewModalProps) {
   const doc = registration.document;
   if (!doc) return null;
 
@@ -3900,10 +4238,15 @@ function DocumentPreviewModal({ registration, onClose }: DocumentPreviewModalPro
       <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl space-y-4 p-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>
-            <span className="text-xs text-emerald-400 font-mono font-bold">Ref: {registration.id}</span>
-            <h3 className="text-lg font-black text-white">Dokumen Lampiran: {registration.full_name}</h3>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-emerald-400 font-mono font-bold">Ref: {registration.id}</span>
+              <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded font-bold">
+                Pratonton Dokumen
+              </span>
+            </div>
+            <h3 className="text-lg font-black text-white mt-0.5">Dokumen Lampiran: {registration.full_name}</h3>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -3914,16 +4257,21 @@ function DocumentPreviewModal({ registration, onClose }: DocumentPreviewModalPro
             <img 
               src={doc.data_url} 
               alt={doc.name || 'Dokumen lampiran'} 
-              className="max-h-[400px] max-w-full rounded-xl object-contain shadow-lg border border-slate-800"
+              className="max-h-[380px] max-w-full rounded-xl object-contain shadow-lg border border-slate-800"
             />
           ) : (
             <div className="space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-950 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-800">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-950 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-800 shadow-md">
                 <FileText className="w-8 h-8" />
               </div>
               <div>
                 <p className="font-bold text-white text-base">{doc.name}</p>
                 <p className="text-xs text-slate-400 mt-1">Jenis: {doc.type} • Saiz: {doc.size}</p>
+                {doc.category && (
+                  <span className="inline-block mt-1 text-[11px] bg-slate-900 text-cyan-300 border border-slate-700 px-2.5 py-0.5 rounded-full font-semibold">
+                    {doc.category}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -3940,11 +4288,267 @@ function DocumentPreviewModal({ registration, onClose }: DocumentPreviewModalPro
           )}
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-800">
+          <div className="flex items-center space-x-2">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="px-4 py-2 bg-slate-800 hover:bg-cyan-950 text-slate-200 hover:text-cyan-300 border border-slate-700 hover:border-cyan-700 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Ubah / Ganti Dokumen</span>
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="px-4 py-2 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Buang Dokumen</span>
+              </button>
+            )}
+          </div>
+
           <button onClick={onClose} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer">
             Tutup Pratonton
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+{/* ========================================================================= */}
+{/* COMPONENT: MANAGE DOCUMENT MODAL (EDIT, TAMBAH, BUANG DOKUMEN PENDAFTARAN) */}
+{/* ========================================================================= */}
+interface ManageDocumentModalProps {
+  registration: NewRegistration;
+  onClose: () => void;
+  onSave: (doc: PatientRegistrationDoc | undefined) => void;
+  onDelete?: () => void;
+}
+
+function ManageDocumentModal({ registration, onClose, onSave, onDelete }: ManageDocumentModalProps) {
+  const existingDoc = registration.document;
+  const isEditing = !!existingDoc;
+
+  const [docName, setDocName] = useState(existingDoc?.name || '');
+  const [docType, setDocType] = useState(existingDoc?.type || 'application/pdf');
+  const [docSize, setDocSize] = useState(existingDoc?.size || '');
+  const [docDataUrl, setDocDataUrl] = useState(existingDoc?.data_url || existingDoc?.dataUrl || '');
+  const [docCategory, setDocCategory] = useState(existingDoc?.category || 'Surat Rujukan Pakar Nefrologi');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorMsg('');
+    const sizeFormatted = file.size >= 1024 * 1024 
+      ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+      : `${(file.size / 1024).toFixed(1)} KB`;
+    
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setDocName(file.name);
+      setDocType(file.type || 'application/pdf');
+      setDocSize(sizeFormatted);
+      setDocDataUrl(evt.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docName.trim()) {
+      setErrorMsg('Sila masukkan nama dokumen atau pilih fail untuk dimuat naik.');
+      return;
+    }
+    const finalDoc: PatientRegistrationDoc = {
+      name: docName.trim(),
+      type: docType || 'application/pdf',
+      size: docSize || '250 KB',
+      data_url: docDataUrl || undefined,
+      category: docCategory,
+      uploaded_at: new Date().toISOString().slice(0, 10)
+    };
+    onSave(finalDoc);
+  };
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete();
+    } else {
+      onSave(undefined);
+    }
+  };
+
+  const isPdf = docType.includes('pdf');
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl space-y-5 p-6 my-8">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-emerald-400 font-mono font-bold">Ref: {registration.id}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                isEditing 
+                  ? 'bg-cyan-950 text-cyan-300 border-cyan-800' 
+                  : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+              }`}>
+                {isEditing ? 'Ubah / Ganti Dokumen' : 'Tambah Dokumen Baru'}
+              </span>
+            </div>
+            <h3 className="text-lg font-black text-white mt-1">
+              {isEditing ? 'Kemaskini Dokumen Lampiran' : 'Muat Naik Dokumen Lampiran'}
+            </h3>
+            <p className="text-xs text-slate-400">
+              Pesakit: <strong className="text-white">{registration.full_name}</strong> • MyKad: <span className="font-mono text-slate-300">{registration.ic_number}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* File Picker & Current File Info */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+            <label className="block text-xs font-bold text-white mb-1">
+              Pilih Fail dari Peranti (PDF, JPG, PNG, DOCX):
+            </label>
+            <div className="flex items-center space-x-3">
+              <label className="flex-1 border-2 border-dashed border-slate-700 hover:border-emerald-500/70 bg-slate-900/60 rounded-xl p-4 text-center cursor-pointer transition-colors group">
+                <Upload className="w-6 h-6 text-slate-500 group-hover:text-emerald-400 mx-auto mb-1 transition-colors" />
+                <span className="text-xs text-slate-300 font-semibold block">
+                  Klik untuk pilih atau tukar fail dokumen
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  Format disokong: PDF, PNG, JPG, DOC (Maks: 10MB)
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Current Active File Summary */}
+            {docName && (
+              <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center shrink-0">
+                    <Paperclip className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{docName}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {docSize ? `Saiz: ${docSize} • ` : ''}Format: <span className="font-mono text-slate-300">{docType}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {docDataUrl && (
+                  <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full font-bold shrink-0">
+                    Sedia Dimuat Naik
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Thumbnail Preview for Images */}
+            {docDataUrl && !isPdf && (
+              <div className="mt-2 text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={docDataUrl}
+                  alt="Pratonton"
+                  className="max-h-40 mx-auto rounded-xl object-contain border border-slate-800 shadow"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Form Fields: Name & Category */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-white mb-1">
+                Tajuk / Nama Dokumen: <span className="text-rose-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={docName}
+                onChange={(e) => setDocName(e.target.value)}
+                placeholder="Contoh: Surat Rujukan Hospital Shah Alam"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-white mb-1">
+                Kategori Dokumen:
+              </label>
+              <select
+                value={docCategory}
+                onChange={(e) => setDocCategory(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Surat Rujukan Pakar Nefrologi">Surat Rujukan Pakar Nefrologi</option>
+                <option value="Laporan Keputusan Ujian Darah & Makmal">Laporan Keputusan Ujian Darah & Makmal</option>
+                <option value="Surat Jaminan / Kelulusan Penaja (PERKESO/JPA/Zakat)">Surat Jaminan / Kelulusan Penaja (PERKESO/JPA/Zakat)</option>
+                <option value="Salinan MyKad / Dokumen Pengenalan Diri">Salinan MyKad / Dokumen Pengenalan Diri</option>
+                <option value="Laporan Klinikal / Sejarah Rawatan Dialisis">Laporan Klinikal / Sejarah Rawatan Dialisis</option>
+                <option value="Lain-lain Dokumen Sokongan">Lain-lain Dokumen Sokongan</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
+            {isEditing ? (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Buang / Padam Dokumen Ini</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center space-x-2 justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer transition-all flex items-center space-x-1.5"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isEditing ? 'Simpan Dokumen' : 'Tambah & Simpan Dokumen'}</span>
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );

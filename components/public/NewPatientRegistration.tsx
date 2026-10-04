@@ -233,7 +233,7 @@ export function NewPatientRegistration({
           </button>
         )}
 
-        <div className="bg-gradient-to-r from-cyan-950 via-slate-900 to-emerald-950 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-3">
+        <div className="dark-banner bg-gradient-to-r from-cyan-950 via-slate-900 to-emerald-950 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-3">
           <div className="inline-flex items-center space-x-2 bg-emerald-950 border border-emerald-700 px-3 py-1 rounded-full text-xs font-bold text-emerald-400">
             <UserPlus className="w-3.5 h-3.5" />
             <span>PENDAFTARAN PESAKIT BARU</span>

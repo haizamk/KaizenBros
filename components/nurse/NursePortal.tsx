@@ -39,7 +39,9 @@ import {
   CalendarDays,
   Moon,
   Sun,
-  TrendingUp
+  TrendingUp,
+  Scale,
+  Zap
 } from 'lucide-react';
 import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
 import { TreatmentScheduleManager } from '@/components/schedule/TreatmentScheduleManager';
@@ -70,9 +72,119 @@ import {
   VERIFIED_CENTRE_INFO
 } from '@/lib/mock-data';
 
+export function DialysisCountdownTimer({ session }: { session?: DialysisSession }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!session || session.status !== 'SEDANG_DIALISIS') return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [session?.status]);
+
+  if (!session) {
+    return (
+      <span className="text-[11px] text-slate-500 font-mono">Tiada Sesi Hari Ini</span>
+    );
+  }
+
+  if (session.status === 'SUDAH_SELESAI') {
+    return (
+      <span className="inline-flex items-center text-[11px] font-bold text-teal-300 bg-teal-950/90 border border-teal-700 px-2.5 py-1 rounded-lg">
+        <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-teal-400 shrink-0" />
+        Selesai ({session.actual_end_time || 'Discaj'})
+      </span>
+    );
+  }
+
+  if (session.status === 'GAGAL_HABIS_DIALISIS' || session.status === 'TAMAT_AWAL' || session.status === 'BATAL') {
+    return (
+      <span className="inline-flex items-center text-[11px] font-bold text-rose-300 bg-rose-950/90 border border-rose-700 px-2.5 py-1 rounded-lg">
+        <AlertTriangle className="w-3.5 h-3.5 mr-1 text-rose-400 shrink-0" />
+        {session.status === 'GAGAL_HABIS_DIALISIS' ? 'Gagal Habis' : session.status === 'BATAL' ? 'Batal' : 'Tamat Awal'}
+      </span>
+    );
+  }
+
+  if (session.status !== 'SEDANG_DIALISIS') {
+    return (
+      <span className="inline-flex items-center text-[11px] font-medium text-amber-300 bg-amber-950/60 border border-amber-800/80 px-2.5 py-1 rounded-lg">
+        <Clock className="w-3.5 h-3.5 mr-1 text-amber-400 shrink-0" />
+        {session.status.replace(/_/g, ' ')} (Piawaian 4 Jam)
+      </span>
+    );
+  }
+
+  // Active Dialysis Countdown calculation (4 hours standard duration)
+  const FOUR_HOURS_MS = 4 * 3600 * 1000;
+  let startMs = session.start_timestamp;
+  if (!startMs && session.actual_start_time) {
+    const match = session.actual_start_time.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (match) {
+      let hrs = parseInt(match[1]);
+      const mins = parseInt(match[2]);
+      const ampm = match[3];
+      if (ampm && ampm.toUpperCase() === 'PM' && hrs < 12) hrs += 12;
+      if (ampm && ampm.toUpperCase() === 'AM' && hrs === 12) hrs = 0;
+      const d = new Date();
+      d.setHours(hrs, mins, 0, 0);
+      startMs = d.getTime();
+    }
+  }
+  if (!startMs) {
+    startMs = Date.now() - (3.5 * 3600 * 1000);
+  }
+
+  const elapsedMs = Math.max(0, now - startMs);
+  const remainingMs = FOUR_HOURS_MS - elapsedMs;
+
+  if (remainingMs <= 0) {
+    const graceElapsedMs = elapsedMs - FOUR_HOURS_MS;
+    const graceRemainingMs = Math.max(0, (3600 * 1000) - graceElapsedMs);
+    const graceMinutes = Math.floor(graceRemainingMs / 60000);
+    const graceSeconds = Math.floor((graceRemainingMs % 60000) / 1000);
+
+    return (
+      <div className="space-y-1">
+        <span className="inline-flex items-center text-[11px] font-black text-amber-300 bg-amber-950/90 border border-amber-500 px-2.5 py-1 rounded-lg animate-pulse">
+          <Clock className="w-3.5 h-3.5 mr-1 text-amber-400 shrink-0" />
+          Masa 4 Jam Tamat (Auto-Discaj: {graceMinutes}m {graceSeconds}s)
+        </span>
+        <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+          <div className="bg-amber-400 h-full w-full animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  const hours = Math.floor(remainingMs / (1000 * 3600));
+  const minutes = Math.floor((remainingMs % (1000 * 3600)) / (1000 * 60));
+  const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+  const percentProgress = Math.min(100, Math.max(0, (elapsedMs / FOUR_HOURS_MS) * 100));
+
+  return (
+    <div className="space-y-1 min-w-[140px]">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-mono font-bold text-emerald-400 flex items-center text-[11px]">
+          <Clock className="w-3.5 h-3.5 mr-1 text-emerald-400 animate-spin shrink-0" style={{ animationDuration: '4s' }} />
+          Baki: {hours > 0 ? `${hours}j ` : ''}{String(minutes).padStart(2, '0')}m {String(seconds).padStart(2, '0')}s
+        </span>
+        <span className="text-[10px] text-slate-400 font-mono font-semibold">{percentProgress.toFixed(0)}%</span>
+      </div>
+      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700/50">
+        <div 
+          className="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 h-full transition-all duration-1000" 
+          style={{ width: `${percentProgress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface NursePortalProps {
   currentNurseName?: string;
   patients?: Patient[];
+  sessions?: DialysisSession[];
+  onUpdateSession?: (session: DialysisSession) => void;
   onAuditLog?: (action: string, details: string) => void;
   checkInQueue?: PatientCheckIn[];
   onCheckInPatient?: (patientId: number, preWeight: number, preBp: string, notes?: string) => void;
@@ -84,6 +196,8 @@ interface NursePortalProps {
 export function NursePortal({
   currentNurseName = 'Sister Siti Fatimah',
   patients: propPatients,
+  sessions: propSessions,
+  onUpdateSession,
   onAuditLog,
   checkInQueue: propQueue,
   onCheckInPatient,
@@ -96,6 +210,7 @@ export function NursePortal({
   const [activeNav, setActiveNav] = useState<'hari_ini' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'laporan' | 'tetapan'>('hari_ini');
 
   const [sessions, setSessions] = useState<DialysisSession[]>(() => {
+    if (propSessions && propSessions.length > 0) return propSessions;
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('kaizenbros_sessions');
@@ -104,6 +219,13 @@ export function NursePortal({
     }
     return INITIAL_TODAY_SESSIONS;
   });
+
+  // Sync sessions when propSessions updates from root
+  useEffect(() => {
+    if (propSessions && propSessions.length > 0) {
+      setSessions(propSessions);
+    }
+  }, [propSessions]);
 
   const malaysiaTime = useMalaysiaTime();
 
@@ -237,6 +359,155 @@ export function NursePortal({
   const [finishSystolic, setFinishSystolic] = useState<string>('128');
   const [finishDiastolic, setFinishDiastolic] = useState<string>('76');
   const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false);
+
+  // Dedicated Weight Management State for Nurse (Pra & After Dialisis)
+  const [weightModalSession, setWeightModalSession] = useState<DialysisSession | null>(null);
+  const [weightModalPreWeight, setWeightModalPreWeight] = useState<number>(75.0);
+  const [weightModalPostWeight, setWeightModalPostWeight] = useState<string>('');
+  const [weightModalPreSys, setWeightModalPreSys] = useState<string>('138');
+  const [weightModalPreDia, setWeightModalPreDia] = useState<string>('82');
+  const [weightModalPostSys, setWeightModalPostSys] = useState<string>('124');
+  const [weightModalPostDia, setWeightModalPostDia] = useState<string>('78');
+  const [weightModalStatus, setWeightModalStatus] = useState<SessionStatus>('SEDANG_DIALISIS');
+  const [weightModalError, setWeightModalError] = useState<string | null>(null);
+
+  const openWeightModalForSession = (s: DialysisSession) => {
+    setWeightModalSession(s);
+    setWeightModalPreWeight(s.pre_weight_kg ? Number(s.pre_weight_kg) : Number((s.dry_weight_kg + 1.8).toFixed(1)));
+    setWeightModalPostWeight(s.post_weight_kg ? String(s.post_weight_kg) : '');
+    
+    if (s.pre_bp && s.pre_bp.includes('/')) {
+      const parts = s.pre_bp.split('/');
+      setWeightModalPreSys(parts[0]);
+      setWeightModalPreDia(parts[1]);
+    } else {
+      setWeightModalPreSys('138');
+      setWeightModalPreDia('82');
+    }
+
+    if (s.post_bp && s.post_bp.includes('/')) {
+      const parts = s.post_bp.split('/');
+      setWeightModalPostSys(parts[0]);
+      setWeightModalPostDia(parts[1]);
+    } else {
+      setWeightModalPostSys('124');
+      setWeightModalPostDia('78');
+    }
+
+    setWeightModalStatus(s.status);
+    setWeightModalError(null);
+  };
+
+  // Quick Session Status Modal State for Nurses
+  const [quickStatusSession, setQuickStatusSession] = useState<DialysisSession | null>(null);
+  const [quickStatusValue, setQuickStatusValue] = useState<SessionStatus>('SEDANG_DIALISIS');
+  const [quickStatusReason, setQuickStatusReason] = useState<string>('');
+
+  // Warning Modal State for Nurses when session starts
+  const [showNurseStartWarningModal, setShowNurseStartWarningModal] = useState<boolean>(false);
+
+  // Unstarted sessions count (checked in / assigned station but not SEDANG_DIALISIS)
+  const unstartedSessions = useMemo(() => {
+    return sessions.filter(s => s.status === 'SUDAH_HADIR' || (s.chair_number && s.status === 'BELUM_HADIR'));
+  }, [sessions]);
+
+  const openQuickStatusForPatient = (patient: Patient) => {
+    let sess = sessions.find(s => s.patient_id === patient.id);
+    if (!sess) {
+      const nowStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+      sess = {
+        id: Math.floor(Math.random() * 900000) + 100000,
+        patient_id: patient.id,
+        patient_id_code: patient.patient_id_code,
+        patient_name: patient.name,
+        chair_id: 1,
+        chair_number: patient.assigned_chair || 'B-01',
+        scheduled_date: new Date().toISOString().slice(0, 10),
+        scheduled_time: '08:00 AM',
+        status: 'SEDANG_DIALISIS',
+        dry_weight_kg: patient.dry_weight_kg,
+        pre_weight_kg: patient.latest_weight_kg || patient.dry_weight_kg + 1.5,
+        target_uf_litres: 2.0,
+        actual_start_time: nowStr,
+        start_timestamp: Date.now(),
+        pre_bp: patient.latest_bp || '135/85'
+      };
+      setSessions(prev => [sess!, ...prev]);
+    }
+    setQuickStatusSession(sess);
+    setQuickStatusValue(sess.status);
+    setQuickStatusReason(sess.status_reason || '');
+  };
+
+  const handleSaveQuickStatus = () => {
+    if (!quickStatusSession) return;
+    const nowStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const nowMs = Date.now();
+
+    const updated: DialysisSession = {
+      ...quickStatusSession,
+      status: quickStatusValue,
+      status_reason: quickStatusReason || undefined,
+      actual_start_time: quickStatusValue === 'SEDANG_DIALISIS' ? (quickStatusSession.actual_start_time || nowStr) : quickStatusSession.actual_start_time,
+      start_timestamp: quickStatusValue === 'SEDANG_DIALISIS' ? (quickStatusSession.start_timestamp || nowMs) : quickStatusSession.start_timestamp,
+      actual_end_time: (quickStatusValue === 'SUDAH_SELESAI' || quickStatusValue === 'GAGAL_HABIS_DIALISIS' || quickStatusValue === 'TAMAT_AWAL') ? (quickStatusSession.actual_end_time || nowStr) : quickStatusSession.actual_end_time,
+      updated_at: new Date().toISOString()
+    };
+
+    setSessions(prev => {
+      const next = prev.map(s => s.id === updated.id ? updated : s);
+      try {
+        localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (onUpdateSession) onUpdateSession(updated);
+
+    if (onAuditLog) {
+      onAuditLog(
+        'TUKAR_STATUS_SESI',
+        `Jururawat ${currentNurseName} menukar status pesakit ${quickStatusSession.patient_name} (${quickStatusSession.patient_id_code}) kepada '${quickStatusValue.replace(/_/g, ' ')}'${quickStatusReason ? ` (Sebab: ${quickStatusReason})` : ''}.`
+      );
+    }
+
+    showToast(`✓ Status pesakit ${quickStatusSession.patient_name} ditukar kepada '${quickStatusValue.replace(/_/g, ' ')}'`);
+    setQuickStatusSession(null);
+  };
+
+  const handleBatchStartDialysis = () => {
+    const nowStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const nowMs = Date.now();
+
+    setSessions(prev => {
+      const next = prev.map(s => {
+        if (s.status === 'SUDAH_HADIR' || (s.chair_number && s.status === 'BELUM_HADIR')) {
+          return {
+            ...s,
+            status: 'SEDANG_DIALISIS' as SessionStatus,
+            actual_start_time: s.actual_start_time || nowStr,
+            start_timestamp: nowMs,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return s;
+      });
+      try {
+        localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (onAuditLog) {
+      onAuditLog(
+        'MULA_BATCH_DIALISIS',
+        `Jururawat ${currentNurseName} menukar pukal ${unstartedSessions.length} pesakit kepada 'SEDANG DIALISIS'.`
+      );
+    }
+
+    showToast(`✓ Berjaya menukar status ${unstartedSessions.length} pesakit kepada 'SEDANG DIALISIS' & memulakan timer 4 jam!`);
+    setShowNurseStartWarningModal(false);
+  };
 
   // Success Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -608,7 +879,7 @@ export function NursePortal({
     const sys = parseInt(hourlySystolic, 10);
     const dia = parseInt(hourlyDiastolic, 10);
     if (isNaN(sys) || isNaN(dia)) {
-      alert('Sila masukkan bacaan Systolic dan Diastolic.');
+      showToast('⚠️ Sila masukkan bacaan Systolic dan Diastolic.');
       return;
     }
 
@@ -635,6 +906,7 @@ export function NursePortal({
           ]
         };
         setSelectedSessionForActive(updated);
+        if (onUpdateSession) onUpdateSession(updated);
         return updated;
       }
       return s;
@@ -659,6 +931,7 @@ export function NursePortal({
         const updatedNotes = s.notes ? `${s.notes}\n${noteEntry}` : noteEntry;
         const updated = { ...s, notes: updatedNotes };
         setSelectedSessionForActive(updated);
+        if (onUpdateSession) onUpdateSession(updated);
         return updated;
       }
       return s;
@@ -676,7 +949,7 @@ export function NursePortal({
     const postDia = parseInt(finishDiastolic, 10);
 
     if (isNaN(postW) || isNaN(postSys) || isNaN(postDia)) {
-      alert('Sila lengkapkan berat selepas dialisis dan tekanan darah akhir.');
+      showToast('⚠️ Sila lengkapkan berat selepas dialisis dan tekanan darah akhir.');
       return;
     }
 
@@ -684,32 +957,50 @@ export function NursePortal({
     const actualUf = selectedSessionForActive.pre_weight_kg ? +(selectedSessionForActive.pre_weight_kg - postW).toFixed(2) : 1.5;
     const currentTimeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+    const finishedSession: DialysisSession = {
+      ...selectedSessionForActive,
+      post_weight_kg: postW,
+      post_bp: postBpStr,
+      actual_uf_litres: actualUf,
+      actual_end_time: currentTimeStr,
+      status: 'SUDAH_SELESAI',
+      nurse_in_charge: currentNurseName
+    };
+
     setSessions(prev => prev.map(s => {
       if (s.id === selectedSessionForActive.id) {
-        return {
-          ...s,
-          post_weight_kg: postW,
-          post_bp: postBpStr,
-          actual_uf_litres: actualUf,
-          actual_end_time: currentTimeStr,
-          status: 'SUDAH_SELESAI',
-          nurse_in_charge: currentNurseName
-        };
+        return finishedSession;
       }
       return s;
     }));
 
+    try {
+      localStorage.setItem('kaizenbros_sessions', JSON.stringify(
+        sessions.map(s => s.id === selectedSessionForActive.id ? finishedSession : s)
+      ));
+    } catch {}
+
+    if (onUpdateSession) {
+      onUpdateSession(finishedSession);
+    }
+
     // Update patient's latest record
-    setPatientsList(prev => prev.map(p => {
-      if (p.id === selectedSessionForActive.patient_id) {
-        return {
-          ...p,
-          latest_weight_kg: postW,
-          latest_bp: postBpStr
-        };
-      }
-      return p;
-    }));
+    setPatientsList(prev => {
+      const next = prev.map(p => {
+        if (p.id === selectedSessionForActive.patient_id) {
+          return {
+            ...p,
+            latest_weight_kg: postW,
+            latest_bp: postBpStr
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('kaizenbros_patients', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
     // Resolve any post-weight alerts for this session
     setAlerts(prev => prev.filter(a => !(a.session_id === selectedSessionForActive.id && a.alert_type === 'POST_WEIGHT_MISSING')));
@@ -724,6 +1015,93 @@ export function NursePortal({
     showToast('✓ Sesi dialisis berjaya ditamatkan.');
     setShowFinishConfirm(false);
     setSelectedSessionForActive(null);
+  };
+
+  // ACTION 5: NURSE INPUTS / EDITS PRE & POST DIALYSIS WEIGHTS
+  const handleSaveNurseWeights = () => {
+    if (!weightModalSession) return;
+
+    if (isNaN(weightModalPreWeight) || weightModalPreWeight <= 0) {
+      setWeightModalError('Sila masukkan nilai Berat Pra-Dialisis yang sah.');
+      return;
+    }
+
+    const postNum = weightModalPostWeight.trim() !== '' ? parseFloat(weightModalPostWeight) : undefined;
+    if (postNum !== undefined && (isNaN(postNum) || postNum <= 0)) {
+      setWeightModalError('Sila masukkan nilai Berat Selepas Dialisis yang sah.');
+      return;
+    }
+
+    const preBpStr = `${weightModalPreSys.trim() || '138'}/${weightModalPreDia.trim() || '82'}`;
+    const postBpStr = postNum !== undefined ? `${weightModalPostSys.trim() || '124'}/${weightModalPostDia.trim() || '78'}` : undefined;
+    const actualUf = postNum !== undefined ? Number((weightModalPreWeight - postNum).toFixed(2)) : weightModalSession.actual_uf_litres;
+
+    // Final status: if post-weight entered and currently not completed, can change to completed if chosen
+    const finalStatus: SessionStatus = weightModalStatus;
+
+    let updatedSessionObj: DialysisSession | null = null;
+
+    setSessions(prev => {
+      const next = prev.map(s => {
+        if (s.id === weightModalSession.id) {
+          updatedSessionObj = {
+            ...s,
+            pre_weight_kg: weightModalPreWeight,
+            post_weight_kg: postNum,
+            pre_bp: preBpStr,
+            post_bp: postBpStr || s.post_bp,
+            current_bp: postBpStr || preBpStr,
+            actual_uf_litres: actualUf,
+            status: finalStatus,
+            nurse_in_charge: currentNurseName,
+            updated_at: new Date().toISOString()
+          };
+          return updatedSessionObj;
+        }
+        return s;
+      });
+      try {
+        localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (updatedSessionObj) {
+      if (onUpdateSession) {
+        onUpdateSession(updatedSessionObj);
+      }
+      if (selectedSessionForActive?.id === updatedSessionObj.id) {
+        setSelectedSessionForActive(updatedSessionObj);
+      }
+
+      // Update patient's latest record
+      setPatientsList(prev => {
+        const next = prev.map(p => {
+          if (p.id === updatedSessionObj!.patient_id) {
+            return {
+              ...p,
+              latest_weight_kg: postNum ?? weightModalPreWeight,
+              latest_bp: postBpStr || preBpStr
+            };
+          }
+          return p;
+        });
+        try {
+          localStorage.setItem('kaizenbros_patients', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      if (onAuditLog) {
+        onAuditLog(
+          'KEMASKINI_BERAT_JURURAWAT',
+          `Jururawat ${currentNurseName} merekodkan: ${updatedSessionObj.patient_name} - Berat Pra: ${weightModalPreWeight}kg, Berat Selepas: ${postNum !== undefined ? `${postNum}kg` : 'Belum diisi'}, Cecair Ditapis: ${actualUf !== undefined ? `${actualUf}L` : '-'}.`
+        );
+      }
+
+      showToast(`✓ Data berat ${updatedSessionObj.patient_name} (Pra: ${weightModalPreWeight}kg, Selepas: ${postNum !== undefined ? `${postNum}kg` : '-'}) berjaya disimpan.`);
+      setWeightModalSession(null);
+    }
   };
 
   return (
@@ -902,6 +1280,40 @@ export function NursePortal({
         {/* VIEW 1: HARI INI DASHBOARD */}
         {activeNav === 'hari_ini' && (
           <div className="space-y-6">
+            {/* Warning Banner for Unstarted Sessions */}
+            {unstartedSessions.length > 0 && (
+              <div className="bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg shadow-amber-950/40">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-amber-500 text-slate-950 rounded-xl font-black shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white flex items-center gap-1.5">
+                      <span>PERINGATAN SYIF DIALISIS: {unstartedSessions.length} PESAKIT BELUM DITUKAR KE 'SEDANG DIALISIS'</span>
+                    </h4>
+                    <p className="text-xs text-amber-200 mt-0.5">
+                      Sila tukar status pesakit ke <strong>'Sedang Dialisis'</strong> untuk memulakan pemantauan & timer 4 jam automatik.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <button
+                    onClick={handleBatchStartDialysis}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow cursor-pointer transition-all flex items-center space-x-1"
+                  >
+                    <Zap className="w-4 h-4 fill-slate-950" />
+                    <span>Mula Semua ({unstartedSessions.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setShowNurseStartWarningModal(true)}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 cursor-pointer"
+                  >
+                    Lihat Senarai
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* MANDATORY 5 STATUS COUNTERS */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               {/* 1. JUMLAH PESAKIT */}
@@ -1308,6 +1720,13 @@ export function NursePortal({
                             </div>
                           )}
 
+                          {s.post_weight_kg && (
+                            <div className="bg-slate-900 p-2 rounded-lg">
+                              <span className="text-slate-400 block">Berat Selepas</span>
+                              <span className="font-bold text-cyan-300 text-sm">{s.post_weight_kg} kg</span>
+                            </div>
+                          )}
+
                           {s.pre_bp && (
                             <div className="bg-slate-900 p-2 rounded-lg">
                               <span className="text-slate-400 block">Tekanan Darah</span>
@@ -1316,35 +1735,19 @@ export function NursePortal({
                           )}
                         </div>
 
-                        {/* Status Badge */}
-                        <div className="mt-3">
-                          {isSedang && (
-                            <span className="inline-flex items-center text-xs font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-700 px-3 py-1 rounded-full">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-1.5" />
-                              🟢 Sedang Dialisis (Mula {s.actual_start_time})
-                            </span>
-                          )}
-                          {isSelesai && (
-                            <span className="inline-flex items-center text-xs font-bold text-teal-300 bg-teal-950/80 border border-teal-700 px-3 py-1 rounded-full">
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                              ✓ Selesai ({s.actual_end_time})
-                            </span>
-                          )}
-                          {isHadir && (
-                            <span className="inline-flex items-center text-xs font-bold text-blue-300 bg-blue-950/80 border border-blue-700 px-3 py-1 rounded-full">
-                              Sudah Hadir (Menunggu Kerusi)
-                            </span>
-                          )}
-                          {isBelum && (
-                            <span className="inline-flex items-center text-xs font-bold text-amber-300 bg-amber-950/80 border border-amber-700 px-3 py-1 rounded-full">
-                              Belum Hadir
-                            </span>
+                        {/* Status Badge & 4-Hour Countdown */}
+                        <div className="mt-3 space-y-1.5">
+                          <DialysisCountdownTimer session={s} />
+                          {s.status_reason && (
+                            <p className="text-[10px] text-amber-300/90 bg-amber-950/40 p-1.5 rounded-lg border border-amber-900/60 font-mono">
+                              Catatan: {s.status_reason}
+                            </p>
                           )}
                         </div>
                       </div>
 
                       {/* Main Action Buttons: Minimum 48px Touch Target */}
-                      <div className="pt-2 flex items-center space-x-2">
+                      <div className="pt-2 flex items-center space-x-1.5">
                         {isBelum && (
                           <button
                             onClick={() => {
@@ -1353,7 +1756,7 @@ export function NursePortal({
                               setCheckInSystolic('148');
                               setCheckInDiastolic('82');
                             }}
-                            className="flex-1 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-sm rounded-xl transition-all flex items-center justify-center space-x-2 shadow-md cursor-pointer"
+                            className="flex-1 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
                           >
                             <UserCheck className="w-4 h-4" />
                             <span>CHECK-IN</span>
@@ -1363,7 +1766,7 @@ export function NursePortal({
                         {isSedang && (
                           <button
                             onClick={() => setSelectedSessionForActive(s)}
-                            className="flex-1 min-h-[48px] bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-black text-sm rounded-xl transition-all flex items-center justify-center space-x-2 shadow-md cursor-pointer"
+                            className="flex-1 min-h-[48px] bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-black text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
                           >
                             <Stethoscope className="w-4 h-4" />
                             <span>[ BUKA SESI ]</span>
@@ -1373,12 +1776,36 @@ export function NursePortal({
                         {isSelesai && (
                           <button
                             onClick={() => setSelectedSessionForActive(s)}
-                            className="flex-1 min-h-[48px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer border border-slate-700"
+                            className="flex-1 min-h-[48px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer border border-slate-700"
                           >
                             <FileText className="w-4 h-4" />
                             <span>Lihat Rekod</span>
                           </button>
                         )}
+
+                        {/* Quick Status Button */}
+                        <button
+                          onClick={() => {
+                            setQuickStatusSession(s);
+                            setQuickStatusValue(s.status);
+                            setQuickStatusReason(s.status_reason || '');
+                          }}
+                          className="px-2.5 min-h-[48px] bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700 font-bold text-xs rounded-xl flex items-center justify-center space-x-1 cursor-pointer transition-all shrink-0"
+                          title="Tukar Status Sesi Pantas"
+                        >
+                          <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                          <span className="hidden sm:inline">Status</span>
+                        </button>
+
+                        {/* Direct Weight Entry & Update button */}
+                        <button
+                          onClick={() => openWeightModalForSession(s)}
+                          className="px-2.5 min-h-[48px] bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-700 hover:border-cyan-500 font-bold text-xs rounded-xl flex items-center justify-center space-x-1 cursor-pointer transition-all shrink-0"
+                          title="Masukkan atau Kemaskini Berat Pra & After Dialisis"
+                        >
+                          <Scale className="w-4 h-4 text-cyan-400" />
+                          <span className="hidden sm:inline">Berat</span>
+                        </button>
 
                         <button
                           onClick={() => {
@@ -1461,14 +1888,17 @@ export function NursePortal({
                       <th className="px-5 py-3.5">No. Kad Pengenalan & Umur</th>
                       <th className="px-5 py-3.5">Corak Jadual</th>
                       <th className="px-5 py-3.5">Stesen & Akses</th>
+                      <th className="px-5 py-3.5">Status & Countdown (4 Jam)</th>
                       <th className="px-5 py-3.5">Berat Kering</th>
                       <th className="px-5 py-3.5">Penaja</th>
-                      <th className="px-5 py-3.5 text-right">Tindakan</th>
+                      <th className="px-5 py-3.5 text-right">Tindakan Pantas</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {patientsList.map((p) => {
                       const icData = parseMalaysianIC(p.ic_number);
+                      const pSession = sessions.find(s => s.patient_id === p.id);
+
                       return (
                         <tr key={p.id} className="hover:bg-slate-850/50 transition-colors">
                           <td className="px-5 py-4 font-medium">
@@ -1503,26 +1933,48 @@ export function NursePortal({
                             <strong className="text-cyan-400 block font-bold">{p.assigned_chair}</strong>
                             <span>{p.vascular_access}</span>
                           </td>
+                          <td className="px-5 py-4">
+                            <DialysisCountdownTimer session={pSession} />
+                          </td>
                           <td className="px-5 py-4 font-bold text-emerald-400 text-base">{p.dry_weight_kg} kg</td>
                           <td className="px-5 py-4 text-xs">
                             <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-medium">
                               {p.sponsor.replace(/_/g, ' ')}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-right space-x-2 whitespace-nowrap">
+                          <td className="px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
+                            <button
+                              onClick={() => openQuickStatusForPatient(p)}
+                              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-black text-xs rounded-lg cursor-pointer inline-flex items-center space-x-1 shadow"
+                              title="Tukar Status Sesi Pesakit Hari Ini"
+                            >
+                              <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                              <span>Status</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (pSession) openWeightModalForSession(pSession);
+                                else openQuickStatusForPatient(p);
+                              }}
+                              className="px-2.5 py-1.5 bg-cyan-900 hover:bg-cyan-800 text-cyan-200 border border-cyan-700 font-bold text-xs rounded-lg cursor-pointer inline-flex items-center space-x-1"
+                              title="Masukkan / Kemaskini Berat Pra & After Dialisis"
+                            >
+                              <Scale className="w-3.5 h-3.5 text-cyan-300" />
+                              <span>Berat</span>
+                            </button>
                             <button
                               onClick={() => setWhatsAppPatient(p)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer inline-flex items-center space-x-1 shadow"
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer inline-flex items-center space-x-1 shadow"
                               title="Hantar Peringatan Sesi (WhatsApp)"
                             >
                               <Send className="w-3.5 h-3.5" />
-                              <span>Peringatan Sesi</span>
+                              <span>Peringatan</span>
                             </button>
                             <button
                               onClick={() => setSelectedPatientForDetail(p)}
-                              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold cursor-pointer border border-slate-700"
                             >
-                              Buka Profil
+                              Profil
                             </button>
                           </td>
                         </tr>
@@ -1569,14 +2021,30 @@ export function NursePortal({
                     </div>
 
                     <h4 className="font-bold text-white text-sm truncate">{s.patient_name}</h4>
-                    <p className="text-xs text-slate-400 mt-1">Mula: {s.actual_start_time || s.scheduled_time}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Mula: {s.actual_start_time || s.scheduled_time}</p>
                     
-                    {isActive && (
-                      <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between text-xs">
-                        <span className="text-slate-400">BP Semasa:</span>
-                        <strong className="text-emerald-400 font-bold">{s.current_bp || s.pre_bp}</strong>
+                    <div className="mt-2 pt-2 border-t border-slate-800 text-[11px] space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Pra:</span>
+                        <strong className="text-amber-300 font-bold font-mono">{s.pre_weight_kg ? `${s.pre_weight_kg}kg` : '--'}</strong>
                       </div>
-                    )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Selepas:</span>
+                        <strong className="text-cyan-300 font-bold font-mono">{s.post_weight_kg ? `${s.post_weight_kg}kg` : '--'}</strong>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openWeightModalForSession(s);
+                      }}
+                      className="w-full mt-2 py-1.5 bg-slate-800 hover:bg-cyan-900/60 text-slate-200 hover:text-cyan-200 text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center space-x-1 cursor-pointer transition-all"
+                    >
+                      <Scale className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Input / Edit Berat</span>
+                    </button>
                   </div>
                 );
               })}
@@ -1591,16 +2059,29 @@ export function NursePortal({
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
               <div className="divide-y divide-slate-800">
                 {sessions.filter(s => s.status === 'SUDAH_SELESAI').map(s => (
-                  <div key={s.id} className="py-3 flex justify-between items-center">
+                  <div key={s.id} className="py-3 flex justify-between items-center flex-wrap gap-2">
                     <div>
                       <strong className="text-white text-base block font-bold">{s.patient_name} ({s.patient_id_code})</strong>
                       <p className="text-xs text-slate-400">
                         {s.scheduled_date} | Stesen {s.chair_number} | {s.actual_start_time} - {s.actual_end_time}
                       </p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        Pra: <strong className="text-amber-300">{s.pre_weight_kg || '--'} kg</strong> (BP: {s.pre_bp || '--'}) • Selepas: <strong className="text-cyan-300">{s.post_weight_kg || '--'} kg</strong> (BP: {s.post_bp || '--'})
+                      </p>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs text-slate-400 block">Cecair Ditapis</span>
-                      <strong className="text-cyan-400 text-sm font-bold">{s.actual_uf_litres} L</strong>
+                    <div className="flex items-center space-x-3">
+                      <div className="text-right">
+                        <span className="text-xs text-slate-400 block">Cecair Ditapis</span>
+                        <strong className="text-cyan-400 text-sm font-bold">{s.actual_uf_litres ? `${s.actual_uf_litres} L` : '--'}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openWeightModalForSession(s)}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-cyan-950 text-cyan-300 border border-slate-700 hover:border-cyan-600 rounded-lg text-xs font-bold flex items-center space-x-1 cursor-pointer"
+                      >
+                        <Scale className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Edit Berat</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -2148,27 +2629,39 @@ export function NursePortal({
 
             {/* SECTION 1: BERAT */}
             <div className="space-y-2">
-              <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                BERAT
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                  <Scale className="w-4 h-4 text-cyan-400" />
+                  <span>BERAT (PRA & AFTER DIALISIS)</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => openWeightModalForSession(selectedSessionForActive)}
+                  className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition-all flex items-center space-x-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Masukkan / Edit Berat</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400 block">Sebelum</span>
-                  <strong className="text-xl font-bold text-white block mt-0.5">
+                  <span className="text-xs text-slate-400 block font-semibold">Sebelum (Pra)</span>
+                  <strong className="text-xl font-bold text-amber-300 block mt-0.5 font-mono">
                     {selectedSessionForActive.pre_weight_kg || '--'} kg
                   </strong>
                 </div>
 
                 <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400 block">Selepas</span>
-                  <strong className="text-xl font-bold text-cyan-400 block mt-0.5">
+                  <span className="text-xs text-slate-400 block font-semibold">Selepas (After)</span>
+                  <strong className="text-xl font-bold text-cyan-400 block mt-0.5 font-mono">
                     {selectedSessionForActive.post_weight_kg ? `${selectedSessionForActive.post_weight_kg} kg` : '[ -- ]'}
                   </strong>
                 </div>
 
                 <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400 block">Berat Kering</span>
-                  <strong className="text-xl font-bold text-emerald-400 block mt-0.5">
+                  <span className="text-xs text-slate-400 block font-semibold">Berat Kering</span>
+                  <strong className="text-xl font-bold text-emerald-400 block mt-0.5 font-mono">
                     {selectedSessionForActive.dry_weight_kg} kg
                   </strong>
                 </div>
@@ -2827,6 +3320,269 @@ export function NursePortal({
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* MODAL KHAS: MASUKKAN & KEMASKINI BERAT PRA & AFTER DIALISIS OLEH JURURAWAT */}
+      {/* ========================================================================= */}
+      {weightModalSession && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-cyan-500 rounded-3xl max-w-xl w-full p-6 sm:p-7 text-white space-y-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-2xl bg-cyan-950 border-2 border-cyan-500 flex items-center justify-center text-cyan-300">
+                  <Scale className="w-7 h-7 stroke-[2.5]" />
+                </div>
+                <div>
+                  <span className="text-xs uppercase font-extrabold text-cyan-400 tracking-wider">
+                    Kemasukan Data Klinikal Jururawat
+                  </span>
+                  <h3 className="text-2xl font-black text-white">
+                    {weightModalSession.patient_name.toUpperCase()}
+                  </h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => setWeightModalSession(null)}
+                className="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer text-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Context Info */}
+            <div className="grid grid-cols-3 gap-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-center">
+              <div>
+                <span className="text-[11px] text-slate-400 block font-semibold">ID Pesakit</span>
+                <strong className="text-sm font-bold text-white font-mono">{weightModalSession.patient_id_code}</strong>
+              </div>
+              <div>
+                <span className="text-[11px] text-slate-400 block font-semibold">Stesen Kerusi</span>
+                <strong className="text-lg font-black text-cyan-400">{weightModalSession.chair_number}</strong>
+              </div>
+              <div>
+                <span className="text-[11px] text-slate-400 block font-semibold">Sasaran Kering</span>
+                <strong className="text-sm font-bold text-emerald-400 font-mono">{weightModalSession.dry_weight_kg} kg</strong>
+              </div>
+            </div>
+
+            {weightModalError && (
+              <div className="p-3 bg-rose-950 border border-rose-600 rounded-xl text-xs font-bold text-rose-300 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{weightModalError}</span>
+              </div>
+            )}
+
+            <div className="space-y-5">
+              {/* SECTION 1: BERAT PRA-DIALISIS */}
+              <div className="bg-slate-950 border-2 border-amber-500/60 rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                    <span>1. Berat Badan Pra-Dialisis (Sebelum Rawatan)</span>
+                  </h4>
+                  <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full font-bold">
+                    Pra
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs text-slate-300 font-bold block">
+                    Berat Pra (kg):
+                  </label>
+                  <div className="flex items-center justify-between gap-3 bg-slate-900 border border-slate-700 p-2 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setWeightModalPreWeight(prev => Number((Math.max(30, prev - 0.1)).toFixed(1)))}
+                      className="w-10 h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-black text-xl rounded-lg cursor-pointer flex items-center justify-center shrink-0"
+                    >
+                      -
+                    </button>
+                    <div className="text-center">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={weightModalPreWeight}
+                        onChange={(e) => setWeightModalPreWeight(parseFloat(e.target.value) || 0)}
+                        className="w-28 text-center font-mono font-black text-2xl text-amber-300 bg-transparent border-b border-slate-700 focus:border-amber-400 outline-none"
+                      />
+                      <span className="text-xs text-slate-400 font-bold ml-1">kg</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWeightModalPreWeight(prev => Number((prev + 0.1).toFixed(1)))}
+                      className="w-10 h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-black text-xl rounded-lg cursor-pointer flex items-center justify-center shrink-0"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs text-slate-400 pt-1">
+                    <span>Anggaran Kelebihan Cecair:</span>
+                    <strong className={`font-mono font-bold ${weightModalPreWeight - weightModalSession.dry_weight_kg > 2.0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      +{Number((weightModalPreWeight - weightModalSession.dry_weight_kg).toFixed(1))} kg vs kering
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Pre BP */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Systolic Pra:</label>
+                    <input
+                      type="number"
+                      value={weightModalPreSys}
+                      onChange={(e) => setWeightModalPreSys(e.target.value)}
+                      placeholder="138"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Diastolic Pra:</label>
+                    <input
+                      type="number"
+                      value={weightModalPreDia}
+                      onChange={(e) => setWeightModalPreDia(e.target.value)}
+                      placeholder="82"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: BERAT SELEPAS DIALISIS */}
+              <div className="bg-slate-950 border-2 border-cyan-500/60 rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+                    <span>2. Berat Badan Selepas Dialisis (After Dialisis)</span>
+                  </h4>
+                  <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-bold">
+                    After
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs text-slate-300 font-bold block">
+                    Berat Selepas / After (kg):
+                  </label>
+                  <div className="flex items-center justify-between gap-3 bg-slate-900 border border-slate-700 p-2 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = weightModalPostWeight ? parseFloat(weightModalPostWeight) : weightModalSession.dry_weight_kg;
+                        setWeightModalPostWeight((Math.max(30, cur - 0.1)).toFixed(1));
+                      }}
+                      className="w-10 h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-black text-xl rounded-lg cursor-pointer flex items-center justify-center shrink-0"
+                    >
+                      -
+                    </button>
+                    <div className="text-center">
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="Contoh: 73.5"
+                        value={weightModalPostWeight}
+                        onChange={(e) => setWeightModalPostWeight(e.target.value)}
+                        className="w-28 text-center font-mono font-black text-2xl text-cyan-300 bg-transparent border-b border-slate-700 focus:border-cyan-400 outline-none"
+                      />
+                      <span className="text-xs text-slate-400 font-bold ml-1">kg</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = weightModalPostWeight ? parseFloat(weightModalPostWeight) : weightModalSession.dry_weight_kg;
+                        setWeightModalPostWeight((cur + 0.1).toFixed(1));
+                      }}
+                      className="w-10 h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-black text-xl rounded-lg cursor-pointer flex items-center justify-center shrink-0"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {weightModalPostWeight && !isNaN(parseFloat(weightModalPostWeight)) && (
+                    <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-1 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Cecair Ditapis (UF = Pra - Selepas):</span>
+                        <strong className="text-emerald-400 font-mono font-bold text-sm">
+                          {Number((weightModalPreWeight - parseFloat(weightModalPostWeight)).toFixed(2))} kg (Liter)
+                        </strong>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Beza vs Sasaran Kering:</span>
+                        <strong className="text-cyan-300 font-mono font-bold">
+                          {parseFloat(weightModalPostWeight) >= weightModalSession.dry_weight_kg ? `+${(parseFloat(weightModalPostWeight) - weightModalSession.dry_weight_kg).toFixed(1)}` : `${(parseFloat(weightModalPostWeight) - weightModalSession.dry_weight_kg).toFixed(1)}`} kg
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Post BP */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Systolic Selepas:</label>
+                    <input
+                      type="number"
+                      value={weightModalPostSys}
+                      onChange={(e) => setWeightModalPostSys(e.target.value)}
+                      placeholder="124"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Diastolic Selepas:</label>
+                    <input
+                      type="number"
+                      value={weightModalPostDia}
+                      onChange={(e) => setWeightModalPostDia(e.target.value)}
+                      placeholder="78"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Session Option */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white block">Status Sesi Rawatan:</span>
+                  <span className="text-[11px] text-slate-400">Tentukan status terkini pesakit</span>
+                </div>
+                <select
+                  value={weightModalStatus}
+                  onChange={(e) => setWeightModalStatus(e.target.value as SessionStatus)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none cursor-pointer"
+                >
+                  <option value="SUDAH_HADIR">SUDAH HADIR</option>
+                  <option value="SEDANG_DIALISIS">SEDANG DIALISIS</option>
+                  <option value="SUDAH_SELESAI">SUDAH SELESAI</option>
+                  <option value="BELUM_HADIR">BELUM HADIR</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setWeightModalSession(null)}
+                className="flex-1 min-h-[48px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm rounded-xl cursor-pointer border border-slate-700"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNurseWeights}
+                className="flex-1 min-h-[48px] bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <Save className="w-4 h-4 stroke-[2.5]" />
+                <span>SIMPAN DATA BERAT (PRA & AFTER)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WhatsApp Reminder Modal */}
       <WhatsAppReminderModal
         isOpen={!!whatsAppPatient}
@@ -2835,6 +3591,172 @@ export function NursePortal({
         onLogAudit={onAuditLog}
         onNavigateToSettings={() => setActiveNav('tetapan')}
       />
+
+      {/* ========================================================================= */}
+      {/* MODAL PANTAS: TUKAR STATUS SESI & SEBAB / CATATAN JURURAWAT */}
+      {/* ========================================================================= */}
+      {quickStatusSession && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-lg w-full p-6 text-white space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                  <Zap className="w-6 h-6 fill-slate-950" />
+                </div>
+                <div>
+                  <span className="text-xs uppercase font-extrabold text-amber-400">Tukar Status Sesi Pantas</span>
+                  <h3 className="text-xl font-black text-white">{quickStatusSession.patient_name}</h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setQuickStatusSession(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Pilih Status Sesi Rawatan:</label>
+                <select
+                  value={quickStatusValue}
+                  onChange={(e) => setQuickStatusValue(e.target.value as SessionStatus)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold text-sm focus:border-amber-500 outline-none cursor-pointer"
+                >
+                  <option value="SEDANG_DIALISIS">🟢 SEDANG DIALISIS (Sesi Bermula - Timer 4 Jam)</option>
+                  <option value="SUDAH_SELESAI">✓ SUDAH SELESAI (Discaj Sempurna / Standard 4 Jam)</option>
+                  <option value="GAGAL_HABIS_DIALISIS">⚠️ GAGAL HABIS DIALISIS (Isu Akses / Hipotensi)</option>
+                  <option value="TAMAT_AWAL">🛑 TAMAT AWAL (Permintaan Pesakit / Gejala Klinikal)</option>
+                  <option value="SUDAH_HADIR">🔵 SUDAH HADIR (Check-in - Menunggu Kerusi)</option>
+                  <option value="BELUM_HADIR">⚪ BELUM HADIR</option>
+                  <option value="BATAL">❌ BATAL SESI</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Sebab / Catatan Jururawat (Pilihan):</label>
+                <textarea
+                  rows={3}
+                  value={quickStatusReason}
+                  onChange={(e) => setQuickStatusReason(e.target.value)}
+                  placeholder="Contoh: Pesakit mengalami cramp teruk pada jam ke-3 dan sesi ditamatkan awal..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1">
+                <div className="flex justify-between">
+                  <span>Stesen Kerusi:</span>
+                  <strong className="text-cyan-400">{quickStatusSession.chair_number}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Berat Pra:</span>
+                  <strong className="text-amber-300">{quickStatusSession.pre_weight_kg ? `${quickStatusSession.pre_weight_kg} kg` : '-'}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Berat After:</span>
+                  <strong className="text-cyan-300">{quickStatusSession.post_weight_kg ? `${quickStatusSession.post_weight_kg} kg` : '-'}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setQuickStatusSession(null)}
+                className="flex-1 min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickStatus}
+                className="flex-1 min-h-[44px] bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer"
+              >
+                KEMASKINI STATUS SESI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL PERINGATAN SYIF JURURAWAT: MULA DIALISIS PUKAL */}
+      {/* ========================================================================= */}
+      {showNurseStartWarningModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-lg w-full p-6 text-white space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">Peringatan Status 'Sedang Dialisis'</h3>
+                  <p className="text-xs text-amber-300">Tukar status untuk mengaktifkan timer 4 jam & auto-discaj</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNurseStartWarningModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Terdapat <strong>{unstartedSessions.length} pesakit</strong> telah hadir / berada di kerusi stesen tetapi status belum ditukar kepada <strong>'Sedang Dialisis'</strong>:
+            </p>
+
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+              {unstartedSessions.map(s => (
+                <div key={s.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex justify-between items-center text-xs">
+                  <div>
+                    <strong className="text-white block">{s.patient_name}</strong>
+                    <span className="text-slate-400 font-mono">Stesen {s.chair_number} • {s.status.replace(/_/g, ' ')}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const updated: DialysisSession = {
+                        ...s,
+                        status: 'SEDANG_DIALISIS',
+                        actual_start_time: new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                        start_timestamp: Date.now(),
+                        updated_at: new Date().toISOString()
+                      };
+                      setSessions(prev => prev.map(item => item.id === s.id ? updated : item));
+                      if (onUpdateSession) onUpdateSession(updated);
+                      showToast(`✓ Pesakit ${s.patient_name} ditukar ke 'Sedang Dialisis'`);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg cursor-pointer"
+                  >
+                    Mula Dialisis
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowNurseStartWarningModal(false)}
+                className="flex-1 min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={handleBatchStartDialysis}
+                className="flex-1 min-h-[44px] bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer flex items-center justify-center space-x-1"
+              >
+                <Zap className="w-4 h-4 fill-slate-950" />
+                <span>TUKAR SEMUA KE SEDANG DIALISIS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

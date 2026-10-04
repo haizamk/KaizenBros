@@ -16,7 +16,7 @@ import {
   INITIAL_CHECK_INS,
   INITIAL_REGISTRATIONS
 } from '@/lib/mock-data';
-import { AuditLog, PatientCheckIn, DialysisSession, Patient, NewRegistration } from '@/types';
+import { AuditLog, PatientCheckIn, DialysisSession, Patient, NewRegistration, PatientMedication, SessionStatus } from '@/types';
 import { syncPatientsWithMalaysiaSchedule } from '@/lib/malaysia-time';
 import { useMalaysiaTime } from '@/hooks/useMalaysiaTime';
 import { Home as HomeIcon, User, AlertTriangle, PhoneCall, MessageSquare, ShieldAlert } from 'lucide-react';
@@ -40,16 +40,20 @@ export default function Home() {
   const [currentView, setCurrentView] = useState<'public' | 'patient' | 'nurse' | 'admin' | 'database' | 'registration'>('patient');
   const [showGlobalHelpModal, setShowGlobalHelpModal] = useState(false);
   const [showPatientLoginModal, setShowPatientLoginModal] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      try { localStorage.setItem('kaizenbros_theme', next); } catch {}
+      return next;
+    });
   };
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
 
   // Authentication State (Patients & Staff)
-  const [authenticatedPatient, setAuthenticatedPatient] = useState<PatientAccount | null>(INITIAL_PATIENT_ACCOUNTS[0]);
+  const [authenticatedPatient, setAuthenticatedPatient] = useState<PatientAccount | null>(null);
   const [authenticatedStaff, setAuthenticatedStaff] = useState<StaffAccount | null>(INITIAL_STAFF_ACCOUNTS[0]);
 
   // Registrations state
@@ -72,6 +76,10 @@ export default function Home() {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
+        const storedTheme = localStorage.getItem('kaizenbros_theme');
+        if (storedTheme === 'light' || storedTheme === 'dark') {
+          setTheme(storedTheme);
+        }
         const storedPatients = localStorage.getItem('kaizenbros_patients');
         if (storedPatients) {
           const parsed = JSON.parse(storedPatients);
@@ -125,38 +133,45 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Synchronize document and body background with theme
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (theme === 'light') {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+        document.body.style.backgroundColor = '#F5F7FA';
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        document.body.style.backgroundColor = '#020617';
+      }
+    }
+  }, [theme]);
+
   // Automatically derive patients with real-time next dialysis schedules (including >7pm rollover)
   const syncedPatients = useMemo(() => {
     return syncPatientsWithMalaysiaSchedule(patients, malaysiaTime.effectiveDate);
   }, [patients, malaysiaTime.effectiveDate]);
 
   const activePatient = useMemo(() => {
-    if (!authenticatedPatient && !selectedPatientId) return null;
+    if (!authenticatedPatient) return null;
     
     // First priority: match by authenticatedPatient account
-    if (authenticatedPatient) {
-      const cleanAuthCode = (authenticatedPatient.patientIdCode || '').trim().toLowerCase();
-      const cleanAuthEmail = (authenticatedPatient.email || '').trim().toLowerCase();
-      const cleanAuthIc = (authenticatedPatient.icNumber || '').replace(/\D/g, '');
+    const cleanAuthCode = (authenticatedPatient.patientIdCode || '').trim().toLowerCase();
+    const cleanAuthEmail = (authenticatedPatient.email || '').trim().toLowerCase();
+    const cleanAuthIc = (authenticatedPatient.icNumber || '').replace(/\D/g, '');
 
-      const matched = syncedPatients.find(p => {
-        const matchId = p.id === authenticatedPatient.id;
-        const matchCode = p.patient_id_code.trim().toLowerCase() === cleanAuthCode;
-        const matchEmail = p.email && p.email.trim().toLowerCase() === cleanAuthEmail;
-        const matchIc = cleanAuthIc && p.ic_number && p.ic_number.replace(/\D/g, '') === cleanAuthIc;
-        return matchId || matchCode || matchEmail || matchIc;
-      });
-      if (matched) return matched;
-    }
+    const matched = syncedPatients.find(p => {
+      const matchId = p.id === authenticatedPatient.id;
+      const matchCode = p.patient_id_code.trim().toLowerCase() === cleanAuthCode;
+      const matchEmail = p.email && p.email.trim().toLowerCase() === cleanAuthEmail;
+      const matchIc = cleanAuthIc && p.ic_number && p.ic_number.replace(/\D/g, '') === cleanAuthIc;
+      return matchId || matchCode || matchEmail || matchIc;
+    });
+    if (matched) return matched;
 
-    // Second priority: match by selectedPatientId
-    if (selectedPatientId) {
-      const matched = syncedPatients.find(p => p.id === selectedPatientId);
-      if (matched) return matched;
-    }
-
-    return syncedPatients.length > 0 ? syncedPatients[0] : null;
-  }, [authenticatedPatient, selectedPatientId, syncedPatients]);
+    return syncedPatients.find(p => p.id === authenticatedPatient.id) || null;
+  }, [authenticatedPatient, syncedPatients]);
 
   const handleAddMedication = (newMed: Omit<PatientMedication, 'id'>) => {
     setMedications(prev => {
@@ -354,6 +369,198 @@ export default function Home() {
     );
   };
 
+  // Patient records Pre and/or Post Dialysis weights & blood pressure
+  const handlePatientUpdateWeights = (
+    preWeight?: number, 
+    postWeight?: number, 
+    preBp?: string, 
+    postBp?: string
+  ) => {
+    if (!demoPatient) return;
+    const ptId = demoPatient.id;
+
+    // 1. Update or create DialysisSession
+    setSessions(prev => {
+      let found = false;
+      const next = prev.map(s => {
+        if (s.patient_id === ptId) {
+          found = true;
+          const newPre = (preWeight !== undefined && preWeight !== null) ? preWeight : s.pre_weight_kg;
+          const newPost = (postWeight !== undefined && postWeight !== null) ? postWeight : s.post_weight_kg;
+          const newActualUf = (newPre !== undefined && newPost !== undefined) ? Number((newPre - newPost).toFixed(2)) : s.actual_uf_litres;
+          const newStatus: SessionStatus = newPost ? 'SUDAH_SELESAI' : s.status;
+          return {
+            ...s,
+            pre_weight_kg: newPre,
+            post_weight_kg: newPost,
+            pre_bp: preBp || s.pre_bp,
+            post_bp: postBp || s.post_bp,
+            current_bp: postBp || preBp || s.current_bp,
+            actual_uf_litres: newActualUf,
+            status: newStatus,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return s;
+      });
+
+      if (!found) {
+        const newPre = preWeight !== undefined ? preWeight : demoPatient.dry_weight_kg + 1.8;
+        const newPost = postWeight !== undefined ? postWeight : undefined;
+        const newSession: DialysisSession = {
+          id: Date.now(),
+          patient_id: ptId,
+          patient_id_code: demoPatient.patient_id_code,
+          patient_name: demoPatient.name,
+          chair_id: 1,
+          chair_number: demoPatient.assigned_chair || 'C-01',
+          scheduled_date: new Date().toISOString().slice(0, 10),
+          scheduled_time: '08:00 AM',
+          status: newPost ? 'SUDAH_SELESAI' : 'MENUNGGU_GILIRAN',
+          dry_weight_kg: demoPatient.dry_weight_kg,
+          pre_weight_kg: newPre,
+          post_weight_kg: newPost,
+          target_uf_litres: Number((newPre - demoPatient.dry_weight_kg).toFixed(2)),
+          actual_uf_litres: newPost ? Number((newPre - newPost).toFixed(2)) : undefined,
+          pre_bp: preBp || '130/80',
+          post_bp: postBp,
+          current_bp: postBp || preBp || '130/80',
+          created_at: new Date().toISOString()
+        };
+        next.unshift(newSession);
+      }
+
+      try {
+        localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    // 2. Update patient profile latest_weight_kg and latest_bp
+    setPatients(prev => {
+      const next = prev.map(p => {
+        if (p.id === ptId) {
+          return {
+            ...p,
+            latest_weight_kg: postWeight ?? preWeight ?? p.latest_weight_kg,
+            latest_bp: postBp || preBp || p.latest_bp
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('kaizenbros_patients', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    // 3. Update queue if present
+    setCheckInQueue(prev => {
+      const next = prev.map(q => {
+        if (q.patient_id === ptId) {
+          return {
+            ...q,
+            pre_weight_kg: preWeight ?? q.pre_weight_kg,
+            pre_bp: preBp || q.pre_bp
+          };
+        }
+        return q;
+      });
+      try {
+        localStorage.setItem('kaizenbros_queue', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    // 4. Audit Log
+    handleAuditLog(
+      'KEMASKINI_BERAT_PESAKIT',
+      `Pesakit ${demoPatient.name} memasukkan data berat: Pra: ${preWeight !== undefined ? `${preWeight}kg` : '-'} (BP: ${preBp || '-'}), Selepas: ${postWeight !== undefined ? `${postWeight}kg` : '-'} (BP: ${postBp || '-'}).`
+    );
+  };
+
+  // Quick Session Status Change Handler (with 4-hour start timestamp recording)
+  const handleSessionStatusChange = (sessionId: number, newStatus: SessionStatus, reason?: string) => {
+    setSessions(prev => {
+      const nowStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+      const nowMs = Date.now();
+
+      const next = prev.map(s => {
+        if (s.id === sessionId) {
+          const isStartingDialysis = newStatus === 'SEDANG_DIALISIS' && s.status !== 'SEDANG_DIALISIS';
+          const isEndingDialysis = (newStatus === 'SUDAH_SELESAI' || newStatus === 'GAGAL_HABIS_DIALISIS' || newStatus === 'TAMAT_AWAL');
+
+          return {
+            ...s,
+            status: newStatus,
+            status_reason: reason || s.status_reason,
+            actual_start_time: isStartingDialysis ? nowStr : s.actual_start_time,
+            start_timestamp: isStartingDialysis ? nowMs : s.start_timestamp || (newStatus === 'SEDANG_DIALISIS' ? nowMs : undefined),
+            actual_end_time: isEndingDialysis ? nowStr : s.actual_end_time,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return s;
+      });
+
+      try {
+        localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    const targetSession = sessions.find(s => s.id === sessionId);
+    if (targetSession) {
+      handleAuditLog(
+        'TUKAR_STATUS_SESI',
+        `Status sesi pesakit ${targetSession.patient_name} (${targetSession.patient_id_code}) ditukar kepada ${newStatus}${reason ? ` (Sebab: ${reason})` : ''}.`
+      );
+    }
+  };
+
+  // Auto-Complete Logic: Automatically switch status to 'SUDAH_SELESAI' after 1 hour post 4-hour standard session (5 hours total)
+  useEffect(() => {
+    const timerInterval = setInterval(() => {
+      const nowMs = Date.now();
+      const FIVE_HOURS_MS = 5 * 3600 * 1000; // 5 hours in ms (4h standard + 1h grace)
+      const nowStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+      setSessions(prev => {
+        let changed = false;
+        const next = prev.map(s => {
+          if (s.status === 'SEDANG_DIALISIS') {
+            const startMs = s.start_timestamp || (s.actual_start_time ? Date.now() - 3.5 * 3600 * 1000 : null);
+            if (startMs && (nowMs - startMs) >= FIVE_HOURS_MS) {
+              changed = true;
+              return {
+                ...s,
+                status: 'SUDAH_SELESAI' as SessionStatus,
+                auto_completed: true,
+                status_reason: 'Auto-Discaj: melepasi 1 jam dari tempoh standard 4 jam',
+                actual_end_time: nowStr,
+                updated_at: new Date().toISOString()
+              };
+            }
+          }
+          return s;
+        });
+
+        if (changed) {
+          try {
+            localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+          } catch {}
+          handleAuditLog(
+            'AUTO_DISCAJ_SELESAI',
+            `Sistem menukar automatik status sesi dialisis kepada 'SUDAH_SELESAI' kerana telah melepasi 1 jam dari waktu tamat standard 4 jam.`
+          );
+        }
+        return next;
+      });
+    }, 10000); // Check every 10s
+
+    return () => clearInterval(timerInterval);
+  }, []);
+
   // Nurse assigns station to patient in queue
   const handleAssignStation = (patientId: number, chairNumber: string, machineModel: string) => {
     const updatedQueue = checkInQueue.map(q => {
@@ -418,7 +625,7 @@ export default function Home() {
   };
 
   return (
-    <div suppressHydrationWarning className={`min-h-screen flex flex-col bg-slate-950 text-slate-100 ${theme}`}>
+    <div suppressHydrationWarning className={`min-h-screen flex flex-col ${theme === 'light' ? 'bg-[#F5F7FA] text-slate-900 light' : 'bg-slate-950 text-slate-100 dark'}`}>
       <Header
         currentView={currentView}
         onViewChange={(view) => setCurrentView(view)}
@@ -495,11 +702,14 @@ export default function Home() {
             medications={medications}
             checkInRecord={demoPatientCheckIn}
             isLoggedIn={!!authenticatedPatient}
+            onUpdateWeights={handlePatientUpdateWeights}
+            onCheckInArrival={handlePatientSelfCheckIn}
             onPatientLogout={() => {
               clearPatientSession();
               setAuthenticatedPatient(null);
-              setShowPatientLoginModal(true);
-              handleAuditLog('LOGOUT_PESAKIT', 'Pesakit log keluar daripada portal.');
+              setSelectedPatientId(null);
+              setShowPatientLoginModal(false);
+              handleAuditLog('LOGOUT_PESAKIT', 'Pesakit berjaya log keluar 100% daripada portal.');
             }}
             onOpenLogin={() => setShowPatientLoginModal(true)}
             onSelectPatient={(selectedPt) => {
@@ -536,6 +746,34 @@ export default function Home() {
           <NursePortal
             currentNurseName={authenticatedStaff ? authenticatedStaff.name : demoNurseName}
             patients={syncedPatients}
+            sessions={sessions}
+            onUpdateSession={(updatedSession) => {
+              setSessions(prev => {
+                const next = prev.map(s => s.id === updatedSession.id ? updatedSession : s);
+                try {
+                  localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+                } catch {}
+                return next;
+              });
+              if (updatedSession.post_weight_kg || updatedSession.pre_weight_kg) {
+                setPatients(prev => {
+                  const next = prev.map(p => {
+                    if (p.id === updatedSession.patient_id) {
+                      return {
+                        ...p,
+                        latest_weight_kg: updatedSession.post_weight_kg ?? updatedSession.pre_weight_kg ?? p.latest_weight_kg,
+                        latest_bp: updatedSession.post_bp || updatedSession.pre_bp || p.latest_bp
+                      };
+                    }
+                    return p;
+                  });
+                  try {
+                    localStorage.setItem('kaizenbros_patients', JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }
+            }}
             onAuditLog={handleAuditLog}
             checkInQueue={checkInQueue}
             onCheckInPatient={handleNurseCheckInPatient}

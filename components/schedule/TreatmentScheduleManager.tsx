@@ -26,11 +26,14 @@ import {
   CalendarDays,
   LayoutGrid,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { DialysisSession, Patient, ShiftSlot, Nurse } from '@/types';
 import { INITIAL_CHAIRS, VERIFIED_CENTRE_INFO } from '@/lib/mock-data';
 import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
+import { QuickStatusModal } from '@/components/shared/QuickStatusModal';
+import { getSessionTimerInfo } from '@/lib/dialysis-timer';
 import { parseMalaysianIC } from '@/lib/ic-utils';
 import { getMalaysiaDate } from '@/lib/malaysia-time';
 
@@ -107,6 +110,14 @@ export function TreatmentScheduleManager({
   const [prefilledShift, setPrefilledShift] = useState<ShiftSlot>('SYIF_1');
   const [prefilledDate, setPrefilledDate] = useState<string>(selectedDate);
   const [whatsAppPatient, setWhatsAppPatient] = useState<Patient | null>(null);
+  const [quickStatusSession, setQuickStatusSession] = useState<DialysisSession | null>(null);
+
+  // Live countdown timer ticker
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Form State for Adding / Editing Session
   const [formPatientId, setFormPatientId] = useState<number>(0);
@@ -246,21 +257,12 @@ export function TreatmentScheduleManager({
     <div className="space-y-6 font-sans">
       {/* Top Clarification Banner: Perbezaan Shif Jururawat vs Shif Rawatan Pesakit */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border-2 border-indigo-500/40 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="bg-indigo-900 text-indigo-200 text-xs font-black px-3 py-1 rounded-full border border-indigo-600 flex items-center">
-                <Info className="w-3.5 h-3.5 mr-1.5 text-cyan-400" />
-                PANDUAN OPERASI KLINIKAL
-              </span>
-              <span className="text-xs text-slate-400 font-mono">12 Stesen Fresenius 4008S</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white">
-              Perbezaan Shif Jururawat vs Shif Pesakit Dialisis
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300">
-              Pusat Dialisis KaizenBros Semenyih menetapkan jadual rawatan pesakit kepada <strong>3 sesi harian</strong>, disokong oleh <strong>2 syif bertugas jururawat</strong>.
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="flex items-center space-x-2">
+            <span className="bg-indigo-900 text-indigo-200 text-xs font-black px-3 py-1 rounded-full border border-indigo-600 flex items-center">
+              <Info className="w-3.5 h-3.5 mr-1.5 text-cyan-400" />
+              PANDUAN OPERASI KLINIKAL
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -301,9 +303,9 @@ export function TreatmentScheduleManager({
           </div>
         </div>
 
-        {/* 2 Visual Shift Explanation Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-          {/* A. SHIF PESAKIT (3 Sesi) */}
+        {/* Visual Shift Explanation Card */}
+        <div className="pt-1">
+          {/* SHIF RAWATAN PESAKIT (3 Sesi) */}
           <div className="bg-slate-950/80 border-2 border-cyan-500/50 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div className="flex items-center space-x-2">
@@ -335,36 +337,6 @@ export function TreatmentScheduleManager({
             </div>
             <p className="text-[11px] text-slate-400">
               * Antara setiap syif terdapat rehat 30 minit bagi tujuan sanitasi, disinfeksi mesin Fresenius dan pertukaran litar tiub darah.
-            </p>
-          </div>
-
-          {/* B. SHIF JURURAWAT (2 Syif Staf) */}
-          <div className="bg-slate-950/80 border-2 border-emerald-500/50 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-950 text-emerald-400 flex items-center justify-center font-black text-xs">
-                  🧑‍⚕️
-                </div>
-                <h4 className="font-black text-white text-sm">Shif Bertugas Jururawat (2 Syif Staf)</h4>
-              </div>
-              <span className="text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700 px-2 py-0.5 rounded-full">
-                Waktu Bekerja Staf
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-emerald-500/30">
-                <span className="font-extrabold text-emerald-300 block text-[11px]">Syif Jururawat Pagi</span>
-                <strong className="text-white font-mono text-xs block">5:30 AM - 3:00 PM</strong>
-                <span className="text-[10px] text-slate-400">Prep mesin 5:30am & jaga Syif 1 & 2 pesakit</span>
-              </div>
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-teal-500/30">
-                <span className="font-extrabold text-teal-300 block text-[11px]">Syif Jururawat Petang</span>
-                <strong className="text-white font-mono text-xs block">12:00 PM - 8:00 PM</strong>
-                <span className="text-[10px] text-slate-400">Handover tengah hari & jaga Syif 2 & 3 pesakit</span>
-              </div>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              * Jururawat datang 30 minit lebih awal (5:30 AM) untuk ujian litar / priming mesin dan pulang 8:00 PM selepas terminal disinfection.
             </p>
           </div>
         </div>
@@ -536,6 +508,7 @@ export function TreatmentScheduleManager({
                     const isSedang = sessionOnChair.status === 'SEDANG_DIALISIS';
                     const isSelesai = sessionOnChair.status === 'SUDAH_SELESAI';
                     const isHadir = sessionOnChair.status === 'SUDAH_HADIR';
+                    const timerInfo = getSessionTimerInfo(sessionOnChair, nowMs);
 
                     return (
                       <div
@@ -556,17 +529,22 @@ export function TreatmentScheduleManager({
                             <span className="text-xs font-mono font-black text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
                               {sessionOnChair.chair_number}
                             </span>
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                              isSedang
-                                ? 'bg-emerald-950 text-emerald-300 border-emerald-700 animate-pulse'
-                                : isSelesai
-                                ? 'bg-teal-950 text-teal-300 border-teal-800'
-                                : isHadir
-                                ? 'bg-blue-950 text-blue-300 border-blue-700'
-                                : 'bg-slate-800 text-slate-300 border-slate-700'
-                            }`}>
-                              {sessionOnChair.status.replace(/_/g, ' ')}
-                            </span>
+                            <button
+                              onClick={() => setQuickStatusSession(sessionOnChair)}
+                              className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border cursor-pointer hover:opacity-80 transition-opacity flex items-center space-x-1 ${
+                                isSedang
+                                  ? 'bg-emerald-950 text-emerald-300 border-emerald-700 animate-pulse'
+                                  : isSelesai
+                                  ? 'bg-teal-950 text-teal-300 border-teal-800'
+                                  : isHadir
+                                  ? 'bg-blue-950 text-blue-300 border-blue-700'
+                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                              }`}
+                              title="Klik untuk tukar status pantas"
+                            >
+                              <span>{sessionOnChair.status.replace(/_/g, ' ')}</span>
+                              <RotateCcw className="w-2.5 h-2.5 ml-0.5 shrink-0" />
+                            </button>
                           </div>
 
                           {/* Patient Name & Age (Tahun & Hari) */}
@@ -602,6 +580,43 @@ export function TreatmentScheduleManager({
                             </div>
                           </div>
 
+                          {/* Live 4-Hour Countdown Timer Component for SEDANG DIALISIS */}
+                          {isSedang && (
+                            <div className="mt-2.5 p-2 bg-emerald-950/90 border-2 border-emerald-500/80 rounded-xl text-xs space-y-1 shadow-inner">
+                              <div className="flex items-center justify-between font-black text-emerald-300">
+                                <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider">
+                                  <Clock className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                                  <span>Baki Masa 4 Jam:</span>
+                                </span>
+                                <span className="font-mono text-xs text-white bg-slate-950 px-1.5 py-0.5 rounded border border-emerald-700 font-bold">
+                                  {timerInfo.formattedRemaining}
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-emerald-800">
+                                <div 
+                                  className="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 h-full transition-all duration-1000" 
+                                  style={{ width: `${timerInfo.progressPercent}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-[10px] text-slate-300 font-mono">
+                                <span>Mula: {sessionOnChair.actual_start_time || '08:00 AM'}</span>
+                                <span>{timerInfo.progressPercent}% Selesai</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {!isSedang && !isSelesai && (
+                            <div className="mt-2 text-[10px] bg-amber-950/40 p-1.5 rounded-lg border border-amber-800/60 text-amber-200 flex items-center justify-between">
+                              <span className="truncate">⚠️ Tukar status ke 'SEDANG DIALISIS' untuk timer 4j.</span>
+                              <button
+                                onClick={() => setQuickStatusSession(sessionOnChair)}
+                                className="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-[10px] cursor-pointer shrink-0 ml-1"
+                              >
+                                Mula
+                              </button>
+                            </div>
+                          )}
+
                           {sessionOnChair.nurse_name && (
                             <div className="mt-2 text-[11px] text-slate-400 flex items-center space-x-1">
                               <span>Staf Jururawat:</span>
@@ -624,11 +639,20 @@ export function TreatmentScheduleManager({
 
                           <div className="flex items-center space-x-1.5">
                             <button
+                              onClick={() => setQuickStatusSession(sessionOnChair)}
+                              className="flex-1 py-1.5 px-2 bg-gradient-to-r from-cyan-700 to-blue-700 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg text-xs font-black transition-all flex items-center justify-center space-x-1 cursor-pointer shadow"
+                              title="Tukar Status Sesi Pantas (Modal Radio)"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>🔄 Status</span>
+                            </button>
+
+                            <button
                               onClick={() => handleOpenEditSession(sessionOnChair)}
-                              className="flex-1 py-1.5 px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                              className="py-1.5 px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
                             >
                               <Edit3 className="w-3 h-3" />
-                              <span>Edit Sesi</span>
+                              <span>Edit</span>
                             </button>
 
                             <button

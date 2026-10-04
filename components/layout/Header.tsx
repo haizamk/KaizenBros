@@ -44,7 +44,7 @@ export function Header({
   onViewChange,
   activePatientName = 'Ahmad bin Ali',
   activeNurseName = 'Sister Siti Fatimah',
-  theme = 'light',
+  theme = 'dark',
   onThemeToggle,
   authenticatedStaff,
   onStaffLoginSuccess,

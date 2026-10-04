@@ -1,326 +1,120 @@
 @import "tailwindcss";
 
-/* KAIZENBROS SOOTHING LIGHT MODE DESIGN SYSTEM (ANTI-GLARE / COMFORT THEME) */
+:root {
+  --main-bg: #020617;
+  --main-color: #f8fafc;
+}
+
+.dark {
+  --main-bg: #020617;
+  --main-color: #f8fafc;
+}
+
 .light {
-  color-scheme: light;
-  background-color: #f1f5f9 !important; /* Soft cool slate-100 instead of blinding white */
-  color: #1e293b !important; /* Elegant charcoal text for premium reading contrast */
+  --main-bg: #F5F7FA;
+  --main-color: #0F172A;
+  color: #0F172A;
+}
 
-  /* SPECIFIC EXCEPTION: Keep the top-most Clinic Info Bar beautifully dark for crisp dual-tone contrast */
-  & header > .bg-slate-950 {
-    background-color: #020617 !important; /* Rich deep slate-950 */
-    border-bottom: 1px solid #1e293b !important;
-    color: #94a3b8 !important; /* Comforting soft gray text */
+@layer base {
+  body {
+    background-color: var(--main-bg, #020617);
+    color: var(--main-color, #f8fafc);
   }
+}
 
-  & header > .bg-slate-950 * {
-    color: inherit;
-  }
+/* LIGHT MODE: Main application, dashboard & portal background patch (#F5F7FA) */
+.light,
+.light.min-h-screen,
+.light.bg-slate-950,
+.light .min-h-screen.bg-slate-950,
+.light > .flex-1,
+.light > .flex-1 > div.min-h-screen {
+  background-color: #F5F7FA !important;
+}
 
-  & header > .bg-slate-950 .text-white {
-    color: #ffffff !important;
-  }
+/* ========================================================================= */
+/* LIGHT MODE TEXT CONTRAST PATCH — STRICTLY TEXT COLOR ONLY                */
+/* Primary text: #0F172A | Secondary text: #475569 | Muted text: #64748B   */
+/* ========================================================================= */
 
-  & header > .bg-slate-950 .text-slate-200 {
-    color: #cbd5e1 !important;
-  }
+/* 1. Page/Section Headings directly on light background */
+.light main > div > div > div > h2.text-white,
+.light main > div > div > h2.text-white,
+.light main > div > h2.text-white,
+.light main > div > div > div > h1.text-white,
+.light main > div > div > h1.text-white,
+.light main > div > h1.text-white,
+.light main > div > div > div > h3.text-white,
+.light section.bg-slate-950 h2.text-white,
+.light section.bg-slate-950 h1.text-white {
+  color: #0F172A !important;
+}
 
-  & header > .bg-slate-950 .text-slate-300 {
-    color: #cbd5e1 !important;
-  }
+/* 2. Subtitles & Descriptions directly on light background */
+.light main > div > div > div > p.text-slate-400,
+.light main > div > div > p.text-slate-400,
+.light main > div > p.text-slate-400,
+.light main > div > div > div > p.text-slate-300,
+.light main > div > div > p.text-slate-300,
+.light main > div > p.text-slate-300,
+.light section.bg-slate-950 p.text-slate-400,
+.light section.bg-slate-950 p.text-slate-300 {
+  color: #475569 !important;
+}
 
-  & header > .bg-slate-950 .text-emerald-400 {
-    color: #34d399 !important; /* Bright emerald green for KKM license */
-  }
+/* 3. Metadata, badges, counts & timestamps directly on light background */
+.light main > div > div > div > div > span.text-slate-400,
+.light main > div > div > div > span.text-slate-400,
+.light main > div > div > span.text-slate-400,
+.light main > div > span.text-slate-400,
+.light footer.bg-slate-950 p.text-slate-500 {
+  color: #64748B !important;
+}
 
-  & header > .bg-slate-950 .text-rose-400 {
-    color: #fb7185 !important; /* Bright rose for Emergency Hotline */
-  }
+/* 4. GUARANTEE: Text inside ALL dark cards, headers, navigation, buttons, and modals ALWAYS keeps white/light text */
+.light [class*="bg-slate-900"] h1,
+.light [class*="bg-slate-900"] h2,
+.light [class*="bg-slate-900"] h3,
+.light [class*="bg-slate-900"] h4,
+.light [class*="bg-slate-900"] .text-white,
+.light [class*="bg-slate-850"] .text-white,
+.light [class*="bg-slate-800"] .text-white,
+.light [class*="bg-indigo-"] .text-white,
+.light [class*="bg-cyan-"] .text-white,
+.light [class*="bg-emerald-"] .text-white,
+.light [class*="bg-amber-"] .text-white,
+.light [class*="bg-rose-"] .text-white,
+.light [class*="bg-blue-"] .text-white,
+.light [class*="bg-teal-"] .text-white,
+.light [class*="bg-purple-"] .text-white,
+.light [class*="bg-gradient-"] .text-white,
+.light .patient-dark-card .text-white,
+.light header .text-white,
+.light nav .text-white,
+.light button.text-white,
+.light button .text-white,
+.light .fixed .text-white,
+.light [role="dialog"] .text-white {
+  color: #ffffff !important;
+}
 
-  & header > .bg-slate-950 .bg-slate-900 {
-    background-color: #0f172a !important; /* Dark container for MYT Clock */
-    border-color: #1e293b !important;
-    color: #cbd5e1 !important;
-  }
+.light [class*="bg-slate-900"] .text-slate-300,
+.light [class*="bg-slate-850"] .text-slate-300,
+.light [class*="bg-slate-800"] .text-slate-300,
+.light [class*="bg-gradient-"] .text-slate-300,
+.light .patient-dark-card .text-slate-300 {
+  color: #cbd5e1 !important;
+}
 
-  & header > .bg-slate-950 .text-cyan-300 {
-    color: #67e8f9 !important; /* Bright cyan for time simulation */
-  }
+.light [class*="bg-slate-900"] .text-slate-400,
+.light [class*="bg-slate-850"] .text-slate-400,
+.light [class*="bg-slate-800"] .text-slate-400,
+.light [class*="bg-gradient-"] .text-slate-400,
+.light .patient-dark-card .text-slate-400 {
+  color: #94a3b8 !important;
+}
 
-  & header > .bg-slate-950 .bg-cyan-700, & header > .bg-slate-950 .bg-indigo-600, & header > .bg-slate-950 .bg-emerald-600 {
-    color: #ffffff !important;
-  }
-
-  /* MAP OVERLAY LOCATION CARD EXCEPTION: Keep it premium dark for map contrast */
-  & .map-overlay-location-card {
-    background-color: #0f172a !important; /* Keep bg dark Slate-900 */
-    border-color: #334155 !important;
-    color: #f8fafc !important; /* White text */
-  }
-
-  & .map-overlay-location-card p {
-    color: #f1f5f9 !important; /* Premium bright slate text */
-  }
-
-  & .map-overlay-location-card span {
-    color: #cbd5e1 !important;
-  }
-
-  & .map-overlay-location-card .text-cyan-400 {
-    color: #38bdf8 !important; /* Bright cyan */
-  }
-
-  & .map-overlay-location-card .text-emerald-400 {
-    color: #34d399 !important; /* Bright emerald */
-  }
-
-  /* PUBLIC WEBSITE HERO EXCEPTION: Keep it premium dark with outstanding high-contrast white text */
-  & .public-hero-section {
-    background-image: linear-gradient(to bottom, #0f172a, #020617, #020617) !important; /* Keep premium dark */
-    color: #f8fafc !important; /* Outstanding bright white text */
-    border-bottom: 1px solid #1e293b !important;
-  }
-
-  & .public-hero-section h1 {
-    color: #ffffff !important; /* Outstanding white title */
-  }
-
-  & .public-hero-section p {
-    color: #cbd5e1 !important; /* Soft white/gray body text */
-  }
-
-  & .public-hero-section span {
-    color: inherit;
-  }
-
-  & .public-hero-section .text-emerald-400 {
-    color: #34d399 !important; /* Keep KKM license badge text bright emerald */
-  }
-
-  & .public-hero-section .text-slate-400 {
-    color: #cbd5e1 !important;
-  }
-
-  & .public-hero-section button.bg-gradient-to-r * {
-    color: #020617 !important; /* Keep "PENDAFTARAN PESAKIT BARU" text dark for button legibility */
-  }
-
-  /* PATIENT PORTAL DARK CARD EXCEPTION: High contrast white & glowing accents on dark cards */
-  & .patient-dark-card {
-    background-image: linear-gradient(to bottom right, #083344, #0f172a, #020617) !important;
-    color: #ffffff !important;
-    border-color: #06b6d4 !important;
-  }
-
-  & .patient-dark-card h1, 
-  & .patient-dark-card h2, 
-  & .patient-dark-card h3, 
-  & .patient-dark-card h4 {
-    color: #ffffff !important; /* Pure white for "Khamis," title */
-  }
-
-  & .patient-dark-card p, 
-  & .patient-dark-card span, 
-  & .patient-dark-card strong {
-    color: #f1f5f9 !important; /* Soft bright white text */
-  }
-
-  & .patient-dark-card .text-slate-200, 
-  & .patient-dark-card .text-slate-300, 
-  & .patient-dark-card .text-slate-400 {
-    color: #cbd5e1 !important; /* High contrast light slate text */
-  }
-
-  & .patient-dark-card .text-cyan-300, 
-  & .patient-dark-card .text-cyan-400 {
-    color: #38bdf8 !important; /* Glowing bright cyan */
-  }
-
-  & .patient-dark-card .text-emerald-300, 
-  & .patient-dark-card .text-emerald-400 {
-    color: #34d399 !important; /* Glowing bright emerald */
-  }
-
-  & .patient-dark-card .text-amber-300, 
-  & .patient-dark-card .text-amber-400 {
-    color: #fbbf24 !important; /* Glowing bright amber */
-  }
-
-  & .patient-dark-card .text-indigo-200, 
-  & .patient-dark-card .text-indigo-300 {
-    color: #c7d2fe !important;
-  }
-
-  & .patient-dark-card .bg-slate-900, 
-  & .patient-dark-card .bg-slate-950, 
-  & .patient-dark-card .bg-slate-950\/80, 
-  & .patient-dark-card .bg-slate-950\/90 {
-    background-color: #020617 !important; /* Deep dark slate for inner boxes */
-    border-color: #1e293b !important;
-    color: #e2e8f0 !important;
-  }
-
-  & .patient-dark-card button.bg-amber-500 *, 
-  & .patient-dark-card button.bg-emerald-500 *, 
-  & .patient-dark-card button.bg-cyan-500 * {
-    color: #020617 !important; /* Dark text on action buttons */
-  }
-
-  &, & .bg-slate-950, & .bg-black, & .bg-slate-950\/60, & .bg-slate-950\/70, & .bg-slate-950\/80, & .bg-slate-950\/90 {
-    background-color: #f1f5f9 !important; /* Soft gray slate base */
-    color: #1e293b !important;
-  }
-  
-  /* Sections, Headers, Cards */
-  & .bg-slate-900, & .bg-slate-900\/60, & .bg-slate-900\/80, & .bg-slate-850 {
-    background-color: #f8fafc !important; /* Delicate, soothing off-white (slate-50) */
-    border-color: #cbd5e1 !important; /* Calm gray borders */
-    color: #1e293b !important;
-    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.04), 0 2px 4px -1px rgba(15, 23, 42, 0.02) !important;
-  }
-
-  /* Secondary Buttons, Badges, Subtle highlights */
-  & .bg-slate-800, & .bg-slate-800\/90, & .bg-slate-750 {
-    background-color: #e2e8f0 !important; /* Soft slate-200 */
-    border-color: #cbd5e1 !important;
-    color: #334155 !important;
-  }
-
-  /* Borders */
-  & .border-slate-800, & .border-slate-800\/80, & .border-slate-700, & .border-slate-700\/80 {
-    border-color: #cbd5e1 !important; /* Light-gray borders for soft separation */
-  }
-
-  /* Text Colors with proper soothing contrast */
-  & .text-white {
-    color: #0f172a !important; /* Rich dark-indigo slate for headings */
-  }
-  
-  & .text-slate-100 {
-    color: #1e293b !important;
-  }
-
-  & .text-slate-200 {
-    color: #334155 !important;
-  }
-
-  & .text-slate-300 {
-    color: #475569 !important; /* Deep comfortable body text */
-  }
-
-  & .text-slate-400 {
-    color: #57606a !important;
-  }
-
-  /* Headings - deep rich slate/navy for extreme readability without glare */
-  & h1, & h2, & h3, & h4, & h5, & h6 {
-    color: #0f172a !important;
-  }
-
-  /* Dialogs / Modals */
-  & .fixed .bg-slate-900, & .fixed .bg-slate-950 {
-    background-color: #f8fafc !important; /* Soothing off-white */
-    border-color: #cbd5e1 !important;
-    color: #1e293b !important;
-  }
-  
-  & .fixed .text-white {
-    color: #0f172a !important;
-  }
-
-  & .fixed .text-slate-300 {
-    color: #334155 !important;
-  }
-
-  & .fixed .text-slate-400 {
-    color: #475569 !important;
-  }
-
-  & .fixed input, & .fixed textarea, & .fixed select {
-    background-color: #ffffff !important;
-    border-color: #cbd5e1 !important;
-    color: #0f172a !important;
-  }
-  
-  /* Form Inputs, Textareas, Selects */
-  & input, & textarea, & select {
-    background-color: #ffffff !important;
-    border-color: #cbd5e1 !important;
-    color: #0f172a !important;
-  }
-
-  /* Active states & Tables */
-  & .bg-slate-950\/40, & .bg-slate-950\/50, & .bg-slate-950\/60, & .bg-slate-950\/80 {
-    background-color: #e2e8f0 !important;
-    border-color: #cbd5e1 !important;
-  }
-
-  /* Navigation Bar */
-  & nav {
-    background-color: #f1f5f9 !important; /* Smooth gray base to eliminate bottom bar glare */
-    border-top-color: #cbd5e1 !important;
-    box-shadow: 0 -10px 15px -3px rgba(15, 23, 42, 0.03) !important;
-  }
-
-  & nav button {
-    color: #475569 !important;
-  }
-
-  & nav button.bg-gradient-to-r {
-    background: linear-gradient(135deg, #0284c7, #0d9488) !important; /* Comfortable teal-cyan medical gradient */
-    color: #ffffff !important;
-    border-color: #0284c7 !important;
-  }
-
-  /* Staff login modal button */
-  & button.bg-slate-800 {
-    background-color: #e2e8f0 !important;
-    border-color: #cbd5e1 !important;
-    color: #1e293b !important;
-  }
-
-  /* SVGs & Charts */
-  & svg text {
-    fill: #475569 !important;
-  }
-  
-  & svg text[fill="#94a3b8"], & svg text[fill="#64748b"] {
-    fill: #57606a !important;
-  }
-
-  /* Highlight/Action buttons should stay clear with excellent contrast */
-  & .bg-emerald-500, & .bg-emerald-600, & .bg-cyan-500, & .bg-cyan-600, & .bg-indigo-600, & .bg-rose-600 {
-    color: #ffffff !important;
-  }
-
-  & .bg-emerald-500 *, & .bg-emerald-600 *, & .bg-cyan-500 *, & .bg-cyan-600 *, & .bg-indigo-600 *, & .bg-rose-600 * {
-    color: #ffffff !important;
-  }
-
-  /* Dialysis chair grid cards */
-  & .bg-slate-900\/40, & .bg-slate-900\/90 {
-    background-color: #ffffff !important;
-    border-color: #cbd5e1 !important;
-  }
-
-  /* Richer, high-contrast text accents for soft light backgrounds */
-  & .text-cyan-400 {
-    color: #0369a1 !important; /* Legible deep ocean blue */
-  }
-
-  & .text-teal-400 {
-    color: #0f766e !important; /* Legible deep forest teal */
-  }
-
-  & .text-emerald-400 {
-    color: #15803d !important; /* Legible deep green */
-  }
-
-  & .text-rose-400 {
-    color: #b91c1c !important; /* Clear red for alerts */
-  }
-  
-  & .text-amber-400 {
-    color: #b45309 !important; /* Muted warm amber */
-  }
+.patient-dark-card {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
 }

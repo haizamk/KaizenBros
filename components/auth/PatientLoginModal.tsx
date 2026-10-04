@@ -22,6 +22,7 @@ import {
   authenticatePatient, 
   resetPatientPassword, 
   validatePasswordRules,
+  resetAllPatientAccountsToDefault,
   PatientAccount 
 } from '@/lib/auth-service';
 
@@ -314,6 +315,23 @@ export function PatientLoginModal({
                   className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-[11px] font-bold text-left text-slate-300 hover:text-cyan-300 cursor-pointer truncate"
                 >
                   👤 Siti Aminah (P00104)
+                </button>
+              </div>
+
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetAllPatientAccountsToDefault();
+                    setLoginIdentifier('P00123');
+                    setLoginPassword('kaizen123');
+                    setLoginSuccessMsg('✓ Semua akaun & kata laluan pesakit berjaya di-reset ke nilai asal (kaizen123).');
+                    setTimeout(() => setLoginSuccessMsg(''), 4000);
+                  }}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 font-bold inline-flex items-center space-x-1 cursor-pointer underline"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Reset Semula Semua Akaun Pesakit (Default)</span>
                 </button>
               </div>
             </div>
