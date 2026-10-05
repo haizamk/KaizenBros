@@ -23,18 +23,22 @@ import {
 } from 'lucide-react';
 import { VERIFIED_CENTRE_INFO } from '@/lib/mock-data';
 import { NewRegistration, PatientRegistrationDoc } from '@/types';
-import { parseMalaysianIC, ICParsedData } from '@/lib/ic-utils';
+import { parseMalaysianIC, getAgeDisplayFromIC, ICParsedData } from '@/lib/ic-utils';
 
 interface NewPatientRegistrationProps {
   onBackToPublic?: () => void;
   onSuccessRedirect?: () => void;
   onNewRegistrationSubmitted?: (newReg: NewRegistration) => void;
+  isAdminModal?: boolean;
+  onCloseModal?: () => void;
 }
 
 export function NewPatientRegistration({
   onBackToPublic,
   onSuccessRedirect,
-  onNewRegistrationSubmitted
+  onNewRegistrationSubmitted,
+  isAdminModal = false,
+  onCloseModal
 }: NewPatientRegistrationProps) {
   const [formData, setFormData] = useState({
     fullName: '',
@@ -47,27 +51,35 @@ export function NewPatientRegistration({
     city: 'Semenyih',
     state: 'Selangor',
     patientType: 'Pesakit Baru Dialisis',
-    medicalNotes: ''
+    medicalNotes: '',
+    nokName: '',
+    nokRelationship: 'Anak',
+    nokPhone: '',
+    nokEmail: '',
+    // Admin Direct Options
+    adminStatus: 'DILULUSKAN' as 'BARU' | 'DILULUSKAN',
+    adminSponsor: 'PERKESO / SOCSO',
+    adminDays: 'Isnin, Rabu, Jumaat',
+    adminShift: 'Syif 1: 6:00 AM - 10:00 AM (Sesi Pagi Awal)'
   });
 
   const [icParsed, setIcParsed] = useState<ICParsedData | null>(null);
 
   const handleIcChange = (inputVal: string) => {
     const parsed = parseMalaysianIC(inputVal);
+    setIcParsed(parsed);
     if (parsed.isValid) {
       setFormData(prev => ({
         ...prev,
         icNumber: parsed.formattedIC,
         age: parsed.years.toString(),
-        gender: parsed.gender === 'LELAKI' ? 'Lelaki' : 'Perempuan'
+        gender: parsed.genderDisplay || (parsed.gender === 'LELAKI' ? 'Lelaki' : 'Perempuan')
       }));
-      setIcParsed(parsed);
     } else {
       setFormData(prev => ({
         ...prev,
         icNumber: inputVal
       }));
-      setIcParsed(null);
     }
   };
 
@@ -120,8 +132,15 @@ export function NewPatientRegistration({
         state: formData.state,
         patient_category: formData.patientType,
         medical_notes: formData.medicalNotes,
+        nok_name: formData.nokName || undefined,
+        nok_relationship: formData.nokRelationship || undefined,
+        nok_phone: formData.nokPhone || undefined,
+        nok_email: formData.nokEmail || undefined,
         document: uploadedDoc || undefined,
-        status: 'BARU',
+        status: isAdminModal ? formData.adminStatus : 'BARU',
+        sponsor_type: isAdminModal ? formData.adminSponsor : undefined,
+        preferred_days: isAdminModal ? formData.adminDays : undefined,
+        preferred_shift: isAdminModal ? formData.adminShift : undefined,
         created_at: nowStr
       };
 
@@ -147,28 +166,28 @@ export function NewPatientRegistration({
   if (submittedRef) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 font-sans">
-        <div className="bg-slate-900 border-2 border-emerald-500/80 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-6 text-center">
-          <div className="w-20 h-20 bg-emerald-950 border border-emerald-500/50 rounded-full flex items-center justify-center text-emerald-400 mx-auto animate-bounce">
+        <div className="bg-[#132238] border-2 border-teal-500 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-6 text-center">
+          <div className="w-20 h-20 bg-teal-950 border border-teal-500/80 rounded-full flex items-center justify-center text-teal-400 mx-auto animate-bounce">
             <CheckCircle2 className="w-12 h-12" />
           </div>
 
           <div className="space-y-2">
-            <span className="inline-block bg-emerald-950 text-emerald-300 font-extrabold text-xs px-3.5 py-1 rounded-full border border-emerald-700">
+            <span className="inline-block bg-teal-950 text-teal-300 font-extrabold text-xs px-3.5 py-1 rounded-full border border-teal-700">
               PENDAFTARAN BERJAYA DIHANTAR
             </span>
             <h2 className="text-3xl font-black text-white">Terima Kasih, {formData.fullName}</h2>
-            <p className="text-slate-300 text-sm max-w-xl mx-auto">
+            <p className="text-slate-200 text-sm sm:text-base max-w-xl mx-auto">
               Permohonan pendaftaran pesakit baru anda telah selamat diterima dan didaftarkan ke dalam sistem pentadbiran Pusat Dialisis KaizenBros.
             </p>
           </div>
 
           {/* Reference Card */}
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-left max-w-md mx-auto space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <span className="text-xs text-slate-400 font-semibold uppercase">No. Rujukan Pendaftaran</span>
-              <span className="text-emerald-400 font-mono font-black text-lg">{submittedRef}</span>
+          <div className="bg-[#0B132B] border border-[#1F385C] rounded-2xl p-5 text-left max-w-md mx-auto space-y-3">
+            <div className="flex justify-between items-center border-b border-[#1F385C] pb-3">
+              <span className="text-xs text-slate-300 font-semibold uppercase">No. Rujukan Pendaftaran</span>
+              <span className="text-teal-400 font-mono font-black text-lg">{submittedRef}</span>
             </div>
-            <div className="space-y-1.5 text-xs text-slate-300">
+            <div className="space-y-1.5 text-xs sm:text-sm text-slate-200">
               <p><strong className="text-white">Nama Pesakit:</strong> {formData.fullName}</p>
               <p><strong className="text-white">No. IC:</strong> {formData.icNumber}</p>
               <p><strong className="text-white">No. Telefon:</strong> {formData.phoneNumber}</p>
@@ -180,12 +199,12 @@ export function NewPatientRegistration({
           </div>
 
           {/* Next Steps Card */}
-          <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 text-left text-xs space-y-3 max-w-lg mx-auto">
-            <h4 className="font-bold text-cyan-300 text-sm flex items-center">
-              <FileCheck className="w-4 h-4 mr-2" />
+          <div className="bg-[#0E1A30] border border-[#1F385C] rounded-2xl p-5 text-left text-xs sm:text-sm space-y-3 max-w-lg mx-auto">
+            <h4 className="font-bold text-cyan-300 text-sm sm:text-base flex items-center">
+              <FileCheck className="w-5 h-5 mr-2" />
               Langkah Seterusnya:
             </h4>
-            <ol className="list-decimal list-inside space-y-2 text-slate-300 leading-relaxed">
+            <ol className="list-decimal list-inside space-y-2 text-slate-200 leading-relaxed">
               <li>Nurse / Admin KaizenBros akan semak permohonan anda dan menetapkan jadual syif, penaja (PERKESO/Zakat/JPA) dan stesen rawatan.</li>
               <li>Pegawai Kesihatan KaizenBros akan menghubungi anda melalui WhatsApp/Telefon (<span className="text-emerald-400 font-semibold">{formData.phoneNumber}</span>) dalam masa 24 jam.</li>
               <li>Sila bawa bersama kad pengenalan dan dokumen rujukan asal apabila dijemput melawat fasiliti.</li>
@@ -198,7 +217,7 @@ export function NewPatientRegistration({
                 setSubmittedRef(null);
                 if (onBackToPublic) onBackToPublic();
               }}
-              className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-xl transition-all cursor-pointer flex items-center space-x-2"
+              className="px-6 py-3.5 bg-[#0B132B] hover:bg-[#0E1A30] text-white font-bold text-sm rounded-xl transition-all cursor-pointer flex items-center space-x-2 border border-[#1F385C] min-h-[50px]"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Kembali ke Laman Utama</span>
@@ -208,7 +227,7 @@ export function NewPatientRegistration({
               href={`https://wa.me/${VERIFIED_CENTRE_INFO.whatsapp_number}?text=Salam%20KaizenBros,%20saya%20telah%20menghantar%20pendaftaran%20pesakit%20baru%20(No.%20Rujukan:%20${submittedRef}).`}
               target="_blank"
               rel="noreferrer"
-              className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg flex items-center space-x-2"
+              className="px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg flex items-center space-x-2 min-h-[50px]"
             >
               <Phone className="w-4 h-4 fill-current" />
               <span>WhatsApp Pegawai Pengambilan</span>
@@ -226,29 +245,40 @@ export function NewPatientRegistration({
         {onBackToPublic && (
           <button
             onClick={onBackToPublic}
-            className="inline-flex items-center text-xs font-bold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer bg-slate-900 border border-slate-800 px-3.5 py-1.5 rounded-xl"
+            className="inline-flex items-center text-xs sm:text-sm font-bold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer bg-[#132238] border border-[#1F385C] px-4 py-2 rounded-xl min-h-[44px]"
           >
-            <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+            <ArrowLeft className="w-4 h-4 mr-2" />
             <span>Kembali ke Laman Utama</span>
           </button>
         )}
 
-        <div className="dark-banner bg-gradient-to-r from-cyan-950 via-slate-900 to-emerald-950 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-3">
-          <div className="inline-flex items-center space-x-2 bg-emerald-950 border border-emerald-700 px-3 py-1 rounded-full text-xs font-bold text-emerald-400">
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>PENDAFTARAN PESAKIT BARU</span>
+        <div className="bg-gradient-to-r from-[#0E1A30] via-[#132238] to-[#0E1A30] border border-[#1F385C] rounded-3xl p-6 sm:p-8 space-y-3 shadow-xl relative">
+          {isAdminModal && onCloseModal && (
+            <button
+              type="button"
+              onClick={onCloseModal}
+              className="absolute top-6 right-6 p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+          <div className="inline-flex items-center space-x-2 bg-teal-950 border border-teal-700 px-3.5 py-1 rounded-full text-xs sm:text-sm font-bold text-teal-300">
+            <UserPlus className="w-4 h-4" />
+            <span>{isAdminModal ? 'BORANG PENDAFTARAN (PORTAL ADMIN)' : 'PENDAFTARAN PESAKIT BARU'}</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white">
+          <h1 className="text-3xl sm:text-5xl font-black text-white">
             Borang Pendaftaran Kemasukan Dialisis
           </h1>
-          <p className="text-slate-300 text-sm leading-relaxed max-w-2xl">
-            Sila lengkapkan maklumat ringkas di bawah. Pilihan penaja, jadual syif dan stesen akan diaturkan oleh Nurse / Admin KaizenBros.
+          <p className="text-slate-200 text-sm sm:text-base leading-relaxed max-w-2xl">
+            {isAdminModal
+              ? 'Masukkan data lengkap pesakit baru termasuk demografi, waris/penjaga, catatan kesihatan, penaja & pilihan syif.'
+              : 'Sila lengkapkan maklumat ringkas di bawah. Pilihan penaja, jadual syif dan stesen akan diaturkan oleh Nurse / Admin KaizenBros.'}
           </p>
         </div>
       </div>
 
       {/* Main Registration Form */}
-      <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 space-y-8 shadow-2xl">
+      <form onSubmit={handleSubmit} className="bg-[#132238] border border-[#1F385C] rounded-3xl p-6 sm:p-10 space-y-8 shadow-2xl">
         {/* Section 1: Data Peribadi Pesakit */}
         <div className="space-y-4">
           <div className="border-b border-slate-800 pb-3 flex items-center space-x-2">
@@ -288,14 +318,19 @@ export function NewPatientRegistration({
               {icParsed && icParsed.isValid && (
                 <div className="mt-2 bg-emerald-950/80 border border-emerald-800/80 rounded-xl p-2.5 text-xs space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400 font-medium">Umur Pesakit (Auto):</span>
+                    <span className="text-slate-400 font-medium">Umur Pesakit:</span>
                     <strong className="text-emerald-300 font-black">{icParsed.ageDisplay}</strong>
                   </div>
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400 font-medium">Tarikh Lahir MyKad:</span>
-                    <span className="text-slate-200">{icParsed.birthDateFormatted}</span>
+                    <span className="text-slate-400 font-medium">Tarikh Lahir & Jantina:</span>
+                    <span className="text-slate-200">{icParsed.birthDateFormatted} ({icParsed.genderDisplay})</span>
                   </div>
                 </div>
+              )}
+              {icParsed && !icParsed.isValid && icParsed.errorMessage && (
+                <p className="text-[11px] text-rose-400 mt-1.5 font-semibold bg-rose-950/70 p-2.5 rounded-xl border border-rose-800/80 leading-relaxed">
+                  ⚠️ {icParsed.errorMessage}
+                </p>
               )}
             </div>
 
@@ -328,30 +363,35 @@ export function NewPatientRegistration({
 
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                Umur Pesakit (Tahun) <span className="text-rose-400">*</span>
+                Umur Pesakit <span className="text-rose-400">*</span>
               </label>
               <input
-                type="number"
+                type="text"
+                readOnly
                 required
-                value={formData.age}
-                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                placeholder="Contoh: 54"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                value={icParsed?.isValid ? icParsed.ageDisplay : (formData.age ? getAgeDisplayFromIC(formData.icNumber, formData.age) : '')}
+                placeholder="Auto dikira dari No. MyKad (Wajib)"
+                className="w-full bg-slate-900 border border-emerald-500/60 rounded-xl px-4 py-3 text-sm text-emerald-300 font-bold focus:outline-none cursor-not-allowed shadow-inner"
               />
+              {!icParsed?.isValid && (
+                <p className="text-[11px] text-amber-400 mt-1.5 font-medium">
+                  ⚠️ Sila masukkan No. MyKad yang sah di atas untuk jana umur pesakit secara automatik.
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">
                 Jantina <span className="text-rose-400">*</span>
               </label>
-              <select
-                value={formData.gender}
-                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors"
-              >
-                <option value="Lelaki">Lelaki</option>
-                <option value="Perempuan">Perempuan</option>
-              </select>
+              <input
+                type="text"
+                readOnly
+                required
+                value={formData.gender || (icParsed?.genderDisplay || 'Lelaki')}
+                placeholder="Auto dikira dari No. MyKad (Wajib)"
+                className="w-full bg-slate-900 border border-emerald-500/60 rounded-xl px-4 py-3 text-sm text-emerald-300 font-bold focus:outline-none cursor-not-allowed shadow-inner"
+              />
             </div>
           </div>
 
@@ -370,11 +410,87 @@ export function NewPatientRegistration({
           </div>
         </div>
 
-        {/* Section 2: Kategori Pesakit (Disederhanakan - Pilihan penaja, hari, syif akan ditentukan oleh Nurse/Admin) */}
+        {/* Section 2: Maklumat Waris / Penjaga */}
+        <div className="space-y-4 pt-4 border-t border-slate-800">
+          <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-950 text-indigo-400 flex items-center justify-center font-bold text-sm">
+                2
+              </div>
+              <h3 className="text-lg font-black text-white">Maklumat Waris / Penjaga (Kecemasan)</h3>
+            </div>
+            <span className="text-xs bg-slate-800 text-indigo-300 border border-indigo-800/60 px-2.5 py-0.5 rounded-full font-bold">
+              Diperlukan / Required
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                Nama Penuh Waris / Penjaga <span className="text-rose-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.nokName}
+                onChange={(e) => setFormData({ ...formData, nokName: e.target.value })}
+                placeholder="Contoh: Siti binti Ahmad"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                Hubungan Dengan Pesakit <span className="text-rose-400">*</span>
+              </label>
+              <select
+                value={formData.nokRelationship}
+                onChange={(e) => setFormData({ ...formData, nokRelationship: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors"
+              >
+                <option value="Suami / Isteri">Suami / Isteri</option>
+                <option value="Anak">Anak</option>
+                <option value="Ibu / Bapa">Ibu / Bapa</option>
+                <option value="Adik-Beradik">Adik-Beradik</option>
+                <option value="Penjaga Sah">Penjaga Sah</option>
+                <option value="Lain-lain">Lain-lain</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                Nombor Telefon Waris <span className="text-rose-400">*</span>
+              </label>
+              <input
+                type="tel"
+                required
+                value={formData.nokPhone}
+                onChange={(e) => setFormData({ ...formData, nokPhone: e.target.value })}
+                placeholder="Contoh: 013-8899123"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                Alamat E-mel Waris (Pilihan)
+              </label>
+              <input
+                type="email"
+                value={formData.nokEmail}
+                onChange={(e) => setFormData({ ...formData, nokEmail: e.target.value })}
+                placeholder="Contoh: waris@gmail.com"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Kategori Pesakit (Disederhanakan - Pilihan penaja, hari, syif akan ditentukan oleh Nurse/Admin) */}
         <div className="space-y-4 pt-4 border-t border-slate-800">
           <div className="pb-2 flex items-center space-x-2">
             <div className="w-8 h-8 rounded-lg bg-teal-950 text-teal-400 flex items-center justify-center font-bold text-sm">
-              2
+              3
             </div>
             <h3 className="text-lg font-black text-white">Kategori Pesakit & Catatan Kesihatan</h3>
           </div>
@@ -411,12 +527,12 @@ export function NewPatientRegistration({
           </div>
         </div>
 
-        {/* Section 3: Muat Naik Surat / Dokumen Berkaitan */}
+        {/* Section 4: Muat Naik Surat / Dokumen Berkaitan */}
         <div className="space-y-4 pt-4 border-t border-slate-800">
           <div className="pb-2 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-lg bg-amber-950 text-amber-400 flex items-center justify-center font-bold text-sm">
-                3
+                4
               </div>
               <h3 className="text-lg font-black text-white">Muat Naik Surat / Dokumen Rujukan (Jika Ada)</h3>
             </div>
@@ -484,6 +600,82 @@ export function NewPatientRegistration({
             </div>
           )}
         </div>
+
+        {/* Section 5: Tetapan & Kelulusan Direct (Hanya Untuk Admin Portal) */}
+        {isAdminModal && (
+          <div className="space-y-4 pt-6 border-t-2 border-indigo-500/60 bg-indigo-950/20 p-6 rounded-2xl border">
+            <div className="pb-2 flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-900 text-indigo-300 flex items-center justify-center font-bold text-sm">
+                5
+              </div>
+              <h3 className="text-lg font-black text-indigo-200">Tetapan Admin & Kelulusan Pesakit Direct</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                  Status Kemasukan <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={formData.adminStatus}
+                  onChange={(e) => setFormData({ ...formData, adminStatus: e.target.value as any })}
+                  className="w-full bg-slate-900 border border-indigo-500 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="DILULUSKAN">DILULUSKAN (Auto Masuk Ke Direktori Pesakit Aktif)</option>
+                  <option value="BARU">BARU (Simpan Sebagai Permohonan Pendaftaran)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                  Jenis Penaja / Pembiaya Rawatan <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={formData.adminSponsor}
+                  onChange={(e) => setFormData({ ...formData, adminSponsor: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="PERKESO / SOCSO">PERKESO / SOCSO (Panel Berdaftar)</option>
+                  <option value="JPA / KWAP">JPA / KWAP (Pesara Kerajaan)</option>
+                  <option value="Lembaga Zakat Selangor (LZS)">Lembaga Zakat Selangor (LZS)</option>
+                  <option value="Baitulmal MAIWP">Baitulmal MAIWP</option>
+                  <option value="Yayasan Buah Pinggang (NKF)">Yayasan Buah Pinggang (NKF)</option>
+                  <option value="Insurans Swasta">Insurans Swasta</option>
+                  <option value="Bayaran Sendiri (Persendirian)">Bayaran Sendiri (Persendirian)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                  Jadual Hari Rawatan
+                </label>
+                <select
+                  value={formData.adminDays}
+                  onChange={(e) => setFormData({ ...formData, adminDays: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="Isnin, Rabu, Jumaat">Isnin, Rabu, Jumaat</option>
+                  <option value="Selasa, Khamis, Sabtu">Selasa, Khamis, Sabtu</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                  Pilihan Syif Rawatan
+                </label>
+                <select
+                  value={formData.adminShift}
+                  onChange={(e) => setFormData({ ...formData, adminShift: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="Syif 1: 6:00 AM - 10:00 AM (Sesi Pagi Awal)">Syif 1: 6:00 AM - 10:00 AM (Sesi Pagi Awal)</option>
+                  <option value="Syif 2: 10:30 AM - 2:30 PM (Sesi Tengah Hari)">Syif 2: 10:30 AM - 2:30 PM (Sesi Tengah Hari)</option>
+                  <option value="Syif 3: 3:00 PM - 7:00 PM (Sesi Petang)">Syif 3: 3:00 PM - 7:00 PM (Sesi Petang)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Form Submission Button */}
         <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">

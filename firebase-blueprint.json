@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Represents a dialysis patient profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "user_id": { "type": "integer" },
+        "patient_id_code": { "type": "string" },
+        "name": { "type": "string" },
+        "ic_number": { "type": "string" },
+        "gender": { "type": "string" },
+        "age": { "type": "integer" },
+        "phone": { "type": "string" },
+        "dry_weight_kg": { "type": "number" },
+        "is_active": { "type": "boolean" }
+      },
+      "required": ["id", "patient_id_code", "name", "ic_number"]
+    },
+    "DialysisSession": {
+      "title": "DialysisSession",
+      "description": "Represents a dialysis treatment session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "patient_id": { "type": "integer" },
+        "patient_name": { "type": "string" },
+        "status": { "type": "string" },
+        "chair_number": { "type": "string" },
+        "pre_weight_kg": { "type": "number" },
+        "post_weight_kg": { "type": "number" }
+      },
+      "required": ["id", "patient_id", "status"]
+    },
+    "MedicalRecord": {
+      "title": "MedicalRecord",
+      "description": "Represents a blood test and clinical analysis record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "integer" },
+        "patient_id_code": { "type": "string" },
+        "patient_name": { "type": "string" },
+        "examination_type": { "type": "string" },
+        "examination_date": { "type": "string" },
+        "clinical_notes": { "type": "string" },
+        "doctor_comments": { "type": "string" },
+        "ai_analysis_notes": { "type": "string" }
+      },
+      "required": ["id", "patient_id", "examination_type", "examination_date"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Registered patients collection"
+    },
+    "/dialysis_sessions/{sessionId}": {
+      "schema": "DialysisSession",
+      "description": "Daily or scheduled dialysis sessions"
+    },
+    "/medical_records/{recordId}": {
+      "schema": "MedicalRecord",
+      "description": "Blood test records and analysis collection"
+    }
+  }
+}

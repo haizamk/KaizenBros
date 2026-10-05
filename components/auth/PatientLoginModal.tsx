@@ -123,44 +123,44 @@ export function PatientLoginModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-lg w-full p-6 sm:p-8 text-white space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
+    <div className="fixed inset-0 bg-[#050B18]/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#0E1A30] border-2 border-teal-500 rounded-3xl max-w-lg w-full p-6 sm:p-8 text-white space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
         
         {/* Header Bar */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-center justify-between border-b border-[#1F385C] pb-4">
           <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-950 border border-emerald-700/80 flex items-center justify-center text-emerald-400 shadow-md">
-              <User className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-teal-950 border border-teal-700 flex items-center justify-center text-teal-400 shadow-md">
+              <User className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-white flex items-center space-x-2">
+              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center space-x-2">
                 <span>Portal Pesakit KaizenBros</span>
               </h3>
-              <p className="text-xs text-emerald-400 font-bold">
+              <p className="text-xs sm:text-sm text-teal-300 font-bold">
                 {activeTab === 'login' ? 'Log Masuk Mesra Warga Emas' : 'Set Semula Kata Laluan'}
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold flex items-center justify-center cursor-pointer text-lg transition-colors"
+            className="w-10 h-10 rounded-full bg-[#132238] hover:bg-[#1E3352] text-slate-300 hover:text-white font-bold flex items-center justify-center cursor-pointer text-lg transition-colors"
           >
             ✕
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="grid grid-cols-2 p-1.5 bg-slate-950 rounded-2xl border border-slate-800">
+        <div className="grid grid-cols-2 p-1.5 bg-[#0B132B] rounded-2xl border border-[#1F385C]">
           <button
             type="button"
             onClick={() => {
               setActiveTab('login');
               setLoginError('');
             }}
-            className={`py-2.5 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+            className={`py-3 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               activeTab === 'login'
-                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-md'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
             <User className="w-4 h-4" />
@@ -173,10 +173,10 @@ export function PatientLoginModal({
               setActiveTab('forgot');
               setForgotError('');
             }}
-            className={`py-2.5 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+            className={`py-3 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               activeTab === 'forgot'
                 ? 'bg-cyan-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
             <KeyRound className="w-4 h-4" />

@@ -340,7 +340,7 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: "kaizenbros-dialysis.firebaseapp.com",
-  projectId: "ai-studio-pusatdialisiskai-24a59215",
+  projectId: "ais-asia-east1-350e425ec5b7457",
   storageBucket: "kaizenbros-dialysis.appspot.com"
 };
 
@@ -364,7 +364,7 @@ import { getAuth } from 'firebase/auth';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: "kaizenbros-dialysis.firebaseapp.com",
-  projectId: "ai-studio-pusatdialisiskai-24a59215",
+  projectId: "ais-asia-east1-350e425ec5b7457",
   storageBucket: "kaizenbros-dialysis.appspot.com"
 };
 

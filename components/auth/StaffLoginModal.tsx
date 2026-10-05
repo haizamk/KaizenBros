@@ -14,14 +14,12 @@ import {
   Clock, 
   ArrowRight,
   Sparkles,
-  ShieldAlert,
-  Fingerprint
+  ShieldAlert
 } from 'lucide-react';
 import { 
   authenticateStaff, 
   resetStaffPassword, 
   validatePasswordRules,
-  CLINIC_DEFAULT_2FA_PIN,
   CLINIC_MASTER_RECOVERY_KEY,
   StaffAccount 
 } from '@/lib/auth-service';
@@ -43,9 +41,8 @@ export function StaffLoginModal({
   const [selectedRole, setSelectedRole] = useState<'nurse' | 'admin'>('nurse');
 
   // Login form state
-  const [staffIdentifier, setStaffIdentifier] = useState('');
-  const [staffPassword, setStaffPassword] = useState('');
-  const [securityPin, setSecurityPin] = useState(CLINIC_DEFAULT_2FA_PIN);
+  const [staffIdentifier, setStaffIdentifier] = useState('nurse');
+  const [staffPassword, setStaffPassword] = useState('nurse123');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginSuccessMsg, setLoginSuccessMsg] = useState('');
@@ -96,7 +93,7 @@ export function StaffLoginModal({
       return;
     }
 
-    const result = authenticateStaff(staffIdentifier, staffPassword, securityPin);
+    const result = authenticateStaff(staffIdentifier, staffPassword);
 
     if (!result.success) {
       if (result.isLocked) {
@@ -159,52 +156,51 @@ export function StaffLoginModal({
     setSelectedRole(role);
     setStaffIdentifier(id);
     setStaffPassword(pass);
-    setSecurityPin(CLINIC_DEFAULT_2FA_PIN);
     setLoginError('');
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border-2 border-cyan-500 rounded-3xl max-w-lg w-full p-6 sm:p-8 text-white space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
+    <div className="fixed inset-0 bg-[#050B18]/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#0E1A30] border-2 border-cyan-500 rounded-3xl max-w-lg w-full p-6 sm:p-8 text-white space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
         
         {/* Header Bar */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-center justify-between border-b border-[#1F385C] pb-4">
           <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-2xl bg-cyan-950 border border-cyan-700/80 flex items-center justify-center text-cyan-400 shadow-md">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-cyan-950 border border-cyan-700/80 flex items-center justify-center text-cyan-400 shadow-md">
+              <ShieldCheck className="w-7 h-7" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="text-xl font-black text-white">Portal Staf Klinikal</h3>
-                <span className="bg-cyan-950 text-cyan-400 border border-cyan-800 text-[10px] font-black px-2 py-0.5 rounded">
+                <h3 className="text-xl sm:text-2xl font-black text-white">Portal Staf Klinikal</h3>
+                <span className="bg-cyan-950 text-cyan-300 border border-cyan-700 text-[10px] font-black px-2 py-0.5 rounded">
                   MAX SECURITY
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs sm:text-sm text-slate-300 font-medium">
                 Pusat Hemodialisis KaizenBros (KKM Compliant)
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold flex items-center justify-center cursor-pointer text-lg transition-colors"
+            className="w-10 h-10 rounded-full bg-[#132238] hover:bg-[#1E3352] text-slate-300 hover:text-white font-bold flex items-center justify-center cursor-pointer text-lg transition-colors"
           >
             ✕
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="grid grid-cols-2 p-1.5 bg-slate-950 rounded-2xl border border-slate-800">
+        <div className="grid grid-cols-2 p-1.5 bg-[#0B132B] rounded-2xl border border-[#1F385C]">
           <button
             type="button"
             onClick={() => {
               setActiveTab('login');
               setLoginError('');
             }}
-            className={`py-2.5 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+            className={`py-3 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               activeTab === 'login'
-                ? 'bg-cyan-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-md'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
             <Lock className="w-4 h-4" />
@@ -217,14 +213,14 @@ export function StaffLoginModal({
               setActiveTab('reset');
               setResetError('');
             }}
-            className={`py-2.5 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+            className={`py-3 text-xs sm:text-sm font-extrabold rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               activeTab === 'reset'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-600 text-white shadow-md'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
             <KeyRound className="w-4 h-4" />
-            <span>Pemulihan Kata Laluan</span>
+            <span>Tukar Kata Laluan</span>
           </button>
         </div>
 
@@ -298,10 +294,10 @@ export function StaffLoginModal({
               </div>
             </div>
 
-            {/* Staff ID / Email */}
+            {/* Staff ID / Username */}
             <div>
               <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-1.5">
-                ID Kakitangan (Staff ID) atau Emel Rasmi:
+                ID / Nama Pengguna Kakitangan:
               </label>
               <div className="relative">
                 <input
@@ -310,38 +306,31 @@ export function StaffLoginModal({
                   disabled={isLocked}
                   value={staffIdentifier}
                   onChange={(e) => setStaffIdentifier(e.target.value)}
-                  placeholder={selectedRole === 'nurse' ? 'Contoh: SN-01 atau sister.siti@kaizenbrosdialysis.com.my' : 'Contoh: ADM-01 atau dr.azman@kaizenbrosdialysis.com.my'}
+                  placeholder={selectedRole === 'nurse' ? 'Guna ID: nurse' : 'Guna ID: admin'}
                   className="w-full min-h-[50px] bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-2xl px-4 pl-11 text-sm font-medium text-white placeholder-slate-500 outline-none transition-all shadow-inner disabled:opacity-50"
                 />
                 <UserCheck className="w-5 h-5 text-slate-500 absolute left-3.5 top-3.5 pointer-events-none" />
               </div>
             </div>
 
-            {/* Password (6-12 chars) */}
+            {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Kata Laluan Keselamatan:
+                  Kata Laluan:
                 </label>
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                  staffPassword.length >= 6 && staffPassword.length <= 12
-                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                    : staffPassword.length > 0
-                    ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                    : 'bg-slate-800 text-slate-400'
-                }`}>
-                  {staffPassword.length}/12 aksara (Min 6 - Maks 12)
+                <span className="text-[11px] font-bold text-cyan-400">
+                  {selectedRole === 'nurse' ? 'nurse123' : 'admin123'}
                 </span>
               </div>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  maxLength={12}
                   disabled={isLocked}
                   value={staffPassword}
                   onChange={(e) => setStaffPassword(e.target.value)}
-                  placeholder="Kata laluan staf (6 - 12 aksara)"
+                  placeholder="Masukkan kata laluan"
                   className="w-full min-h-[50px] bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-2xl px-4 pl-11 pr-12 text-sm font-medium text-white placeholder-slate-500 outline-none transition-all shadow-inner disabled:opacity-50"
                 />
                 <Lock className="w-5 h-5 text-slate-500 absolute left-3.5 top-3.5 pointer-events-none" />
@@ -355,31 +344,6 @@ export function StaffLoginModal({
               </div>
             </div>
 
-            {/* 2FA Clinic Security PIN */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  PIN Keselamatan 2FA Klinik:
-                </label>
-                <span className="text-[11px] text-cyan-400 font-mono">
-                  Default PIN: 7788
-                </span>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  required
-                  disabled={isLocked}
-                  maxLength={6}
-                  value={securityPin}
-                  onChange={(e) => setSecurityPin(e.target.value)}
-                  placeholder="Masukkan 4-digit PIN Klinik"
-                  className="w-full min-h-[50px] bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-2xl px-4 pl-11 text-sm font-mono tracking-widest font-bold text-cyan-300 placeholder-slate-600 outline-none transition-all shadow-inner disabled:opacity-50"
-                />
-                <Fingerprint className="w-5 h-5 text-cyan-500 absolute left-3.5 top-3.5 pointer-events-none" />
-              </div>
-            </div>
-
             {/* Submit Button */}
             <button
               type="submit"
@@ -387,7 +351,7 @@ export function StaffLoginModal({
               className="w-full min-h-[54px] bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-black text-base rounded-2xl flex items-center justify-center space-x-2.5 cursor-pointer shadow-lg shadow-cyan-950/50 transition-all border border-cyan-400 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ShieldCheck className="w-5 h-5" />
-              <span>Log Masuk Keselamatan Tinggi</span>
+              <span>Log Masuk Kakitangan</span>
               <ArrowRight className="w-5 h-5" />
             </button>
 
@@ -411,26 +375,26 @@ export function StaffLoginModal({
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-bold flex items-center space-x-1 text-slate-300">
                   <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Isi Pantas Akaun Demo Staf:</span>
+                  <span>Tekan Untuk Isi Log Masuk Pantas:</span>
                 </span>
-                <span className="text-[10px] text-cyan-300 font-mono">PIN: 7788</span>
+                <span className="text-[10px] text-emerald-400 font-bold">Tanpa 2FA / OTP</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handleQuickFill('nurse', 'SN-01', 'Sister@2026')}
-                  className="py-2 px-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-[11px] font-bold text-left text-slate-300 hover:text-cyan-300 cursor-pointer"
+                  onClick={() => handleQuickFill('nurse', 'nurse', 'nurse123')}
+                  className="py-2.5 px-3 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/80 rounded-xl text-[11px] font-bold text-left text-cyan-200 hover:text-white cursor-pointer transition-all shadow-sm"
                 >
-                  👩‍⚕️ Sister Siti (SN-01)
-                  <div className="text-[9px] text-slate-400 font-mono">Sister@2026</div>
+                  <div>👩‍⚕️ Log Masuk Nurse</div>
+                  <div className="text-[10px] text-slate-300 font-mono mt-0.5">nurse | nurse123</div>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleQuickFill('admin', 'ADM-01', 'Admin@2026')}
-                  className="py-2 px-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-[11px] font-bold text-left text-slate-300 hover:text-indigo-300 cursor-pointer"
+                  onClick={() => handleQuickFill('admin', 'admin', 'admin123')}
+                  className="py-2.5 px-3 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/80 rounded-xl text-[11px] font-bold text-left text-indigo-200 hover:text-white cursor-pointer transition-all shadow-sm"
                 >
-                  👨‍⚕️ Dr. Azman (ADM-01)
-                  <div className="text-[9px] text-slate-400 font-mono">Admin@2026</div>
+                  <div>👨‍⚕️ Log Masuk Admin</div>
+                  <div className="text-[10px] text-slate-300 font-mono mt-0.5">admin | admin123</div>
                 </button>
               </div>
             </div>

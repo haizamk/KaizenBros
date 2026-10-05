@@ -123,40 +123,40 @@ export function QuickStatusModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border-2 border-cyan-500 rounded-3xl max-w-xl w-full p-6 text-white space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-[#050B18]/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-[#0E1A30] border-2 border-teal-500 rounded-3xl max-w-xl w-full p-6 sm:p-7 text-white space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-[#1F385C] pb-3">
           <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-2xl bg-cyan-950 border-2 border-cyan-500 flex items-center justify-center text-cyan-300">
+            <div className="w-12 h-12 rounded-2xl bg-teal-950 border-2 border-teal-500 flex items-center justify-center text-teal-300">
               <RotateCcw className="w-6 h-6" />
             </div>
             <div>
-              <span className="text-[10px] uppercase font-extrabold text-cyan-400 tracking-wider">
+              <span className="text-xs uppercase font-extrabold text-teal-300 tracking-wider">
                 Kemasukan Status Sesi Pantas (Jururawat)
               </span>
-              <h3 className="text-xl font-black text-white">
+              <h3 className="text-xl sm:text-2xl font-black text-white">
                 {(session?.patient_name || 'PESAKIT').toUpperCase()}
               </h3>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer text-lg"
+            className="w-10 h-10 rounded-full bg-[#132238] hover:bg-[#1E3352] text-white font-bold flex items-center justify-center cursor-pointer text-lg"
           >
             ✕
           </button>
         </div>
 
         {/* Quick Context Strip */}
-        <div className="grid grid-cols-3 gap-2 bg-slate-950 p-3 rounded-2xl border border-slate-800 text-center text-xs">
+        <div className="grid grid-cols-3 gap-2 bg-[#0B132B] p-3.5 rounded-2xl border border-[#1F385C] text-center text-xs sm:text-sm">
           <div>
             <span className="text-slate-400 block font-semibold">ID Pesakit</span>
             <strong className="text-cyan-300 font-mono font-bold">{session.patient_id_code}</strong>
           </div>
           <div>
             <span className="text-slate-400 block font-semibold">Stesen Kerusi</span>
-            <strong className="text-white font-black text-sm">{session.chair_number}</strong>
+            <strong className="text-white font-black text-base">{session.chair_number}</strong>
           </div>
           <div>
             <span className="text-slate-400 block font-semibold">Masa Temujanji</span>

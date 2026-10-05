@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useSyncExternalStore } from 'react';
 import { 
   Users, 
+  User,
   Stethoscope, 
   Clock, 
   Search, 
@@ -41,7 +42,8 @@ import {
   Sun,
   TrendingUp,
   Scale,
-  Zap
+  Zap,
+  Upload
 } from 'lucide-react';
 import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
 import { TreatmentScheduleManager } from '@/components/schedule/TreatmentScheduleManager';
@@ -58,7 +60,8 @@ import {
   PatientCheckIn,
   DialysisChair,
   CentreProfile,
-  ShiftSlot
+  ShiftSlot,
+  MedicalRecord
 } from '@/types';
 import { 
   INITIAL_TODAY_SESSIONS, 
@@ -184,6 +187,8 @@ interface NursePortalProps {
   currentNurseName?: string;
   patients?: Patient[];
   sessions?: DialysisSession[];
+  medicalRecords?: MedicalRecord[];
+  onUpdateMedicalRecords?: (records: MedicalRecord[]) => void;
   onUpdateSession?: (session: DialysisSession) => void;
   onAuditLog?: (action: string, details: string) => void;
   checkInQueue?: PatientCheckIn[];
@@ -197,6 +202,8 @@ export function NursePortal({
   currentNurseName = 'Sister Siti Fatimah',
   patients: propPatients,
   sessions: propSessions,
+  medicalRecords: propMedicalRecords = [],
+  onUpdateMedicalRecords,
   onUpdateSession,
   onAuditLog,
   checkInQueue: propQueue,
@@ -207,7 +214,7 @@ export function NursePortal({
 }: NursePortalProps) {
   // Navigation tabs:
   // 🏠 Hari Ini, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 📋 Rekod, 📊 Laporan, ⚙️ Tetapan
-  const [activeNav, setActiveNav] = useState<'hari_ini' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'laporan' | 'tetapan'>('hari_ini');
+  const [activeNav, setActiveNav] = useState<'hari_ini' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'rekod_darah' | 'laporan' | 'tetapan'>('hari_ini');
 
   const [sessions, setSessions] = useState<DialysisSession[]>(() => {
     if (propSessions && propSessions.length > 0) return propSessions;
@@ -313,7 +320,9 @@ export function NursePortal({
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('kaizenbros_centre_profile');
-        if (stored) return JSON.parse(stored);
+        if (stored && stored.includes('27 & 29G') && stored.includes('Bandar Rinching')) {
+          return JSON.parse(stored);
+        }
       } catch {}
     }
     return VERIFIED_CENTRE_INFO;
@@ -337,13 +346,93 @@ export function NursePortal({
 
   // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'SEMUA' | 'BELUM_HADIR' | 'SUDAH_HADIR' | 'SEDANG_DIALISIS' | 'SUDAH_SELESAI'>('SEMUA');
+
+  // Debounce effect for simulating server-side database searches
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDebouncedSearchQuery('');
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setIsSearching(false);
+    }, 450); // 450ms debounce
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Modals
   const [selectedSessionForCheckIn, setSelectedSessionForCheckIn] = useState<DialysisSession | null>(null);
   const [selectedSessionForActive, setSelectedSessionForActive] = useState<DialysisSession | null>(null);
   const [selectedPatientForDetail, setSelectedPatientForDetail] = useState<Patient | null>(null);
-  const [patientDetailTab, setPatientDetailTab] = useState<'ringkasan' | 'maklumat' | 'jadual' | 'rekod' | 'vitals' | 'ubat' | 'catatan' | 'dokumen'>('ringkasan');
+  const [patientDetailTab, setPatientDetailTab] = useState<'ringkasan' | 'maklumat' | 'jadual' | 'rekod' | 'vitals' | 'ubat' | 'catatan' | 'dokumen' | 'darah'>('ringkasan');
+
+  // Local state for medical records
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>(() => {
+    if (propMedicalRecords && propMedicalRecords.length > 0) return propMedicalRecords;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kaizenbros_medical_records');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return [];
+  });
+
+  // Sync when propMedicalRecords changes
+  useEffect(() => {
+    if (propMedicalRecords && propMedicalRecords.length > 0) {
+      setMedicalRecords(propMedicalRecords);
+    }
+  }, [propMedicalRecords]);
+
+  // Medical Records Form State inside Nurse Portal
+  const [showAddMedicalRecordForm, setShowAddMedicalRecordForm] = useState<boolean>(false);
+  const [editingMedicalRecord, setEditingMedicalRecord] = useState<MedicalRecord | null>(null);
+  const [selectedPatientForBloodTab, setSelectedPatientForBloodTab] = useState<Patient | null>(null);
+  const [bloodTabSearchTerm, setBloodTabSearchTerm] = useState<string>('');
+  
+  const [mrExamDate, setMrExamDate] = useState<string>('');
+  const [mrExamType, setMrExamType] = useState<string>('Pemeriksaan Berkala 3 Bulan');
+  const [mrExamStatus, setMrExamStatus] = useState<string>('Keputusan Tersedia');
+  const [mrClinicalNotes, setMrClinicalNotes] = useState<string>('');
+  const [mrDoctorComments, setMrDoctorComments] = useState<string>('');
+  const [mrAiAnalysisNotes, setMrAiAnalysisNotes] = useState<string>('');
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState<boolean>(false);
+  const [mrUploadedDoc, setMrUploadedDoc] = useState<any | null>(null);
+
+  // Blood Results Form Fields
+  const [hb, setHb] = useState<string>('');
+  const [wbc, setWbc] = useState<string>('');
+  const [platelet, setPlatelet] = useState<string>('');
+  
+  const [urea, setUrea] = useState<string>('');
+  const [creatinine, setCreatinine] = useState<string>('');
+  const [egfr, setEgfr] = useState<string>('');
+  const [calcium, setCalcium] = useState<string>('');
+  const [phosphate, setPhosphate] = useState<string>('');
+  const [potassium, setPotassium] = useState<string>('');
+  const [sodium, setSodium] = useState<string>('');
+
+  const [glucose, setGlucose] = useState<string>('');
+  const [hba1c, setHba1c] = useState<string>('');
+
+  const [cholesterol, setCholesterol] = useState<string>('');
+  const [ldl, setLdl] = useState<string>('');
+  const [hdl, setHdl] = useState<string>('');
+  const [triglycerides, setTriglycerides] = useState<string>('');
+
+  // Other tests
+  const [customTestName, setCustomTestName] = useState<string>('');
+  const [customTestResult, setCustomTestResult] = useState<string>('');
+  const [customTestUnit, setCustomTestUnit] = useState<string>('');
+  const [customTestRange, setCustomTestRange] = useState<string>('');
+  const [customTestStatus, setCustomTestStatus] = useState<string>('NORMAL');
+  const [otherTestsList, setOtherTestsList] = useState<any[]>([]);
 
   // Check-In Form Fields
   const [checkInWeight, setCheckInWeight] = useState<string>('76.4');
@@ -410,6 +499,306 @@ export function NursePortal({
   const unstartedSessions = useMemo(() => {
     return sessions.filter(s => s.status === 'SUDAH_HADIR' || (s.chair_number && s.status === 'BELUM_HADIR'));
   }, [sessions]);
+
+  // Medical Records Helper Functions
+  const resetMrForm = () => {
+    setEditingMedicalRecord(null);
+    setMrExamDate(new Date().toISOString().slice(0, 10));
+    setMrExamType('Pemeriksaan Berkala 3 Bulan');
+    setMrExamStatus('Keputusan Tersedia');
+    setMrClinicalNotes('');
+    setMrDoctorComments('');
+    setMrAiAnalysisNotes('');
+    setIsAiAnalyzing(false);
+    setMrUploadedDoc(null);
+    setHb('');
+    setWbc('');
+    setPlatelet('');
+    setUrea('');
+    setCreatinine('');
+    setEgfr('');
+    setCalcium('');
+    setPhosphate('');
+    setPotassium('');
+    setSodium('');
+    setGlucose('');
+    setHba1c('');
+    setCholesterol('');
+    setLdl('');
+    setHdl('');
+    setTriglycerides('');
+    setOtherTestsList([]);
+    setCustomTestName('');
+    setCustomTestResult('');
+    setCustomTestUnit('');
+    setCustomTestRange('');
+    setCustomTestStatus('NORMAL');
+  };
+
+  const startEditMr = (record: MedicalRecord) => {
+    setEditingMedicalRecord(record);
+    setMrExamDate(record.examination_date);
+    setMrExamType(record.examination_type);
+    setMrExamStatus(record.status);
+    setMrClinicalNotes(record.clinical_notes || '');
+    setMrDoctorComments(record.doctor_comments || '');
+    setMrAiAnalysisNotes(record.ai_analysis_notes || '');
+    setMrUploadedDoc(record.report_document || null);
+    
+    const br = record.blood_results;
+    setHb(br?.hematology?.hemoglobin?.toString() || '');
+    setWbc(br?.hematology?.wbc?.toString() || '');
+    setPlatelet(br?.hematology?.platelet?.toString() || '');
+    
+    setUrea(br?.renal?.urea?.toString() || '');
+    setCreatinine(br?.renal?.creatinine?.toString() || '');
+    setEgfr(br?.renal?.egfr?.toString() || '');
+    setCalcium(br?.renal?.calcium?.toString() || '');
+    setPhosphate(br?.renal?.phosphate?.toString() || '');
+    setPotassium(br?.renal?.potassium?.toString() || '');
+    setSodium(br?.renal?.sodium?.toString() || '');
+    
+    setGlucose(br?.diabetes?.glucose?.toString() || '');
+    setHba1c(br?.diabetes?.hba1c?.toString() || '');
+    
+    setCholesterol(br?.lipid?.cholesterol?.toString() || '');
+    setLdl(br?.lipid?.ldl?.toString() || '');
+    setHdl(br?.lipid?.hdl?.toString() || '');
+    setTriglycerides(br?.lipid?.triglycerides?.toString() || '');
+    
+    setOtherTestsList(br?.other_tests || []);
+    setShowAddMedicalRecordForm(true);
+  };
+
+  const handleSaveMr = () => {
+    if (!mrExamDate) {
+      alert('Sila masukkan tarikh pemeriksaan.');
+      return;
+    }
+    
+    const activePat = selectedPatientForDetail || selectedPatientForBloodTab;
+    if (!activePat) {
+      alert('Tiada pesakit dipilih.');
+      return;
+    }
+
+    const newRecord: MedicalRecord = {
+      id: editingMedicalRecord ? editingMedicalRecord.id : 'MR-' + Math.floor(100 + Math.random() * 900),
+      patient_id: activePat.id,
+      patient_id_code: activePat.patient_id_code,
+      patient_name: activePat.name,
+      examination_date: mrExamDate,
+      examination_type: mrExamType,
+      status: mrExamStatus,
+      clinical_notes: mrClinicalNotes,
+      doctor_comments: mrDoctorComments || undefined,
+      ai_analysis_notes: mrAiAnalysisNotes || undefined,
+      report_document: mrUploadedDoc || undefined,
+      blood_results: {
+        hematology: {
+          hemoglobin: hb ? (isNaN(Number(hb)) ? hb : Number(hb)) : undefined,
+          wbc: wbc ? (isNaN(Number(wbc)) ? wbc : Number(wbc)) : undefined,
+          platelet: platelet ? (isNaN(Number(platelet)) ? platelet : Number(platelet)) : undefined,
+        },
+        renal: {
+          urea: urea ? (isNaN(Number(urea)) ? urea : Number(urea)) : undefined,
+          creatinine: creatinine ? (isNaN(Number(creatinine)) ? creatinine : Number(creatinine)) : undefined,
+          egfr: egfr ? (isNaN(Number(egfr)) ? egfr : Number(egfr)) : undefined,
+          calcium: calcium ? (isNaN(Number(calcium)) ? calcium : Number(calcium)) : undefined,
+          phosphate: phosphate ? (isNaN(Number(phosphate)) ? phosphate : Number(phosphate)) : undefined,
+          potassium: potassium ? (isNaN(Number(potassium)) ? potassium : Number(potassium)) : undefined,
+          sodium: sodium ? (isNaN(Number(sodium)) ? sodium : Number(sodium)) : undefined,
+        },
+        diabetes: {
+          glucose: glucose ? (isNaN(Number(glucose)) ? glucose : Number(glucose)) : undefined,
+          hba1c: hba1c ? (isNaN(Number(hba1c)) ? hba1c : Number(hba1c)) : undefined,
+        },
+        lipid: {
+          cholesterol: cholesterol ? (isNaN(Number(cholesterol)) ? cholesterol : Number(cholesterol)) : undefined,
+          ldl: ldl ? (isNaN(Number(ldl)) ? ldl : Number(ldl)) : undefined,
+          hdl: hdl ? (isNaN(Number(hdl)) ? hdl : Number(hdl)) : undefined,
+          triglycerides: triglycerides ? (isNaN(Number(triglycerides)) ? triglycerides : Number(triglycerides)) : undefined,
+        },
+        other_tests: otherTestsList
+      },
+      created_at: editingMedicalRecord ? editingMedicalRecord.created_at : new Date().toISOString(),
+      updated_at: editingMedicalRecord ? new Date().toISOString() : undefined,
+      created_by: editingMedicalRecord ? editingMedicalRecord.created_by : (currentNurseName || 'Sister Siti Fatimah')
+    };
+
+    let updatedRecords: MedicalRecord[];
+    if (editingMedicalRecord) {
+      updatedRecords = medicalRecords.map(r => r.id === editingMedicalRecord.id ? newRecord : r);
+      if (onAuditLog) {
+        onAuditLog('KEMASKINI_REKOD_PERUBATAN', `Mengemaskini rekod perubatan ${newRecord.id} untuk pesakit ${newRecord.patient_name}`);
+      }
+    } else {
+      updatedRecords = [newRecord, ...medicalRecords];
+      if (onAuditLog) {
+        onAuditLog('TAMBAH_REKOD_PERUBATAN', `Menambah rekod perubatan baharu ${newRecord.id} untuk pesakit ${newRecord.patient_name}`);
+      }
+    }
+
+    setMedicalRecords(updatedRecords);
+    if (onUpdateMedicalRecords) {
+      onUpdateMedicalRecords(updatedRecords);
+    }
+    
+    showToast(editingMedicalRecord ? '✓ Rekod perubatan berjaya dikemaskini.' : '✓ Rekod perubatan baharu berjaya disimpan.');
+    setShowAddMedicalRecordForm(false);
+    resetMrForm();
+  };
+
+  const handleDeleteMr = (recordId: string | number) => {
+    if (!confirm('Adakah anda pasti mahu memadam rekod perubatan ini? Tindakan ini akan direkodkan dalam log audit.')) {
+      return;
+    }
+    const updated = medicalRecords.filter(r => r.id !== recordId);
+    setMedicalRecords(updated);
+    if (onUpdateMedicalRecords) {
+      onUpdateMedicalRecords(updated);
+    }
+    if (onAuditLog) {
+      onAuditLog('PADAM_REKOD_PERUBATAN', `Memadam rekod perubatan ${recordId} untuk pesakit ${selectedPatientForDetail!.name}`);
+    }
+    showToast('✓ Rekod perubatan berjaya dipadam.');
+  };
+
+  const compressImageFile = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (!file.type.startsWith('image/')) {
+          return resolve(dataUrl);
+        }
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAiAnalysis = async (fileDataUrl: string, customFileName?: string) => {
+    setIsAiAnalyzing(true);
+    const activePat = selectedPatientForBloodTab || selectedPatientForDetail;
+    const resolvedFileName = customFileName || mrUploadedDoc?.name || 'Laporan_Darah.pdf';
+
+    // Clear all previous form fields so no old numbers or previous file values linger
+    setHb('');
+    setWbc('');
+    setPlatelet('');
+    setUrea('');
+    setCreatinine('');
+    setEgfr('');
+    setCalcium('');
+    setPhosphate('');
+    setPotassium('');
+    setSodium('');
+    setGlucose('');
+    setHba1c('');
+    setCholesterol('');
+    setLdl('');
+    setHdl('');
+    setTriglycerides('');
+    setOtherTestsList([]);
+    setMrAiAnalysisNotes('');
+
+    try {
+      const response = await fetch('/api/gemini/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileDataUrl,
+          fileName: resolvedFileName,
+          patientName: activePat?.name,
+          patientAge: activePat?.age,
+          patientGender: activePat?.gender,
+        }),
+      });
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      // Populate form fields with strictly real extracted values
+      const er = data.extracted_results;
+      if (er) {
+        if (er.hematology) {
+          setHb(er.hematology.hemoglobin || '');
+          setWbc(er.hematology.wbc || '');
+          setPlatelet(er.hematology.platelet || '');
+        }
+        if (er.renal) {
+          setUrea(er.renal.urea || '');
+          setCreatinine(er.renal.creatinine || '');
+          setEgfr(er.renal.egfr || '');
+          setCalcium(er.renal.calcium || '');
+          setPhosphate(er.renal.phosphate || '');
+          setPotassium(er.renal.potassium || '');
+          setSodium(er.renal.sodium || '');
+        }
+        if (er.diabetes) {
+          setGlucose(er.diabetes.glucose || '');
+          setHba1c(er.diabetes.hba1c || '');
+        }
+        if (er.lipid) {
+          setCholesterol(er.lipid.cholesterol || '');
+          setLdl(er.lipid.ldl || '');
+          setHdl(er.lipid.hdl || '');
+          setTriglycerides(er.lipid.triglycerides || '');
+        }
+        if (Array.isArray(er.other_tests)) {
+          setOtherTestsList(er.other_tests);
+        }
+      }
+
+      if (data.test_date && typeof data.test_date === 'string' && data.test_date.includes('-')) {
+        setMrExamDate(data.test_date);
+      }
+
+      if (data.ai_analysis) {
+        setMrAiAnalysisNotes(data.ai_analysis);
+      }
+
+      const count = data.extracted_count || 0;
+      if (count > 0) {
+        showToast(`✓ AI berjaya mengekstrak ${count} parameter darah sebenar daripada "${resolvedFileName}"!`);
+      } else {
+        showToast('⚠️ AI tidak menemui parameter ujian darah berangka dalam fail ini. Sila semak imej atau masukkan bacaan secara manual.');
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      alert('Gagal menjalankan analisis AI: ' + err.message);
+    } finally {
+      setIsAiAnalyzing(false);
+    }
+  };
 
   const openQuickStatusForPatient = (patient: Patient) => {
     let sess = sessions.find(s => s.patient_id === patient.id);
@@ -559,23 +948,23 @@ export function NursePortal({
     const sedang = sessions.filter(s => s.status === 'SEDANG_DIALISIS').length;
     const hadir = sessions.filter(s => s.status === 'SUDAH_HADIR' || s.status === 'SEDANG_DIALISIS' || s.status === 'SUDAH_SELESAI').length;
     const belum = sessions.filter(s => s.status === 'BELUM_HADIR').length;
-    return { total, hadir, sedang, selesai, belum };
+    const sudah_hadir = sessions.filter(s => s.status === 'SUDAH_HADIR').length;
+    return { total, hadir, sedang, selesai, belum, sudah_hadir };
   }, [sessions]);
 
-  // Filtered Sessions List
+  // Filtered Sessions List with debounced query for patient name and ID
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
-      const q = (searchQuery || '').toLowerCase();
+      const q = (debouncedSearchQuery || '').toLowerCase().trim();
       const matchQuery = 
         (s.patient_name || '').toLowerCase().includes(q) ||
-        (s.patient_id_code || '').toLowerCase().includes(q) ||
-        (s.chair_number || '').toLowerCase().includes(q);
+        (s.patient_id_code || '').toLowerCase().includes(q);
 
       if (!matchQuery) return false;
       if (statusFilter === 'SEMUA') return true;
       return s.status === statusFilter;
     });
-  }, [sessions, searchQuery, statusFilter]);
+  }, [sessions, debouncedSearchQuery, statusFilter]);
 
   // ACTION: MANUAL STATION & MACHINE ALLOCATION (FCFS WORKFLOW)
   const handleManualStationAllocation = (e: React.FormEvent) => {
@@ -1106,17 +1495,17 @@ export function NursePortal({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#0B132B] text-slate-100 flex flex-col font-sans">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 bg-emerald-600 text-white font-bold px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 border-2 border-emerald-400 animate-slideDown">
+        <div className="fixed top-20 right-4 z-50 bg-teal-600 text-white font-bold px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 border-2 border-teal-400 animate-slideDown">
           <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* TOP CLINICAL HEADER FOR NURSE */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-4 sm:px-8">
+      <div className="bg-[#0E1A30] border-b border-[#1F385C] px-4 py-4 sm:px-8">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2">
@@ -1247,6 +1636,18 @@ export function NursePortal({
           >
             <FileText className="w-4 h-4" />
             <span>📋 Rekod</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('rekod_darah')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              activeNav === 'rekod_darah'
+                ? 'bg-cyan-600 text-white shadow-md border-2 border-cyan-400 animate-pulse'
+                : 'text-[#e879f9] hover:text-fuchsia-300 hover:bg-fuchsia-950/20'
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            <span>🩺 Rekod Darah & Analisa</span>
           </button>
 
           <button
@@ -1590,28 +1991,32 @@ export function NursePortal({
             {/* SEARCH AND FILTERS */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                {/* Search Input */}
+                {/* Search Input with Debounced Server-Side Simulation */}
                 <div className="relative flex-1">
                   <Search className="w-5 h-5 absolute left-3.5 top-3.5 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="🔎 Cari nama / ID pesakit / no stesen..."
+                    placeholder="🔎 Cari nama atau ID pesakit..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-11 pr-4 py-3 text-white placeholder-slate-500 font-medium text-sm focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-11 pr-12 py-3 text-white placeholder-slate-500 font-medium text-sm focus:outline-none focus:border-cyan-500"
                   />
-                  {searchQuery && (
+                  {isSearching ? (
+                    <div className="absolute right-3.5 top-3.5 flex items-center justify-center">
+                      <span className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : searchQuery ? (
                     <button 
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white"
+                      className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
-                  )}
+                  ) : null}
                 </div>
 
-                {/* Filter Chips */}
-                <div className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0">
+                {/* Filter Chips (Semua, Belum Hadir, Sudah Hadir, Sedang Dialisis, Selesai) */}
+                <div className="flex items-center space-x-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                   <button
                     onClick={() => setStatusFilter('SEMUA')}
                     className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -1627,6 +2032,14 @@ export function NursePortal({
                     }`}
                   >
                     Belum Hadir ({stats.belum})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('SUDAH_HADIR')}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      statusFilter === 'SUDAH_HADIR' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    Sudah Hadir ({stats.sudah_hadir})
                   </button>
                   <button
                     onClick={() => setStatusFilter('SEDANG_DIALISIS')}
@@ -1647,193 +2060,234 @@ export function NursePortal({
                 </div>
               </div>
 
+              {/* Debounce Network Directory Search Text Indicator */}
+              {isSearching && (
+                <p className="text-[10px] text-cyan-400 font-mono animate-pulse flex items-center space-x-1 px-1">
+                  <span>●</span> <span>Menghubungi pangkalan data server-side...</span>
+                </p>
+              )}
+
               {/* TODAY'S PATIENTS CARDS GRID */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                {filteredSessions.map((s) => {
-                  const isSedang = s.status === 'SEDANG_DIALISIS';
-                  const isSelesai = s.status === 'SUDAH_SELESAI';
-                  const isBelum = s.status === 'BELUM_HADIR';
-                  const isHadir = s.status === 'SUDAH_HADIR';
+                {filteredSessions.length === 0 ? (
+                  <div className="bg-slate-950/50 border-2 border-dashed border-slate-800 rounded-3xl p-10 text-center space-y-3 col-span-full">
+                    <div className="w-12 h-12 bg-slate-900 text-slate-500 rounded-2xl flex items-center justify-center mx-auto border border-slate-800">
+                      <Search className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-white font-bold text-base">Tiada Pesakit Dijumpai</h4>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      Tiada sesi dialisis yang sepadan dengan carian nama / ID atau penapis aktif anda pada hari ini. Sila semak semula ejaan anda atau tukar penapis di atas.
+                    </p>
+                  </div>
+                ) : (
+                  filteredSessions.map((s) => {
+                    const isSedang = s.status === 'SEDANG_DIALISIS';
+                    const isSelesai = s.status === 'SUDAH_SELESAI';
+                    const isBelum = s.status === 'BELUM_HADIR';
+                    const isHadir = s.status === 'SUDAH_HADIR';
 
-                  const preWeight = s.pre_weight_kg ? Number(s.pre_weight_kg) : 0;
-                  const dryWeight = s.dry_weight_kg ? Number(s.dry_weight_kg) : 0;
-                  const weightExcess = preWeight && dryWeight ? preWeight - dryWeight : 0;
-                  const isExcessiveWeight = weightExcess > 2.0;
+                    const preWeight = s.pre_weight_kg ? Number(s.pre_weight_kg) : 0;
+                    const dryWeight = s.dry_weight_kg ? Number(s.dry_weight_kg) : 0;
+                    const weightExcess = preWeight && dryWeight ? preWeight - dryWeight : 0;
+                    const isExcessiveWeight = weightExcess > 2.0;
 
-                  return (
-                    <div
-                      key={s.id}
-                      className={`bg-slate-950 border-2 rounded-2xl p-4 sm:p-5 transition-all flex flex-col justify-between space-y-4 ${
-                        isExcessiveWeight
-                          ? 'border-rose-600 shadow-lg shadow-rose-950/50 ring-1 ring-rose-500/30'
-                          : isSedang 
-                          ? 'border-emerald-500 shadow-md shadow-emerald-950/30' 
-                          : isSelesai 
-                          ? 'border-teal-700/60 opacity-90' 
-                          : isHadir 
-                          ? 'border-blue-600' 
-                          : 'border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        {/* Header: Name, ID, Chair */}
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <h3 className="text-lg font-black text-white leading-tight">
-                                {(s.patient_name || 'PESAKIT').toUpperCase()}
-                              </h3>
-                              {isExcessiveWeight && (
-                                <span className="animate-pulse inline-flex items-center text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-600 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
-                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 mr-1 shrink-0" />
-                                  <span>URGENT (+{weightExcess.toFixed(1)}kg)</span>
-                                </span>
-                              )}
+                    return (
+                      <div
+                        key={s.id}
+                        className={`bg-slate-950 border-2 rounded-2xl p-4 sm:p-5 transition-all flex flex-col justify-between space-y-4 ${
+                          isExcessiveWeight
+                            ? 'border-rose-600 shadow-lg shadow-rose-950/50 ring-1 ring-rose-500/30'
+                            : isSedang 
+                            ? 'border-emerald-500 shadow-md shadow-emerald-950/30' 
+                            : isSelesai 
+                            ? 'border-teal-700/60 opacity-90' 
+                            : isHadir 
+                            ? 'border-blue-600' 
+                            : 'border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div>
+                          {/* Header: Name, ID, Chair */}
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <h3 className="text-lg font-black text-white leading-tight">
+                                  {(s.patient_name || 'PESAKIT').toUpperCase()}
+                                </h3>
+                                {isExcessiveWeight && (
+                                  <span className="animate-pulse inline-flex items-center text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-600 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400 mr-1 shrink-0" />
+                                    <span>URGENT (+{weightExcess.toFixed(1)}kg)</span>
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs font-mono font-bold text-slate-400">
+                                {s.patient_id_code}
+                              </span>
                             </div>
-                            <span className="text-xs font-mono font-bold text-slate-400">
-                              {s.patient_id_code}
-                            </span>
+
+                            <div className="text-right">
+                              <span className="text-xs font-bold text-slate-400 block">Stesen</span>
+                              <span className="text-xl font-black text-cyan-400">
+                                {s.chair_number || 'Belum'}
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-slate-400 block">Stesen</span>
-                            <span className="text-xl font-black text-cyan-400">
-                              {s.chair_number}
-                            </span>
+                          {/* Middle info */}
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-slate-900 p-2 rounded-lg">
+                              <span className="text-slate-400 block">Masa Temujanji</span>
+                              <span className="font-bold text-white text-sm">{s.scheduled_time}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-lg">
+                              <span className="text-slate-400 block">Berat Kering</span>
+                              <span className="font-bold text-emerald-400 text-sm">{s.dry_weight_kg} kg</span>
+                            </div>
+
+                            {s.pre_weight_kg && (
+                              <div className="bg-slate-900 p-2 rounded-lg">
+                                <span className="text-slate-400 block">Berat Sebelum</span>
+                                <span className="font-bold text-white text-sm">{s.pre_weight_kg} kg</span>
+                              </div>
+                            )}
+
+                            {s.post_weight_kg && (
+                              <div className="bg-slate-900 p-2 rounded-lg">
+                                <span className="text-slate-400 block">Berat Selepas</span>
+                                <span className="font-bold text-cyan-300 text-sm">{s.post_weight_kg} kg</span>
+                              </div>
+                            )}
+
+                            {s.pre_bp && (
+                              <div className="bg-slate-900 p-2 rounded-lg">
+                                <span className="text-slate-400 block">Tekanan Darah</span>
+                                <span className="font-bold text-cyan-400 text-sm">{s.current_bp || s.pre_bp}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Status Badge & 4-Hour Countdown */}
+                          <div className="mt-3 space-y-1.5">
+                            <DialysisCountdownTimer session={s} />
+                            {s.status_reason && (
+                              <p className="text-[10px] text-amber-300/90 bg-amber-950/40 p-1.5 rounded-lg border border-amber-900/60 font-mono">
+                                Catatan: {s.status_reason}
+                              </p>
+                            )}
                           </div>
                         </div>
 
-                        {/* Middle info */}
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-slate-900 p-2 rounded-lg">
-                            <span className="text-slate-400 block">Masa Temujanji</span>
-                            <span className="font-bold text-white text-sm">{s.scheduled_time}</span>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-lg">
-                            <span className="text-slate-400 block">Berat Kering</span>
-                            <span className="font-bold text-emerald-400 text-sm">{s.dry_weight_kg} kg</span>
-                          </div>
-
-                          {s.pre_weight_kg && (
-                            <div className="bg-slate-900 p-2 rounded-lg">
-                              <span className="text-slate-400 block">Berat Sebelum</span>
-                              <span className="font-bold text-white text-sm">{s.pre_weight_kg} kg</span>
-                            </div>
-                          )}
-
-                          {s.post_weight_kg && (
-                            <div className="bg-slate-900 p-2 rounded-lg">
-                              <span className="text-slate-400 block">Berat Selepas</span>
-                              <span className="font-bold text-cyan-300 text-sm">{s.post_weight_kg} kg</span>
-                            </div>
-                          )}
-
-                          {s.pre_bp && (
-                            <div className="bg-slate-900 p-2 rounded-lg">
-                              <span className="text-slate-400 block">Tekanan Darah</span>
-                              <span className="font-bold text-cyan-400 text-sm">{s.current_bp || s.pre_bp}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Status Badge & 4-Hour Countdown */}
-                        <div className="mt-3 space-y-1.5">
-                          <DialysisCountdownTimer session={s} />
-                          {s.status_reason && (
-                            <p className="text-[10px] text-amber-300/90 bg-amber-950/40 p-1.5 rounded-lg border border-amber-900/60 font-mono">
-                              Catatan: {s.status_reason}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Main Action Buttons: Minimum 48px Touch Target */}
-                      <div className="pt-2 flex items-center space-x-1.5">
-                        {isBelum && (
+                        {/* Unified Action Layout with PROMINENT [ BUKA ] Button */}
+                        <div className="space-y-2 pt-2 border-t border-slate-900">
+                          {/* Prominent [ BUKA ] Button - State Aware */}
                           <button
                             onClick={() => {
-                              setSelectedSessionForCheckIn(s);
-                              setCheckInWeight(s.dry_weight_kg ? (s.dry_weight_kg + 1.4).toFixed(1) : '76.4');
-                              setCheckInSystolic('148');
-                              setCheckInDiastolic('82');
+                              if (isBelum) {
+                                setSelectedSessionForCheckIn(s);
+                                setCheckInWeight(s.dry_weight_kg ? (s.dry_weight_kg + 1.4).toFixed(1) : '76.4');
+                                setCheckInSystolic('148');
+                                setCheckInDiastolic('82');
+                              } else if (isHadir) {
+                                const checkInRec = queueList.find(q => q.patient_id === s.patient_id);
+                                if (checkInRec) {
+                                  setAssigningPatient(checkInRec);
+                                  const activeChairs = new Set(sessions.filter(se => se.status === 'SEDANG_DIALISIS').map(se => se.chair_number));
+                                  const firstFree = INITIAL_CHAIRS.find(c => !activeChairs.has(c.chair_number));
+                                  if (firstFree) setSelectedChairNumber(firstFree.chair_number);
+                                } else {
+                                  const foundPatient = patientsList.find(p => p.id === s.patient_id);
+                                  if (foundPatient) setSelectedPatientForDetail(foundPatient);
+                                }
+                              } else {
+                                setSelectedSessionForActive(s);
+                              }
                             }}
-                            className="flex-1 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
+                            className={`w-full min-h-[50px] rounded-xl transition-all flex flex-col items-center justify-center p-2.5 shadow-lg border cursor-pointer hover:scale-[1.01] active:scale-99 font-black text-xs sm:text-sm ${
+                              isBelum
+                                ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 border-amber-400 hover:from-amber-500 hover:to-amber-400 shadow-amber-950/20'
+                                : isHadir
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-400 hover:from-blue-500 hover:to-blue-450 shadow-blue-950/20 animate-pulse'
+                                : isSedang
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-950/25'
+                                : 'bg-gradient-to-r from-slate-800 to-slate-700 text-slate-200 border-slate-600 hover:from-slate-750 hover:to-slate-650'
+                            }`}
                           >
-                            <UserCheck className="w-4 h-4" />
-                            <span>CHECK-IN</span>
+                            <div className="flex items-center space-x-1.5 tracking-wider uppercase">
+                              {isBelum && <UserCheck className="w-4 h-4" />}
+                              {isHadir && <Stethoscope className="w-4 h-4" />}
+                              {isSedang && <Activity className="w-4 h-4" />}
+                              {isSelesai && <FileText className="w-4 h-4" />}
+                              <span className="font-extrabold text-sm">[ BUKA ]</span>
+                            </div>
+                            <span className="text-[10px] font-bold opacity-90 mt-0.5 font-mono">
+                              {isBelum && 'Daftar Masuk / Check-In'}
+                              {isHadir && 'Tugas Stesen & Sesi'}
+                              {isSedang && 'Urus Sesi & Vitals'}
+                              {isSelesai && 'Urus Profil & Rekod Sesi'}
+                            </span>
                           </button>
-                        )}
 
-                        {isSedang && (
-                          <button
-                            onClick={() => setSelectedSessionForActive(s)}
-                            className="flex-1 min-h-[48px] bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-black text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
-                          >
-                            <Stethoscope className="w-4 h-4" />
-                            <span>[ BUKA SESI ]</span>
-                          </button>
-                        )}
+                          {/* Secondary Quick Actions */}
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {/* Quick Status */}
+                            <button
+                              onClick={() => {
+                                setQuickStatusSession(s);
+                                setQuickStatusValue(s.status);
+                                setQuickStatusReason(s.status_reason || '');
+                              }}
+                              className="py-2.5 bg-slate-900 hover:bg-amber-950 hover:text-amber-300 border border-slate-800 hover:border-amber-700 text-slate-400 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all"
+                              title="Tukar Status Sesi Pantas"
+                            >
+                              <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+                              <span className="text-[9px] font-bold mt-1">Status</span>
+                            </button>
 
-                        {isSelesai && (
-                          <button
-                            onClick={() => setSelectedSessionForActive(s)}
-                            className="flex-1 min-h-[48px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-1 cursor-pointer border border-slate-700"
-                          >
-                            <FileText className="w-4 h-4" />
-                            <span>Lihat Rekod</span>
-                          </button>
-                        )}
+                            {/* Direct Weight Entry */}
+                            <button
+                              onClick={() => openWeightModalForSession(s)}
+                              className="py-2.5 bg-slate-900 hover:bg-cyan-950 hover:text-cyan-300 border border-slate-800 hover:border-cyan-700 text-slate-400 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all"
+                              title="Masukkan Berat Dialisis"
+                            >
+                              <Scale className="w-4 h-4 text-cyan-400" />
+                              <span className="text-[9px] font-bold mt-1">Berat</span>
+                            </button>
 
-                        {/* Quick Status Button */}
-                        <button
-                          onClick={() => {
-                            setQuickStatusSession(s);
-                            setQuickStatusValue(s.status);
-                            setQuickStatusReason(s.status_reason || '');
-                          }}
-                          className="px-2.5 min-h-[48px] bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700 font-bold text-xs rounded-xl flex items-center justify-center space-x-1 cursor-pointer transition-all shrink-0"
-                          title="Tukar Status Sesi Pantas"
-                        >
-                          <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-                          <span className="hidden sm:inline">Status</span>
-                        </button>
+                            {/* WhatsApp */}
+                            <button
+                              onClick={() => {
+                                const foundPatient = patientsList.find(p => p.id === s.patient_id);
+                                if (foundPatient) setWhatsAppPatient(foundPatient);
+                              }}
+                              className="py-2.5 bg-slate-900 hover:bg-emerald-950 hover:text-emerald-300 border border-slate-800 hover:border-emerald-700 text-slate-400 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all"
+                              title="Hantar Peringatan Sesi (WhatsApp)"
+                            >
+                              <Send className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-[9px] font-bold mt-1">WhatsApp</span>
+                            </button>
 
-                        {/* Direct Weight Entry & Update button */}
-                        <button
-                          onClick={() => openWeightModalForSession(s)}
-                          className="px-2.5 min-h-[48px] bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-700 hover:border-cyan-500 font-bold text-xs rounded-xl flex items-center justify-center space-x-1 cursor-pointer transition-all shrink-0"
-                          title="Masukkan atau Kemaskini Berat Pra & After Dialisis"
-                        >
-                          <Scale className="w-4 h-4 text-cyan-400" />
-                          <span className="hidden sm:inline">Berat</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            const foundPatient = patientsList.find(p => p.id === s.patient_id);
-                            if (foundPatient) setWhatsAppPatient(foundPatient);
-                          }}
-                          className="px-3 min-h-[48px] bg-emerald-950/80 hover:bg-emerald-900 text-emerald-400 hover:text-emerald-300 rounded-xl text-xs font-bold border border-emerald-800 flex items-center justify-center space-x-1 cursor-pointer"
-                          title="Hantar Peringatan Sesi (WhatsApp)"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">WhatsApp</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            const foundPatient = patientsList.find(p => p.id === s.patient_id) || INITIAL_PATIENTS[0];
-                            if (foundPatient) setSelectedPatientForDetail(foundPatient);
-                          }}
-                          className="px-3 min-h-[48px] bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 flex items-center justify-center cursor-pointer"
-                          title="Profil Pesakit"
-                        >
-                          Profil
-                        </button>
+                            {/* Profil Link */}
+                            <button
+                              onClick={() => {
+                                const foundPatient = patientsList.find(p => p.id === s.patient_id) || INITIAL_PATIENTS[0];
+                                if (foundPatient) {
+                                  setSelectedPatientForDetail(foundPatient);
+                                  setPatientDetailTab('ringkasan');
+                                }
+                              }}
+                              className="py-2.5 bg-slate-900 hover:bg-slate-800 hover:text-white border border-slate-800 hover:border-slate-700 text-slate-400 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all"
+                              title="Profil & Rekod Klinikal Penuh"
+                            >
+                              <User className="w-4 h-4 text-slate-400" />
+                              <span className="text-[9px] font-bold mt-1">Profil</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -1915,20 +2369,14 @@ export function NursePortal({
                           <td className="px-5 py-4 text-xs">
                             <span className="font-semibold text-white block">{p.schedule_pattern.replace(/_/g, ' ')}</span>
                             <span className="text-slate-400">Syif {p.preferred_shift}</span>
-                            {p.next_dialysis_date ? (
-                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800 mt-1">
-                                Seterusnya: {p.next_dialysis_day}, {p.next_dialysis_time}
-                              </span>
-                            ) : (
-                              (() => {
-                                const next = calculateNextDialysis(p, malaysiaTime.effectiveDate);
-                                return (
-                                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 mt-1">
-                                    Seterusnya: {next.dayName}, {next.timeRange}
-                                  </span>
-                                );
-                              })()
-                            )}
+                           {(() => {
+                             const next = calculateNextDialysis(p, malaysiaTime.effectiveDate);
+                             return (
+                               <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 mt-1">
+                                 Seterusnya {next.dayName} {next.shortTime}
+                               </span>
+                             );
+                           })()}
                           </td>
                           <td className="px-5 py-4 text-xs">
                             <strong className="text-cyan-400 block font-bold">{p.assigned_chair}</strong>
@@ -2088,6 +2536,818 @@ export function NursePortal({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* VIEW 4.5: REKOD DARAH PESAKIT & ANALISA */}
+        {activeNav === 'rekod_darah' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                  <Activity className="w-7 h-7 text-fuchsia-400" />
+                  <span>Rekod Darah Pesakit dan Analisa</span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Urus keputusan ujian makmal berkala, jalankan analisis pintar AI dari fail laporan, dan kemaskini komen doktor.
+                </p>
+              </div>
+              {selectedPatientForBloodTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPatientForBloodTab(null);
+                    resetMrForm();
+                  }}
+                  className="min-h-[44px] px-4 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-700 hover:border-slate-650 text-cyan-300 font-extrabold text-sm rounded-xl cursor-pointer transition-all flex items-center space-x-1.5"
+                >
+                  <span>← Kembali ke Senarai</span>
+                </button>
+              )}
+            </div>
+
+            {!selectedPatientForBloodTab ? (
+              /* ==================== SCREEN 1: SELECT PATIENT & GLOBAL LIST ==================== */
+              <div className="space-y-6">
+                {/* Search Patient Box */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
+                  <div className="flex items-center space-x-3 text-cyan-400">
+                    <Search className="w-5 h-5" />
+                    <h3 className="text-base font-extrabold text-white uppercase tracking-wider">Cari Pesakit Untuk Urus Rekod Darah</h3>
+                  </div>
+                  
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={bloodTabSearchTerm}
+                      onChange={(e) => setBloodTabSearchTerm(e.target.value)}
+                      placeholder="Masukkan nama pesakit atau No. ID Pesakit (cth: Tan Ah Kow, P-1001)..."
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-2xl pl-11 pr-4 py-3 text-sm text-white focus:outline-none placeholder-slate-500 min-h-[48px]"
+                    />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  </div>
+
+                  {/* Filtered Patients List */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 max-h-80 overflow-y-auto pr-1">
+                    {patientsList
+                      .filter(p => {
+                        const term = bloodTabSearchTerm.toLowerCase();
+                        return (
+                          p.name.toLowerCase().includes(term) ||
+                          p.patient_id_code.toLowerCase().includes(term)
+                        );
+                      })
+                      .map(p => (
+                        <div
+                          key={p.id}
+                          className="bg-slate-950 border border-slate-850 hover:border-cyan-550/40 p-4 rounded-2xl flex flex-col justify-between space-y-3 transition-all"
+                        >
+                          <div>
+                            <div className="flex justify-between items-start">
+                              <strong className="text-white text-base block font-black truncate max-w-[70%]">{p.name}</strong>
+                              <span className="text-xs font-mono font-bold bg-[#11243b] text-cyan-300 border border-[#1d3d5e] px-2 py-0.5 rounded">
+                                {p.patient_id_code}
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-400 block mt-1">Syif: <strong className="text-slate-200">{p.preferred_shift.replace(/_/g, ' ')}</strong></span>
+                            <span className="text-xs text-slate-400 block mt-0.5">Dry Weight: <strong className="text-emerald-400">{p.dry_weight_kg} kg</strong></span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPatientForBloodTab(p);
+                              resetMrForm();
+                            }}
+                            className="w-full py-2 px-3 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-1 border border-rose-400 cursor-pointer"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                            <span>🩸 URUS REKOD DARAH &amp; ANALISA</span>
+                          </button>
+                        </div>
+                      ))}
+                    {patientsList.filter(p => {
+                      const term = bloodTabSearchTerm.toLowerCase();
+                      return p.name.toLowerCase().includes(term) || p.patient_id_code.toLowerCase().includes(term);
+                    }).length === 0 && (
+                      <p className="text-xs text-slate-500 text-center py-6 col-span-full">Tiada pesakit bertepatan dengan carian anda.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Global Chronic Blood Records List */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center space-x-3 text-fuchsia-400">
+                      <FileText className="w-6 h-6" />
+                      <div>
+                        <h3 className="text-base font-extrabold text-white uppercase tracking-wider">Senarai Semua Rekod Darah &amp; Pemeriksaan Pesakit</h3>
+                        <p className="text-xs text-slate-400">Paparan kronologi keputusan darah di seluruh klinik berdaftar</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {medicalRecords.length === 0 ? (
+                    <div className="text-center py-12 space-y-3">
+                      <Activity className="w-12 h-12 text-slate-700 mx-auto animate-pulse" />
+                      <p className="text-xs text-slate-500">Tiada sebarang rekod darah dimasukkan dalam sistem setakat ini.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                      {[...medicalRecords]
+                        .sort((a, b) => new Date(b.examination_date).getTime() - new Date(a.examination_date).getTime())
+                        .map((r) => {
+                          const hasDoc = Boolean(r.report_document);
+                          const pat = patientsList.find(p => p.id === r.patient_id);
+                          
+                          // Quick visual status checker
+                          const kVal = Number(r.blood_results?.renal?.potassium);
+                          const pVal = Number(r.blood_results?.renal?.phosphate);
+                          const hbVal = Number(r.blood_results?.hematology?.hemoglobin);
+                          
+                          const renderQuickBadge = (label: string, val: number, low: number, high: number) => {
+                            if (!val || isNaN(val)) return null;
+                            const isH = val > high;
+                            const isL = val < low;
+                            return (
+                              <span className={`inline-flex items-center text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                                isH ? 'bg-rose-950 text-rose-300 border-rose-800' :
+                                isL ? 'bg-blue-950 text-blue-300 border-blue-800' :
+                                'bg-emerald-950 text-emerald-300 border-emerald-800'
+                              }`}>
+                                {label}: {val} {isH ? '▲' : isL ? '▼' : '●'}
+                              </span>
+                            );
+                          };
+
+                          return (
+                            <div
+                              key={r.id}
+                              className="bg-slate-950 border border-slate-850 hover:border-slate-800 p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
+                            >
+                              <div className="space-y-2 text-left">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-black bg-[#11243b] text-cyan-300 border border-[#1d3d5e] px-2.5 py-0.5 rounded-lg uppercase">
+                                    {r.patient_id_code}
+                                  </span>
+                                  <strong className="text-white text-base font-extrabold">{r.patient_name}</strong>
+                                  <span className="text-[10px] text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full font-bold">
+                                    {r.examination_type}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-400">
+                                  Tarikh Pemeriksaan: <strong className="text-slate-200">{r.examination_date}</strong> • Status: <span className="text-emerald-400 font-bold">✓ Tersedia</span>
+                                  {hasDoc && <span className="text-cyan-400 font-bold ml-1.5">• 📄 Fail Dikepilkan</span>}
+                                </div>
+                                
+                                {/* Quick Badges Row */}
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {renderQuickBadge('Kalium', kVal, 3.5, 5.1)}
+                                  {renderQuickBadge('Fosfat', pVal, 0.8, 1.4)}
+                                  {renderQuickBadge('Hb', hbVal, 10.0, 15.0)}
+                                </div>
+
+                                {r.doctor_comments && (
+                                  <p className="text-[10px] text-cyan-300 line-clamp-1 italic max-w-xl bg-cyan-950/20 px-2 py-1 rounded border border-[#1b365d]/50">
+                                    <strong>Komen Doktor:</strong> "{r.doctor_comments}"
+                                  </p>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const matchedPatient = patientsList.find(p => p.id === r.patient_id);
+                                  if (matchedPatient) {
+                                    setSelectedPatientForBloodTab(matchedPatient);
+                                    startEditMr(r);
+                                  } else {
+                                    alert('Pesakit untuk rekod ini tidak ditemui.');
+                                  }
+                                }}
+                                className="w-full md:w-auto px-4 py-2 min-h-[40px] bg-slate-900 hover:bg-slate-850 text-slate-200 border border-slate-850 rounded-xl text-xs font-black flex items-center justify-center space-x-1 shadow cursor-pointer transition-colors"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>LIHAT &amp; KEMASKINI</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* ==================== SCREEN 2: ACTIVE PATIENT BLOOD MANAGER ==================== */
+              <div className="space-y-6">
+                {/* Patient Summary Card */}
+                <div className="bg-[#121c2e] border-2 border-[#1E3B60] rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+                  <div className="text-left space-y-1">
+                    <span className="text-[11px] font-mono font-black text-rose-400 uppercase tracking-widest block">Urusan Keputusan Darah Pesakit</span>
+                    <h3 className="text-2xl font-black text-white">{selectedPatientForBloodTab.name}</h3>
+                    <p className="text-xs sm:text-sm text-slate-300 font-mono">
+                      ID: <span className="text-cyan-400 font-bold">{selectedPatientForBloodTab.patient_id_code}</span> • IC: <span className="text-slate-400">{selectedPatientForBloodTab.ic_number}</span> • Berat Kering: <span className="text-emerald-400 font-bold">{selectedPatientForBloodTab.dry_weight_kg} kg</span>
+                    </p>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPatientForBloodTab(null);
+                      resetMrForm();
+                    }}
+                    className="px-4 py-2 bg-slate-950 hover:bg-slate-900 text-slate-300 font-extrabold text-xs rounded-xl border border-slate-800 hover:border-slate-700 transition-all cursor-pointer flex items-center justify-center space-x-1 min-h-[40px]"
+                  >
+                    <span>← Senarai Pesakit</span>
+                  </button>
+                </div>
+
+                {showAddMedicalRecordForm ? (
+                  /* ==================== FORM VIEW ==================== */
+                  <div className="bg-slate-900 border border-slate-800 p-5 sm:p-6 rounded-3xl space-y-5 shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <h4 className="text-base sm:text-lg font-black text-rose-400 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-rose-500 animate-pulse" />
+                        <span>{editingMedicalRecord ? 'Kemas kini Rekod Keputusan' : 'Tambah Rekod Keputusan Makmal Baharu'}</span>
+                      </h4>
+                      <button 
+                        type="button"
+                        onClick={() => { setShowAddMedicalRecordForm(false); resetMrForm(); }}
+                        className="text-xs text-slate-400 hover:text-white font-bold bg-slate-950 border border-slate-800 px-3.5 py-1.5 rounded-xl cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Tarikh Pemeriksaan:</label>
+                        <input 
+                          type="date"
+                          value={mrExamDate}
+                          onChange={(e) => setMrExamDate(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Jenis Pemeriksaan:</label>
+                        <select 
+                          value={mrExamType}
+                          onChange={(e) => setMrExamType(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
+                        >
+                          <option value="Pemeriksaan Berkala 3 Bulan">Pemeriksaan Berkala 3 Bulan</option>
+                          <option value="Pemeriksaan Tahunan">Pemeriksaan Tahunan</option>
+                          <option value="Pemeriksaan Khas">Pemeriksaan Khas</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Status Keputusan:</label>
+                        <select 
+                          value={mrExamStatus}
+                          onChange={(e) => setMrExamStatus(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
+                        >
+                          <option value="Keputusan Tersedia">Keputusan Tersedia</option>
+                          <option value="Menunggu Keputusan">Menunggu Keputusan</option>
+                          <option value="Perlu Tindakan">Perlu Tindakan</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* UPLOAD & AI EXTRACTION SECTION FIRST */}
+                    <div className="bg-[#18112e] border-2 border-[#391e5c] p-4.5 rounded-2xl space-y-3.5">
+                      <div className="flex items-center space-x-2 text-fuchsia-400">
+                        <Sparkles className="w-5 h-5 animate-pulse" />
+                        <h5 className="text-xs uppercase font-extrabold tracking-wider text-white">Ekstrak Data Laporan Darah Menggunakan AI Pintar</h5>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Muat naik gambar keputusan makmal atau laporan imbasan darah. AI akan mengekstrak semua parameter secara terperinci ke dalam kotak borang secara automatik bagi mengelakkan kesilapan menaip.
+                      </p>
+
+                      {mrUploadedDoc ? (
+                        <div className="space-y-2">
+                          <div className="bg-slate-950 p-3.5 rounded-xl border border-emerald-800 flex justify-between items-center text-xs">
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-emerald-400 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>{mrUploadedDoc.name}</span>
+                              </p>
+                              <p className="text-[10px] text-slate-400">{mrUploadedDoc.size} ({mrUploadedDoc.type})</p>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => { setMrUploadedDoc(null); setMrAiAnalysisNotes(''); }}
+                              className="bg-rose-950 hover:bg-rose-900 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-800 cursor-pointer transition-colors"
+                            >
+                              Padam Fail
+                            </button>
+                          </div>
+                          
+                          <button
+                            type="button"
+                            disabled={isAiAnalyzing}
+                            onClick={() => handleAiAnalysis(mrUploadedDoc.data_url, mrUploadedDoc.name)}
+                            className={`w-full min-h-[44px] px-4 py-2.5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center space-x-2 border border-fuchsia-400 ${isAiAnalyzing ? 'animate-pulse opacity-75' : ''}`}
+                          >
+                            <Activity className="w-4 h-4" />
+                            <span>{isAiAnalyzing ? 'AI Sedang Mengekstrak & Menganalisis Fail...' : '🔄 Ulang Analisis & Ekstrak Pintar AI'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative border-2 border-dashed border-slate-800 hover:border-cyan-500/50 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-950/40">
+                          <input 
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const fileSizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                              if (file.type.startsWith('image/')) {
+                                const compressedUrl = await compressImageFile(file);
+                                const docObj = {
+                                  name: file.name,
+                                  type: file.type,
+                                  size: `${fileSizeMb} MB`,
+                                  data_url: compressedUrl
+                                };
+                                setMrUploadedDoc(docObj);
+                                handleAiAnalysis(compressedUrl, file.name);
+                              } else {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  const docObj = {
+                                    name: file.name,
+                                    type: file.type,
+                                    size: `${fileSizeMb} MB`,
+                                    data_url: dataUrl
+                                  };
+                                  setMrUploadedDoc(docObj);
+                                  handleAiAnalysis(dataUrl, file.name);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                          <Upload className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                          <p className="text-xs text-slate-300 font-bold">Pilih Fail Laporan Darah atau Ambil Gambar</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">AI akan automatik mengekstrak data dari dokumen PDF atau Imej tanpa rekaan</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* LABORATORY RESULTS INPUT CATEGORIES */}
+                    <div className="space-y-4 border-t border-slate-850 pt-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-white block uppercase tracking-wider">Kemasukan Parameter Makmal Sebenar (Hanya Dari Dokumen)</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHb(''); setWbc(''); setPlatelet('');
+                            setUrea(''); setCreatinine(''); setEgfr(''); setCalcium(''); setPhosphate(''); setPotassium(''); setSodium('');
+                            setGlucose(''); setHba1c('');
+                            setCholesterol(''); setLdl(''); setHdl(''); setTriglycerides('');
+                            setOtherTestsList([]);
+                          }}
+                          className="text-[11px] text-rose-400 hover:text-rose-300 underline font-bold"
+                        >
+                          Kosongkan Semua Kotak
+                        </button>
+                      </div>
+
+                      {/* HEMATOLOGY */}
+                      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                        <span className="text-xs font-bold text-red-400 block border-b border-slate-850 pb-1.5 uppercase font-mono tracking-wider">🩸 Hematologi / Profil Sel Darah</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Hemoglobin (Hb) (g/dL)</span>
+                            <input 
+                              type="text" placeholder="-" value={hb} onChange={(e) => setHb(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">White Blood Cell (WBC) (x10^9/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={wbc} onChange={(e) => setWbc(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Platelet (x10^9/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={platelet} onChange={(e) => setPlatelet(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RENAL */}
+                      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                        <span className="text-xs font-bold text-cyan-400 block border-b border-slate-850 pb-1.5 uppercase font-mono tracking-wider">⚙️ Profil Ginjal & Elektrolit Dialisis</span>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Urea (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={urea} onChange={(e) => setUrea(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Creatinine (umol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={creatinine} onChange={(e) => setCreatinine(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">eGFR (mL/min/1.73m2)</span>
+                            <input 
+                              type="text" placeholder="-" value={egfr} onChange={(e) => setEgfr(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Calcium (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={calcium} onChange={(e) => setCalcium(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Phosphate (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={phosphate} onChange={(e) => setPhosphate(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Potassium (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={potassium} onChange={(e) => setPotassium(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-1">Sodium (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={sodium} onChange={(e) => setSodium(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* DIABETES & LIPID */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                          <span className="text-xs font-bold text-amber-400 block border-b border-slate-850 pb-1.5 uppercase font-mono tracking-wider">🍬 Kencing Manis (Diabetes)</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-1">Glucose (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={glucose} onChange={(e) => setGlucose(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-1">HbA1c (%)</span>
+                              <input 
+                                type="text" placeholder="-" value={hba1c} onChange={(e) => setHba1c(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                          <span className="text-xs font-bold text-emerald-400 block border-b border-slate-850 pb-1.5 uppercase font-mono tracking-wider">🍔 Profil Lipid / Kolesterol</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-1">Cholesterol (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={cholesterol} onChange={(e) => setCholesterol(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-1">LDL (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={ldl} onChange={(e) => setLdl(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-1">HDL (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={hdl} onChange={(e) => setHdl(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-1">Triglycerides (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={triglycerides} onChange={(e) => setTriglycerides(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none font-mono text-center"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* OTHER TESTS */}
+                      <div className="bg-[#0e1626] p-4 rounded-2xl border border-slate-800 space-y-3">
+                        <span className="text-xs font-bold text-fuchsia-400 block border-b border-slate-800 pb-1.5 uppercase font-mono tracking-wider">🧪 Ujian / Keputusan Makmal Lain (Tambahan)</span>
+                        
+                        {otherTestsList.length > 0 && (
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                            {otherTestsList.map((ot, idx) => (
+                              <div key={idx} className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs flex justify-between items-center">
+                                <div>
+                                  <span className="font-extrabold text-white">{ot.test_name}:</span>{' '}
+                                  <span className="font-mono text-cyan-300 font-bold">{ot.result} {ot.unit}</span>{' '}
+                                  <span className="text-slate-400 text-[10px]">({ot.range || 'Tiada Julat Sasaran'})</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-md font-black uppercase ${
+                                    ot.status === 'HIGH' ? 'bg-rose-950 text-rose-300 border border-rose-800' :
+                                    ot.status === 'LOW' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                                    'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                  }`}>{ot.status}</span>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => setOtherTestsList(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-rose-400 hover:text-rose-300 px-1 font-bold cursor-pointer"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+                          <div className="col-span-2 sm:col-span-1">
+                            <span className="text-[9px] text-slate-400 block mb-0.5">Nama Ujian</span>
+                            <input 
+                              type="text" placeholder="cth: Albumin" value={customTestName} onChange={(e) => setCustomTestName(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block mb-0.5">Keputusan</span>
+                            <input 
+                              type="text" placeholder="cth: 38" value={customTestResult} onChange={(e) => setCustomTestResult(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block mb-0.5">Unit</span>
+                            <input 
+                              type="text" placeholder="cth: g/L" value={customTestUnit} onChange={(e) => setCustomTestUnit(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block mb-0.5">Julat Standard</span>
+                            <input 
+                              type="text" placeholder="cth: 35 - 50" value={customTestRange} onChange={(e) => setCustomTestRange(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                            />
+                          </div>
+                          <div>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                if (!customTestName || !customTestResult) return;
+                                setOtherTestsList(prev => [...prev, {
+                                  test_name: customTestName,
+                                  result: customTestResult,
+                                  unit: customTestUnit,
+                                  range: customTestRange,
+                                  status: customTestStatus
+                                }]);
+                                setCustomTestName('');
+                                setCustomTestResult('');
+                                setCustomTestUnit('');
+                                setCustomTestRange('');
+                                setCustomTestStatus('NORMAL');
+                              }}
+                              className="w-full bg-fuchsia-900 hover:bg-fuchsia-800 text-white font-extrabold text-xs py-2 rounded-lg cursor-pointer transition-colors min-h-[34px]"
+                            >
+                              + Tambah
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* WRITTEN NOTES SECTION */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-850 pt-4">
+                      {/* CLINICAL NOTES */}
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Catatan Klinikal Jururawat:</label>
+                        <textarea 
+                          value={mrClinicalNotes}
+                          onChange={(e) => setMrClinicalNotes(e.target.value)}
+                          placeholder="Masukkan rumusan klinikal untuk keputusan makmal pesakit..."
+                          rows={3}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* DOCTOR COMMENTS */}
+                      <div>
+                        <label className="text-[11px] font-bold text-cyan-400 block mb-1 uppercase tracking-wider font-mono flex items-center gap-1">
+                          <Stethoscope className="w-3.5 h-3.5" />
+                          <span>Komen / Ulasan Doktor (Pilihan):</span>
+                        </label>
+                        <textarea 
+                          value={mrDoctorComments}
+                          onChange={(e) => setMrDoctorComments(e.target.value)}
+                          placeholder="Masukkan komen rasmi atau arahan rawatan tambahan daripada doktor..."
+                          rows={3}
+                          className="w-full bg-slate-950 border border-cyan-900/60 rounded-xl px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* AI ANALYSIS GENERATED DISPLAY */}
+                    <div>
+                      <label className="text-[11px] font-bold text-fuchsia-400 block mb-1 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Analisis Rumusan Kesihatan AI:</span>
+                      </label>
+                      <textarea 
+                        value={mrAiAnalysisNotes}
+                        onChange={(e) => setMrAiAnalysisNotes(e.target.value)}
+                        placeholder="Ulasan kesihatan automatik oleh AI akan terpapar di sini selepas butang Jalankan Ekstrak AI diklik..."
+                        rows={4}
+                        className="w-full bg-[#120f21] border border-fuchsia-900/60 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-fuchsia-500"
+                      />
+                    </div>
+
+                    {/* FORM ACTION BUTTONS */}
+                    <div className="flex space-x-3 pt-2">
+                      <button 
+                        type="button"
+                        onClick={handleSaveMr}
+                        className="flex-1 min-h-[46px] bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-extrabold rounded-xl text-sm cursor-pointer transition-all flex items-center justify-center space-x-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Simpan Rekod Keputusan</span>
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => { setShowAddMedicalRecordForm(false); resetMrForm(); }}
+                        className="px-6 bg-slate-850 hover:bg-slate-800 text-slate-300 font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ==================== LIST VIEW FOR PATIENT ==================== */
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-3xl border border-slate-850 shadow-md">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Status Rekod</span>
+                        <strong className="text-base font-black text-white">
+                          {medicalRecords.filter(r => r.patient_id === selectedPatientForBloodTab.id).length} Rekod Tersedia Untuk Pesakit Ini
+                        </strong>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => { resetMrForm(); setShowAddMedicalRecordForm(true); }}
+                        className="min-h-[40px] px-4 py-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-black text-xs rounded-xl flex items-center space-x-1 shadow-md shadow-rose-950 cursor-pointer transition-all border border-rose-500"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                        <span>TAMBAH REKOD BARU</span>
+                      </button>
+                    </div>
+
+                    {medicalRecords.filter(r => r.patient_id === selectedPatientForBloodTab.id).length === 0 ? (
+                      <div className="text-center py-12 bg-slate-900 rounded-3xl border border-slate-850 space-y-3 shadow-md">
+                        <Activity className="w-12 h-12 text-slate-700 mx-auto animate-pulse" />
+                        <div>
+                          <p className="font-bold text-slate-350">Tiada Sebarang Rekod Darah Diperoleh</p>
+                          <p className="text-xs text-slate-500 max-w-md mx-auto">Sila mulakan kemasukan rekod berkala 3-bulanan pertama untuk pesakit ini dengan menekan butang di bawah.</p>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => { resetMrForm(); setShowAddMedicalRecordForm(true); }}
+                          className="px-4 py-2 bg-slate-950 hover:bg-slate-900 text-cyan-400 font-bold text-xs rounded-xl border border-slate-800 cursor-pointer"
+                        >
+                          Mula Tambah Rekod Sekarang
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3.5 pr-1 max-h-[60vh] overflow-y-auto">
+                        {[...medicalRecords]
+                          .filter(r => r.patient_id === selectedPatientForBloodTab.id)
+                          .sort((a, b) => new Date(b.examination_date).getTime() - new Date(a.examination_date).getTime())
+                          .map((r) => (
+                            <div key={r.id} className="bg-slate-900 border border-slate-850 p-4 sm:p-5 rounded-2xl hover:border-slate-800 transition-all space-y-3 shadow-md">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-2">
+                                <div>
+                                  <div className="flex items-center space-x-2">
+                                    <strong className="text-white text-sm font-extrabold block">{r.examination_type}</strong>
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                                      r.status === 'Perlu Tindakan' ? 'bg-rose-950 text-rose-300 border-rose-800 animate-pulse' :
+                                      r.status === 'Menunggu Keputusan' ? 'bg-amber-950/70 text-amber-300 border-amber-800' :
+                                      'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                    }`}>
+                                      {r.status}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-400">Tarikh Pemeriksaan: <strong className="text-slate-200">{r.examination_date}</strong></span>
+                                </div>
+                                <div className="flex items-center space-x-1.5 self-end sm:self-center">
+                                  <button 
+                                    type="button"
+                                    onClick={() => startEditMr(r)}
+                                    className="px-2.5 py-1 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                                  >
+                                    EDIT / KEMASKINI
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteMr(r.id)}
+                                    className="px-2.5 py-1 bg-rose-950/50 hover:bg-rose-900/60 border border-rose-900 text-rose-300 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                                  >
+                                    PADAM
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Highlights */}
+                              <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850">
+                                  <span className="text-[10px] text-slate-400 block font-semibold">Potassium</span>
+                                  <strong className="text-sm font-mono font-bold text-amber-300">
+                                    {r.blood_results?.renal?.potassium ? `${r.blood_results.renal.potassium} mmol/L` : '-'}
+                                  </strong>
+                                </div>
+                                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850">
+                                  <span className="text-[10px] text-slate-400 block font-semibold">Phosphate</span>
+                                  <strong className="text-sm font-mono font-bold text-cyan-300">
+                                    {r.blood_results?.renal?.phosphate ? `${r.blood_results.renal.phosphate} mmol/L` : '-'}
+                                  </strong>
+                                </div>
+                                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850">
+                                  <span className="text-[10px] text-slate-400 block font-semibold">Hemoglobin</span>
+                                  <strong className="text-sm font-mono font-bold text-red-400">
+                                    {r.blood_results?.hematology?.hemoglobin ? `${r.blood_results.hematology.hemoglobin} g/dL` : '-'}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              {r.clinical_notes && (
+                                <p className="text-[11px] text-slate-300 leading-relaxed bg-slate-950/50 p-2.5 rounded-xl border border-slate-850/60">
+                                  <strong>Catatan Klinikal Jururawat:</strong> {r.clinical_notes}
+                                </p>
+                              )}
+
+                              {r.doctor_comments && (
+                                <p className="text-[11px] text-cyan-300 leading-relaxed bg-cyan-950/20 p-2.5 rounded-xl border border-cyan-900/40">
+                                  <strong>Komen / Ulasan Doktor:</strong> {r.doctor_comments}
+                                </p>
+                              )}
+
+                              {r.ai_analysis_notes && (
+                                <p className="text-[11px] text-fuchsia-300 leading-relaxed bg-fuchsia-950/20 p-2.5 rounded-xl border border-fuchsia-900/30">
+                                  <strong>Rumusan Analisis AI:</strong> {r.ai_analysis_notes}
+                                </p>
+                              )}
+
+                              {r.report_document && (
+                                <div className="flex items-center justify-between text-xs bg-[#11243b] p-3 rounded-xl border border-[#1d3d5e]">
+                                  <span className="text-slate-300 flex items-center gap-1.5 font-medium">
+                                    <FileText className="w-4 h-4 text-emerald-400" />
+                                    <span>Laporan Asal: {r.report_document.name}</span>
+                                  </span>
+                                  <a 
+                                    href={r.report_document.data_url}
+                                    download={r.report_document.name}
+                                    className="text-cyan-400 hover:text-cyan-300 font-bold underline text-xs"
+                                  >
+                                    Muat Turun Laporan
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -3174,6 +4434,7 @@ export function NursePortal({
             <div className="flex space-x-1 overflow-x-auto pb-2 border-b border-slate-800 text-xs font-bold">
               {[
                 { id: 'ringkasan', label: 'RINGKASAN' },
+                { id: 'darah', label: '🩺 REKOD DARAH & PERUBATAN' },
                 { id: 'maklumat', label: 'MAKLUMAT PESAKIT' },
                 { id: 'jadual', label: 'JADUAL DIALISIS' },
                 { id: 'rekod', label: 'REKOD DIALISIS' },
@@ -3211,7 +4472,7 @@ export function NursePortal({
                   </div>
 
                   <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Umur (Tahun & Hari)</span>
+                    <span className="text-[11px] text-slate-400 block font-semibold">Umur</span>
                     {(() => {
                       const icData = parseMalaysianIC(selectedPatientForDetail.ic_number);
                       return (
@@ -3308,6 +4569,564 @@ export function NursePortal({
                   </div>
                   <span className="text-xs text-emerald-400 font-bold bg-emerald-950 px-2.5 py-1 rounded">Disahkan</span>
                 </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: REKOD DARAH & PERUBATAN (NURSE WORKFLOW) */}
+            {patientDetailTab === 'darah' && (
+              <div className="space-y-4">
+                {showAddMedicalRecordForm ? (
+                  /* CREATE / EDIT FORM */
+                  <div className="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <h4 className="text-sm sm:text-base font-black text-rose-400 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-rose-500 animate-pulse" />
+                        <span>{editingMedicalRecord ? 'Kemas kini Rekod Keputusan' : 'Tambah Rekod Keputusan Makmal Baharu'}</span>
+                      </h4>
+                      <button 
+                        type="button"
+                        onClick={() => { setShowAddMedicalRecordForm(false); resetMrForm(); }}
+                        className="text-xs text-slate-400 hover:text-white font-bold bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg"
+                      >
+                        Batal
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Tarikh Pemeriksaan:</label>
+                        <input 
+                          type="date"
+                          value={mrExamDate}
+                          onChange={(e) => setMrExamDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Jenis Pemeriksaan:</label>
+                        <select 
+                          value={mrExamType}
+                          onChange={(e) => setMrExamType(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
+                        >
+                          <option value="Pemeriksaan Berkala 3 Bulan">Pemeriksaan Berkala 3 Bulan</option>
+                          <option value="Pemeriksaan Tahunan">Pemeriksaan Tahunan</option>
+                          <option value="Pemeriksaan Khas">Pemeriksaan Khas</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Status Keputusan:</label>
+                        <select 
+                          value={mrExamStatus}
+                          onChange={(e) => setMrExamStatus(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
+                        >
+                          <option value="Keputusan Tersedia">Keputusan Tersedia</option>
+                          <option value="Menunggu Keputusan">Menunggu Keputusan</option>
+                          <option value="Perlu Tindakan">Perlu Tindakan</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* LABORATORY RESULTS INPUT CATEGORIES */}
+                    <div className="space-y-4 border-t border-slate-800 pt-3">
+                      <span className="text-xs font-black text-white block uppercase tracking-wider">Kemasukan Parameter Makmal</span>
+
+                      {/* HEMATOLOGY */}
+                      <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+                        <span className="text-xs font-bold text-red-400 block border-b border-slate-800 pb-1">HEMATOLOGY</span>
+                        <div className="grid grid-cols-3 gap-2.5">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Hemoglobin (Hb) (g/dL)</span>
+                            <input 
+                              type="text" placeholder="-" value={hb} onChange={(e) => setHb(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">WBC (x10^9/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={wbc} onChange={(e) => setWbc(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Platelet (x10^9/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={platelet} onChange={(e) => setPlatelet(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RENAL */}
+                      <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+                        <span className="text-xs font-bold text-cyan-400 block border-b border-slate-800 pb-1">RENAL & ELEKTROLIT</span>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Urea (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={urea} onChange={(e) => setUrea(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Creatinine (umol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={creatinine} onChange={(e) => setCreatinine(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">eGFR (mL/min)</span>
+                            <input 
+                              type="text" placeholder="-" value={egfr} onChange={(e) => setEgfr(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Calcium (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={calcium} onChange={(e) => setCalcium(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Phosphate (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={phosphate} onChange={(e) => setPhosphate(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Potassium (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={potassium} onChange={(e) => setPotassium(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block mb-0.5">Sodium (mmol/L)</span>
+                            <input 
+                              type="text" placeholder="-" value={sodium} onChange={(e) => setSodium(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* DIABETES & LIPID */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+                          <span className="text-xs font-bold text-amber-400 block border-b border-slate-800 pb-1">KENCING MANIS (DIABETES)</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-0.5">Glucose (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={glucose} onChange={(e) => setGlucose(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-0.5">HbA1c (%)</span>
+                              <input 
+                                type="text" placeholder="-" value={hba1c} onChange={(e) => setHba1c(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+                          <span className="text-xs font-bold text-emerald-400 block border-b border-slate-800 pb-1">PROFIL KOLESTEROL (LIPID)</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-0.5">Cholesterol (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={cholesterol} onChange={(e) => setCholesterol(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-0.5">LDL (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={ldl} onChange={(e) => setLdl(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-0.5">HDL (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={hdl} onChange={(e) => setHdl(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 block mb-0.5">Triglycerides (mmol/L)</span>
+                              <input 
+                                type="text" placeholder="-" value={triglycerides} onChange={(e) => setTriglycerides(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white focus:border-rose-500 focus:outline-none text-center font-mono"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* OTHER TESTS LIST / ADD */}
+                      <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 space-y-3">
+                        <span className="text-xs font-bold text-fuchsia-400 block border-b border-slate-800 pb-1">UJIAN LAIN-LAIN (TAMBAHAN)</span>
+                        
+                        {otherTestsList.length > 0 && (
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                            {otherTestsList.map((ot, idx) => (
+                              <div key={idx} className="bg-slate-950 p-2 rounded border border-slate-800 text-xs flex justify-between items-center">
+                                <div>
+                                  <span className="font-bold text-white">{ot.test_name}:</span>{' '}
+                                  <span className="font-mono text-cyan-300">{ot.result} {ot.unit}</span>{' '}
+                                  <span className="text-slate-400 text-[10px]">({ot.range || 'Tiada Julat'})</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
+                                    ot.status === 'HIGH' ? 'bg-rose-950 text-rose-300 border border-rose-800' :
+                                    ot.status === 'LOW' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                                    'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                  }`}>{ot.status}</span>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => setOtherTestsList(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-rose-400 hover:text-rose-300"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 items-end">
+                          <div className="col-span-2 sm:col-span-1">
+                            <span className="text-[9px] text-slate-400 block">Nama Ujian</span>
+                            <input 
+                              type="text" placeholder="Albumin" value={customTestName} onChange={(e) => setCustomTestName(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block">Keputusan</span>
+                            <input 
+                              type="text" placeholder="38" value={customTestResult} onChange={(e) => setCustomTestResult(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block">Unit</span>
+                            <input 
+                              type="text" placeholder="g/L" value={customTestUnit} onChange={(e) => setCustomTestUnit(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block">Julat Rujukan</span>
+                            <input 
+                              type="text" placeholder="35 - 50" value={customTestRange} onChange={(e) => setCustomTestRange(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                if (!customTestName || !customTestResult) return;
+                                setOtherTestsList(prev => [...prev, {
+                                  test_name: customTestName,
+                                  result: customTestResult,
+                                  unit: customTestUnit,
+                                  range: customTestRange,
+                                  status: customTestStatus
+                                }]);
+                                setCustomTestName('');
+                                setCustomTestResult('');
+                                setCustomTestUnit('');
+                                setCustomTestRange('');
+                                setCustomTestStatus('NORMAL');
+                              }}
+                              className="w-full bg-fuchsia-900 hover:bg-fuchsia-800 text-white font-bold text-xs py-1.5 rounded cursor-pointer transition-colors"
+                            >
+                              + Tambah
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CLINICAL NOTES */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-300 block mb-1">Catatan Klinikal Jururawat:</label>
+                      <textarea 
+                        value={mrClinicalNotes}
+                        onChange={(e) => setMrClinicalNotes(e.target.value)}
+                        placeholder="Masukkan rumusan klinikal untuk keputusan makmal pesakit..."
+                        rows={3}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-rose-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* DOCTOR COMMENTS */}
+                    <div>
+                      <label className="text-[11px] font-bold text-cyan-400 block mb-1 uppercase tracking-wider font-mono flex items-center gap-1">
+                        <Stethoscope className="w-3.5 h-3.5" />
+                        <span>Komen / Ulasan Doktor (Pilihan):</span>
+                      </label>
+                      <textarea 
+                        value={mrDoctorComments}
+                        onChange={(e) => setMrDoctorComments(e.target.value)}
+                        placeholder="Masukkan komen rasmi atau arahan rawatan tambahan daripada doktor..."
+                        rows={3}
+                        className="w-full bg-slate-900 border border-cyan-900/60 rounded-xl px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* AI ANALYSIS NOTES */}
+                    <div>
+                      <label className="text-[11px] font-bold text-fuchsia-400 block mb-1 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>Analisis Rumusan Kesihatan AI:</span>
+                      </label>
+                      <textarea 
+                        value={mrAiAnalysisNotes}
+                        onChange={(e) => setMrAiAnalysisNotes(e.target.value)}
+                        placeholder="Ulasan kesihatan automatik oleh AI akan terpapar di sini selepas butang Ekstrak AI diklik..."
+                        rows={4}
+                        className="w-full bg-[#120f21] border border-fuchsia-900/60 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-fuchsia-500"
+                      />
+                      <p className="text-[10px] text-fuchsia-400/80 mt-1">Ulasan ini juga akan terpapar terus pada portal pesakit sebagai bimbingan warga emas.</p>
+                    </div>
+
+                    {/* UPLOAD ORIGINAL REPORT */}
+                    <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 space-y-2">
+                      <span className="text-xs font-bold text-white block">Muat Naik Laporan Makmal Asal (Sokongan Fail)</span>
+                      
+                      {mrUploadedDoc ? (
+                        <div className="space-y-2">
+                          <div className="bg-slate-950 p-3 rounded-lg border border-emerald-800 flex justify-between items-center text-xs">
+                            <div>
+                              <p className="font-bold text-emerald-400">{mrUploadedDoc.name}</p>
+                              <p className="text-[10px] text-slate-400">{mrUploadedDoc.size} ({mrUploadedDoc.type})</p>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => { setMrUploadedDoc(null); setMrAiAnalysisNotes(''); }}
+                              className="bg-rose-950 text-rose-300 hover:bg-rose-900 px-2 py-1 rounded border border-rose-800"
+                            >
+                              Padam
+                            </button>
+                          </div>
+                          
+                          {/* AI Extract & Analysis Button */}
+                          <button
+                            type="button"
+                            disabled={isAiAnalyzing}
+                            onClick={() => handleAiAnalysis(mrUploadedDoc.data_url, mrUploadedDoc.name)}
+                            className={`w-full min-h-[40px] px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center space-x-2 border border-fuchsia-400 ${isAiAnalyzing ? 'animate-pulse opacity-75' : ''}`}
+                          >
+                            <Activity className="w-4 h-4" />
+                            <span>{isAiAnalyzing ? 'AI Sedang Mengekstrak & Menganalisis Fail...' : '🔄 Ulang Analisis & Ekstrak Pintar AI'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative border-2 border-dashed border-slate-800 hover:border-cyan-500/50 rounded-xl p-4 text-center cursor-pointer transition-colors">
+                          <input 
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const fileSizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                              if (file.type.startsWith('image/')) {
+                                const compressedUrl = await compressImageFile(file);
+                                const docObj = {
+                                  name: file.name,
+                                  type: file.type,
+                                  size: `${fileSizeMb} MB`,
+                                  data_url: compressedUrl
+                                };
+                                setMrUploadedDoc(docObj);
+                                handleAiAnalysis(compressedUrl, file.name);
+                              } else {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  const docObj = {
+                                    name: file.name,
+                                    type: file.type,
+                                    size: `${fileSizeMb} MB`,
+                                    data_url: dataUrl
+                                  };
+                                  setMrUploadedDoc(docObj);
+                                  handleAiAnalysis(dataUrl, file.name);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                          <Upload className="w-6 h-6 text-slate-500 mx-auto mb-1.5" />
+                          <p className="text-xs text-slate-300 font-bold">Pilih Fail / Ambil Gambar Laporan</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">AI akan automatik mengekstrak data dari dokumen PDF atau Imej tanpa sebarang rekaan</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* FORM ACTION BUTTONS */}
+                    <div className="flex space-x-2 pt-2">
+                      <button 
+                        type="button"
+                        onClick={handleSaveMr}
+                        className="flex-1 min-h-[44px] bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-bold rounded-xl text-sm cursor-pointer transition-all flex items-center justify-center space-x-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Simpan Rekod Keputusan</span>
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => { setShowAddMedicalRecordForm(false); resetMrForm(); }}
+                        className="px-5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-sm cursor-pointer transition-colors"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* LIST CHRONOLOGICAL RECORDS */
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 block">Jumlah Rekod Tersedia</span>
+                        <strong className="text-lg font-black text-white">
+                          {medicalRecords.filter(r => r.patient_id === selectedPatientForDetail.id).length} Rekod
+                        </strong>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => { resetMrForm(); setShowAddMedicalRecordForm(true); }}
+                        className="min-h-[40px] px-4 py-1.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-extrabold text-xs rounded-xl flex items-center space-x-1.5 shadow-md shadow-rose-950 cursor-pointer transition-all"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                        <span>TAMBAH REKOD BARU</span>
+                      </button>
+                    </div>
+
+                    {medicalRecords.filter(r => r.patient_id === selectedPatientForDetail.id).length === 0 ? (
+                      <div className="text-center py-12 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                        <Activity className="w-12 h-12 text-slate-600 mx-auto animate-pulse" />
+                        <div>
+                          <p className="font-bold text-slate-300">Tiada Rekod Perubatan & Darah</p>
+                          <p className="text-xs text-slate-500">Sila tambah pemeriksaan berkala 3 bulan untuk merekodkan keputusan makmal pesakit ini.</p>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => { resetMrForm(); setShowAddMedicalRecordForm(true); }}
+                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-cyan-400 font-bold text-xs rounded-lg border border-slate-800 cursor-pointer"
+                        >
+                          Mula Rekod Sekarang
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                        {[...medicalRecords]
+                          .filter(r => r.patient_id === selectedPatientForDetail.id)
+                          .sort((a, b) => new Date(b.examination_date).getTime() - new Date(a.examination_date).getTime())
+                          .map((r) => (
+                            <div key={r.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 hover:border-slate-700 transition-all space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-2">
+                                <div>
+                                  <div className="flex items-center space-x-2">
+                                    <strong className="text-white text-sm font-bold block">{r.examination_type}</strong>
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                                      r.status === 'Perlu Tindakan' ? 'bg-rose-950 text-rose-300 border-rose-800 animate-pulse' :
+                                      r.status === 'Menunggu Keputusan' ? 'bg-amber-950/70 text-amber-300 border-amber-800' :
+                                      'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                    }`}>
+                                      {r.status}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-400">Tarikh Pemeriksaan: <strong className="text-slate-200">{r.examination_date}</strong></span>
+                                </div>
+                                <div className="flex items-center space-x-1.5 self-end sm:self-center">
+                                  <button 
+                                    type="button"
+                                    onClick={() => startEditMr(r)}
+                                    className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[10px] font-bold rounded cursor-pointer"
+                                  >
+                                    KEMASKINI / EDIT
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteMr(r.id)}
+                                    className="px-2 py-1 bg-rose-950/50 hover:bg-rose-900/60 border border-rose-900 text-rose-300 text-[10px] font-bold rounded cursor-pointer"
+                                  >
+                                    PADAM
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Highlights */}
+                              <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                                  <span className="text-[10px] text-slate-400 block font-semibold">Potassium</span>
+                                  <strong className="text-sm font-mono font-bold text-amber-300">
+                                    {r.blood_results?.renal?.potassium ? `${r.blood_results.renal.potassium} mmol/L` : '-'}
+                                  </strong>
+                                </div>
+                                <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                                  <span className="text-[10px] text-slate-400 block font-semibold">Phosphate</span>
+                                  <strong className="text-sm font-mono font-bold text-cyan-300">
+                                    {r.blood_results?.renal?.phosphate ? `${r.blood_results.renal.phosphate} mmol/L` : '-'}
+                                  </strong>
+                                </div>
+                                <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                                  <span className="text-[10px] text-slate-400 block font-semibold">Hemoglobin</span>
+                                  <strong className="text-sm font-mono font-bold text-red-400">
+                                    {r.blood_results?.hematology?.hemoglobin ? `${r.blood_results.hematology.hemoglobin} g/dL` : '-'}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              {r.clinical_notes && (
+                                <p className="text-[11px] text-slate-300 leading-relaxed bg-slate-900/50 p-2 rounded border border-slate-900">
+                                  <strong>Catatan Klinikal Jururawat:</strong> {r.clinical_notes}
+                                </p>
+                              )}
+
+                              {r.doctor_comments && (
+                                <p className="text-[11px] text-cyan-300 leading-relaxed bg-cyan-950/20 p-2 rounded border border-cyan-900/40">
+                                  <strong>Komen / Ulasan Doktor:</strong> {r.doctor_comments}
+                                </p>
+                              )}
+
+                              {r.report_document && (
+                                <div className="flex items-center justify-between text-xs bg-slate-900 p-2.5 rounded border border-slate-800">
+                                  <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Laporan Asal: {r.report_document.name}</span>
+                                  </span>
+                                  <a 
+                                    href={r.report_document.data_url}
+                                    download={r.report_document.name}
+                                    className="text-cyan-400 hover:text-cyan-300 font-bold underline text-[11px]"
+                                  >
+                                    Lihat Laporan Asal
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

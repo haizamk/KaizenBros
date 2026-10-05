@@ -39,8 +39,8 @@ export interface DialysisSession {
   patient_id: number;
   patient_id_code: string;
   patient_name: string;
-  chair_id: number;
-  chair_number: string;
+  chair_id?: number;
+  chair_number?: string;
   machine_id?: number;
   machine_model?: string;
   scheduled_date: string;
@@ -54,9 +54,9 @@ export interface DialysisSession {
   status_reason?: string;
   status: SessionStatus;
   dry_weight_kg: number;
-  pre_weight_kg: number;
+  pre_weight_kg?: number;
   post_weight_kg?: number;
-  target_uf_litres: number;
+  target_uf_litres?: number;
   actual_uf_litres?: number;
   pre_bp?: string;
   post_bp?: string;
@@ -220,6 +220,10 @@ export interface NewRegistration {
   state: string;
   patient_category: string;
   medical_notes?: string;
+  nok_name?: string;
+  nok_relationship?: string;
+  nok_phone?: string;
+  nok_email?: string;
   document?: PatientRegistrationDoc;
   sponsor_type?: string;
   preferred_days?: string;
@@ -284,3 +288,56 @@ export interface User {
   last_login_at?: string;
   created_at: string;
 }
+
+export interface BloodResults {
+  hematology?: {
+    hemoglobin?: string | number;
+    wbc?: string | number;
+    platelet?: string | number;
+  };
+  renal?: {
+    urea?: string | number;
+    creatinine?: string | number;
+    egfr?: string | number;
+    calcium?: string | number;
+    phosphate?: string | number;
+    potassium?: string | number;
+    sodium?: string | number;
+  };
+  diabetes?: {
+    glucose?: string | number;
+    hba1c?: string | number;
+  };
+  lipid?: {
+    cholesterol?: string | number;
+    ldl?: string | number;
+    hdl?: string | number;
+    triglycerides?: string | number;
+  };
+  other_tests?: Array<{
+    test_name: string;
+    result: string;
+    unit: string;
+    range?: string;
+    status?: 'NORMAL' | 'HIGH' | 'LOW' | 'NEEDS_REVIEW' | string;
+  }>;
+}
+
+export interface MedicalRecord {
+  id: string | number;
+  patient_id: number;
+  patient_id_code: string;
+  patient_name: string;
+  examination_date: string;
+  examination_type: 'Pemeriksaan Berkala 3 Bulan' | 'Pemeriksaan Tahunan' | 'Pemeriksaan Khas' | string;
+  status: 'Keputusan Tersedia' | 'Menunggu Keputusan' | 'Perlu Tindakan' | string;
+  clinical_notes?: string;
+  doctor_comments?: string;
+  ai_analysis_notes?: string;
+  report_document?: PatientRegistrationDoc;
+  blood_results: BloodResults;
+  created_at: string;
+  updated_at?: string;
+  created_by?: string;
+}
+
