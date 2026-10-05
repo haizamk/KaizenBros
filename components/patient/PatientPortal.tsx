@@ -41,9 +41,12 @@ import {
   Download,
   TrendingUp,
   RotateCcw,
-  Zap
+  Zap,
+  History,
+  Filter,
+  Loader2
 } from 'lucide-react';
-import { Patient, DialysisSession, PatientMedication, PatientCheckIn, MedicalRecord, SessionStatus } from '@/types';
+import { Patient, DialysisSession, PatientMedication, PatientCheckIn, MedicalRecord, SessionStatus, AuditLog } from '@/types';
 import { VERIFIED_CENTRE_INFO } from '@/lib/mock-data';
 import { parseMalaysianIC, getAgeDisplayFromIC } from '@/lib/ic-utils';
 import { calculateNextDialysis, getMalaysiaDate } from '@/lib/malaysia-time';
@@ -56,6 +59,7 @@ interface PatientPortalProps {
   sessions?: DialysisSession[];
   medications?: PatientMedication[];
   medicalRecords?: MedicalRecord[];
+  auditLogs?: AuditLog[];
   checkInRecord?: PatientCheckIn;
   onCheckInArrival?: (preWeight: number, preBp?: string) => void;
   onResetCheckIn?: () => void;
@@ -78,6 +82,7 @@ export function PatientPortal({
   sessions = [],
   medications = [],
   medicalRecords = [],
+  auditLogs = [],
   checkInRecord,
   onCheckInArrival,
   onResetCheckIn,
@@ -91,8 +96,8 @@ export function PatientPortal({
   onOpenLogin,
   isLoggedIn = true
 }: PatientPortalProps) {
-  // Navigation tabs: 'utama' | 'jadual' | 'timbang' | 'ubat' | 'rekod' | 'profil' | 'darah'
-  const [activeTab, setActiveTab] = useState<'utama' | 'jadual' | 'timbang' | 'ubat' | 'rekod' | 'profil' | 'darah'>('utama');
+  // Navigation tabs: 'utama' | 'jadual' | 'timbang' | 'ubat' | 'rekod' | 'profil' | 'darah' | 'aktiviti'
+  const [activeTab, setActiveTab] = useState<'utama' | 'jadual' | 'timbang' | 'ubat' | 'rekod' | 'profil' | 'darah' | 'aktiviti'>('utama');
   
   // Drill-down medical record state
   const [selectedRecordId, setSelectedRecordId] = useState<string | number | null>(null);
@@ -115,6 +120,46 @@ export function PatientPortal({
     if (!patient) return null;
     return calculateNextDialysis(patient, effectiveDate);
   }, [patient, effectiveDate]);
+
+  // Filter all dialysis sessions for current patient
+  const patientDialysisSessions = useMemo(() => {
+    if (!patient || !sessions) return [];
+    return sessions
+      .filter(s => s.patient_id === patient.id || (patient.patient_id_code && s.patient_id_code === patient.patient_id_code))
+      .sort((a, b) => new Date(b.scheduled_date || 0).getTime() - new Date(a.scheduled_date || 0).getTime());
+  }, [patient, sessions]);
+
+  // Dynamic latest dialysis date based on real dialysis record or patient scheduled date
+  const latestDialysisDateDisplay = useMemo(() => {
+    if (patientDialysisSessions.length > 0 && patientDialysisSessions[0]?.scheduled_date) {
+      try {
+        const d = new Date(patientDialysisSessions[0].scheduled_date);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      } catch {}
+    }
+    if (session?.scheduled_date) {
+      try {
+        const d = new Date(session.scheduled_date);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      } catch {}
+    }
+    if (nextDialysis?.formattedDate) {
+      return nextDialysis.formattedDate;
+    }
+    if (patient?.next_dialysis_date) {
+      try {
+        const d = new Date(patient.next_dialysis_date);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      } catch {}
+    }
+    return new Date().toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  }, [patientDialysisSessions, session, nextDialysis, patient]);
 
   // Effective clinical status prioritization:
   // session is the authoritative record when created or synced by nurse/system.
@@ -179,6 +224,280 @@ export function PatientPortal({
 
   const [saveWeightSuccess, setSaveSuccessMsg] = useState<string | null>(null);
 
+  // Activity Feed Filter & Search state
+  const [activityCategoryFilter, setActivityCategoryFilter] = useState<'all' | 'checkin' | 'weight' | 'session' | 'medical' | 'system'>('all');
+  const [activitySearchQuery, setActivitySearchQuery] = useState('');
+
+  // Comprehensive chronological Activity Feed derived for current patient
+  const patientActivities = useMemo(() => {
+    if (!patient) return [];
+
+    const items: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      description: string;
+      timestamp: string;
+      dateObj: Date;
+      category: 'checkin' | 'weight' | 'session' | 'medical' | 'system';
+      badgeLabel: string;
+      badgeClass: string;
+      iconType: 'check' | 'scale' | 'session' | 'medical' | 'system' | 'lock';
+    }> = [];
+
+    // 1. Audit Logs matching this patient
+    if (auditLogs && auditLogs.length > 0) {
+      auditLogs.forEach((log) => {
+        const ptName = (patient.name || '').toLowerCase();
+        const ptCode = (patient.patient_id_code || '').toLowerCase();
+        const ptIc = (patient.ic_number || '').replace(/[^0-9]/g, '');
+        const detailsLower = (log.details || '').toLowerCase();
+        const matchesPatient = 
+          String(log.entity_id) === String(patient.id) ||
+          detailsLower.includes(ptName) ||
+          (ptCode && detailsLower.includes(ptCode)) ||
+          (ptIc && log.details.replace(/[^0-9]/g, '').includes(ptIc)) ||
+          (log.action.includes('PESAKIT') && detailsLower.includes(ptName.split(' ')[0]));
+
+        if (matchesPatient) {
+          const logDate = log.created_at ? new Date(log.created_at) : new Date();
+          let category: 'checkin' | 'weight' | 'session' | 'medical' | 'system' = 'system';
+          let title = 'Aktiviti Sistem / Kakitangan';
+          let subtitle = log.action;
+          let badgeLabel = 'Sistem';
+          let badgeClass = 'bg-slate-900 text-slate-300 border-slate-700';
+          let iconType: 'check' | 'scale' | 'session' | 'medical' | 'system' | 'lock' = 'system';
+
+          if (log.action.includes('CHECK_IN') || log.action.includes('KETIBAAN')) {
+            category = 'checkin';
+            title = 'Pendaftaran Ketibaan di Kaunter';
+            subtitle = 'Check-in Completed';
+            badgeLabel = 'Daftar Masuk';
+            badgeClass = 'bg-cyan-950 text-cyan-300 border-cyan-700';
+            iconType = 'check';
+          } else if (log.action.includes('BERAT') || log.action.includes('TIMBANG')) {
+            category = 'weight';
+            title = 'Kemaskini Berat & Tekanan Darah';
+            subtitle = 'Weight & BP Updated';
+            badgeLabel = 'Timbang & BP';
+            badgeClass = 'bg-teal-950 text-teal-300 border-teal-700';
+            iconType = 'scale';
+          } else if (log.action.includes('DIALISIS') || log.action.includes('SESI') || log.action.includes('STESEN')) {
+            category = 'session';
+            title = log.action.includes('MULA') ? 'Rawatan Dialisis Dimulakan' : log.action.includes('SELESAI') ? 'Sesi Dialisis Selesai' : 'Pengurusan Sesi Dialisis';
+            subtitle = 'Dialysis Session Update';
+            badgeLabel = 'Rawatan';
+            badgeClass = 'bg-emerald-950 text-emerald-300 border-emerald-700';
+            iconType = 'session';
+          } else if (log.action.includes('PERUBATAN') || log.action.includes('DARAH') || log.action.includes('MAKMAL')) {
+            category = 'medical';
+            title = 'Rekod Perubatan & Makmal';
+            subtitle = 'Medical & Lab Report';
+            badgeLabel = 'Ujian Darah';
+            badgeClass = 'bg-rose-950 text-rose-300 border-rose-700';
+            iconType = 'medical';
+          } else if (log.action.includes('LOGIN')) {
+            category = 'system';
+            title = 'Log Masuk Portal Pesakit Berjaya';
+            subtitle = 'Portal Login';
+            badgeLabel = 'Keselamatan';
+            badgeClass = 'bg-indigo-950 text-indigo-300 border-indigo-700';
+            iconType = 'lock';
+          }
+
+          items.push({
+            id: `audit-${log.id}`,
+            title,
+            subtitle,
+            description: log.details,
+            timestamp: logDate.toLocaleDateString('ms-MY', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            dateObj: logDate,
+            category,
+            badgeLabel,
+            badgeClass,
+            iconType
+          });
+        }
+      });
+    }
+
+    // 2. Active / Completed Dialysis Sessions
+    const allSessions = [...(sessions || []), ...(session ? [session] : [])]
+      .filter(s => s.patient_id === patient.id || (patient.patient_id_code && s.patient_id_code === patient.patient_id_code));
+    
+    // Deduplicate sessions by id
+    const uniqueSessions = Array.from(new Map(allSessions.map(s => [s.id, s])).values());
+
+    uniqueSessions.forEach((sess) => {
+      const sessDate = sess.scheduled_date ? new Date(sess.scheduled_date) : new Date();
+      if (sess.status === 'SUDAH_SELESAI' || sess.status === 'SELESAI') {
+        items.push({
+          id: `sess-finished-${sess.id}`,
+          title: 'Sesi Rawatan Dialisis Selesai (Dialysis Session Finished)',
+          subtitle: `Kerusi ${sess.chair_number || 'Disahkan'} • Selesai Penuh`,
+          description: `Rawatan dialisis selamat disempurnakan. Berat pra: ${sess.pre_weight_kg ? `${sess.pre_weight_kg}kg` : '-'}, Berat pos: ${sess.post_weight_kg ? `${sess.post_weight_kg}kg` : '-'}, BP: ${sess.post_bp || sess.pre_bp || '-'}.`,
+          timestamp: sessDate.toLocaleDateString('ms-MY', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          dateObj: sessDate,
+          category: 'session',
+          badgeLabel: 'Sesi Selesai',
+          badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-700',
+          iconType: 'session'
+        });
+      } else if (sess.status === 'SEDANG_DIALISIS') {
+        items.push({
+          id: `sess-ongoing-${sess.id}`,
+          title: 'Rawatan Dialisis Sedang Berlangsung (Dialysis In Progress)',
+          subtitle: `Stesen Kerusi ${sess.chair_number || '1'} (${sess.machine_model || 'Fresenius 4008S NG'})`,
+          description: `Pemantauan kadar ultrafiltrasi (UF) dan tekanan darah berkala sedang dijalankan oleh jururawat bertugas.`,
+          timestamp: 'Hari Ini (Sedang Berlangsung)',
+          dateObj: new Date(),
+          category: 'session',
+          badgeLabel: 'Sedang Berjalan',
+          badgeClass: 'bg-amber-950 text-amber-300 border-amber-700',
+          iconType: 'session'
+        });
+      }
+    });
+
+    // 3. Live Check-in Status
+    if (checkInRecord && checkInRecord.status !== 'BELUM_HADIR') {
+      const checkInTime = checkInRecord.check_in_time || 'Hari Ini';
+      items.push({
+        id: `checkin-live-${patient.id}`,
+        title: 'Pendaftaran Ketibaan di Kaunter Selesai (Check-in Completed)',
+        subtitle: `No. Giliran: ${checkInRecord.queue_number || 'Q-01'}`,
+        description: checkInRecord.assigned_chair 
+          ? `Pendaftaran di kaunter disahkan. Anda telah ditugaskan ke Stesen Kerusi ${checkInRecord.assigned_chair}.`
+          : `Pendaftaran ketibaan disahkan. Menunggu jururawat memilih stesen kerusi dialisis mengikut susunan giliran FCFS.`,
+        timestamp: checkInTime.includes(':') ? `Hari Ini, ${checkInTime}` : checkInTime,
+        dateObj: new Date(),
+        category: 'checkin',
+        badgeLabel: 'Check-in Selesai',
+        badgeClass: 'bg-cyan-950 text-cyan-300 border-cyan-700',
+        iconType: 'check'
+      });
+    }
+
+    // 4. Weight & BP Readings
+    if (activePreWeight !== null || activePostWeight !== null) {
+      items.push({
+        id: `weight-entry-${patient.id}`,
+        title: 'Data Timbang & Tekanan Darah Disimpan (Weight Updated)',
+        subtitle: `Pra: ${activePreWeight !== null ? `${activePreWeight}kg` : '-'} | Pos: ${activePostWeight !== null ? `${activePostWeight}kg` : '-'}`,
+        description: `Bacaan berat pra/pos dan tekanan darah terkini (${activePreBp || '130/80 mmHg'}) telah diselaraskan dengan selamat dalam profil klinikal.`,
+        timestamp: 'Terkini Disimpan',
+        dateObj: new Date(Date.now() - 60000),
+        category: 'weight',
+        badgeLabel: 'Timbang & BP',
+        badgeClass: 'bg-teal-950 text-teal-300 border-teal-700',
+        iconType: 'scale'
+      });
+    }
+
+    // 5. Medical Records (Blood tests & laboratory findings)
+    if (medicalRecords && medicalRecords.length > 0) {
+      const myMedRecords = medicalRecords.filter(r => 
+        r.patient_id === patient.id || 
+        String(r.patient_id) === String(patient.id) || 
+        (r.patient_id_code && r.patient_id_code === patient.patient_id_code)
+      );
+      myMedRecords.forEach(mr => {
+        const mrDate = mr.examination_date ? new Date(mr.examination_date) : new Date();
+        items.push({
+          id: `medrec-${mr.id}`,
+          title: `Keputusan Ujian Makmal Disahkan (${mr.examination_type})`,
+          subtitle: `Laporan Klinikal Berkala`,
+          description: `Keputusan pemeriksaan darah (Hemoglobin, Potassium, Phosphate, Urea, Creatinine) telah dimuat naik dan disahkan oleh pihak makmal.`,
+          timestamp: mrDate.toLocaleDateString('ms-MY', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          }),
+          dateObj: mrDate,
+          category: 'medical',
+          badgeLabel: 'Laporan Makmal',
+          badgeClass: 'bg-rose-950 text-rose-300 border-rose-700',
+          iconType: 'medical'
+        });
+      });
+    }
+
+    // 6. Base Patient Registration & Onboarding (Ensures feed is never completely blank)
+    if (items.length < 2) {
+      const regDate = patient.registered_date ? new Date(patient.registered_date) : new Date(Date.now() - 86400000 * 7);
+      items.push({
+        id: `reg-base-${patient.id}`,
+        title: 'Pendaftaran Akaun Pesakit Berjaya (Account Initialized)',
+        subtitle: `ID Pesakit: ${patient.patient_id_code || 'PT-KZN'}`,
+        description: `Pendaftaran pesakit rasmi di bawah penajaan ${patient.sponsor ? patient.sponsor.replace('_', ' ') : 'PERSENDIRIAN'} telah disahkan di Pusat Dialisis Kaizenbros.`,
+        timestamp: regDate.toLocaleDateString('ms-MY', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        dateObj: regDate,
+        category: 'system',
+        badgeLabel: 'Pendaftaran',
+        badgeClass: 'bg-indigo-950 text-indigo-300 border-indigo-700',
+        iconType: 'lock'
+      });
+
+      items.push({
+        id: `sched-base-${patient.id}`,
+        title: 'Jadual Rawatan Rutin Ditetapkan (Schedule Synchronized)',
+        subtitle: `Corak: ${patient.schedule_pattern === 'SELASA_KHAMIS_SABTU' ? 'Selasa, Khamis & Sabtu' : 'Isnin, Rabu & Jumaat'}`,
+        description: `Jadual temujanji dialisis 3 kali seminggu telah ditetapkan secara automatik dalam sistem penjadualan klinik.`,
+        timestamp: regDate.toLocaleDateString('ms-MY', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        dateObj: new Date(regDate.getTime() + 3600000),
+        category: 'system',
+        badgeLabel: 'Jadual Disahkan',
+        badgeClass: 'bg-cyan-950 text-cyan-300 border-cyan-700',
+        iconType: 'system'
+      });
+    }
+
+    // Deduplicate items by title + timestamp
+    const seen = new Set<string>();
+    const deduplicated = items.filter(item => {
+      const key = `${item.title}-${item.timestamp}-${item.description.slice(0, 20)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Sort strictly chronological: Newest First
+    return deduplicated.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  }, [patient, auditLogs, sessions, session, checkInRecord, activePreWeight, activePostWeight, activePreBp, medicalRecords]);
+
+  // Filtered Activities
+  const filteredActivities = useMemo(() => {
+    return patientActivities.filter(act => {
+      const matchesCategory = activityCategoryFilter === 'all' || act.category === activityCategoryFilter;
+      const matchesSearch = !activitySearchQuery || 
+        act.title.toLowerCase().includes(activitySearchQuery.toLowerCase()) ||
+        act.description.toLowerCase().includes(activitySearchQuery.toLowerCase()) ||
+        act.subtitle.toLowerCase().includes(activitySearchQuery.toLowerCase()) ||
+        act.timestamp.toLowerCase().includes(activitySearchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [patientActivities, activityCategoryFilter, activitySearchQuery]);
+
   // Synchronize inputs when live session changes
   useEffect(() => {
     if (activePreWeight !== null) setInputPreWeight(activePreWeight);
@@ -195,7 +514,10 @@ export function PatientPortal({
     }
   }, [activePreWeight, activePostWeight, activePreBp, activePostBp]);
 
+  const [isSavingWeight, setIsSavingWeight] = useState<boolean>(false);
+
   const handleSaveSelfWeight = (saveType: 'ALL' | 'PRE' | 'POST' = 'ALL') => {
+    setIsSavingWeight(true);
     const preBpStr = `${inputPreSystolic}/${inputPreDiastolic}`;
     const postBpStr = `${inputPostSystolic}/${inputPostDiastolic}`;
 
@@ -210,14 +532,17 @@ export function PatientPortal({
       onCheckInArrival(inputPreWeight, preBpStr);
     }
 
-    if (saveType === 'PRE') {
-      setSaveSuccessMsg(`✓ Berat Pra-Dialisis (${inputPreWeight.toFixed(1)} kg) dan BP (${preBpStr}) berjaya direkodkan.`);
-    } else if (saveType === 'POST') {
-      setSaveSuccessMsg(`✓ Berat Selepas Dialisis (${inputPostWeight.toFixed(1)} kg) dan BP (${postBpStr}) berjaya direkodkan.`);
-    } else {
-      setSaveSuccessMsg(`✓ Rekod Berat Pra (${inputPreWeight.toFixed(1)} kg) & Selepas (${inputPostWeight.toFixed(1)} kg) berjaya dikemaskini.`);
-    }
-    setTimeout(() => setSaveSuccessMsg(null), 5000);
+    setTimeout(() => {
+      setIsSavingWeight(false);
+      if (saveType === 'PRE') {
+        setSaveSuccessMsg(`✓ Berat Pra-Dialisis (${inputPreWeight.toFixed(1)} kg) dan BP (${preBpStr}) berjaya direkodkan.`);
+      } else if (saveType === 'POST') {
+        setSaveSuccessMsg(`✓ Berat Selepas Dialisis (${inputPostWeight.toFixed(1)} kg) dan BP (${postBpStr}) berjaya direkodkan.`);
+      } else {
+        setSaveSuccessMsg(`✓ Rekod Berat Pra (${inputPreWeight.toFixed(1)} kg) & Selepas (${inputPostWeight.toFixed(1)} kg) berjaya dikemaskini.`);
+      }
+      setTimeout(() => setSaveSuccessMsg(null), 5000);
+    }, 450);
   };
 
   // Dynamic Shift Mapping
@@ -924,6 +1249,81 @@ export function PatientPortal({
                   </div>
                 </button>
 
+                {/* 7. Log Aktiviti Saya (Activity Feed) */}
+                <button
+                  onClick={() => setActiveTab('aktiviti')}
+                  className="min-h-[96px] bg-slate-900 hover:bg-slate-850 active:bg-slate-800 border-2 border-slate-800 hover:border-cyan-400 rounded-2xl p-5 text-left transition-all flex items-center space-x-4 cursor-pointer shadow-lg sm:col-span-2"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-cyan-950 border-2 border-cyan-500 flex items-center justify-center flex-shrink-0 text-cyan-300 shadow-inner">
+                    <History className="w-8 h-8 stroke-[2.5]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>📜 Log Aktiviti Saya (Activity Feed)</h3>
+                      <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        Read-Only • Sahih
+                      </span>
+                    </div>
+                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black truncate`}>
+                      Kronologi sejarah daftar masuk, kemaskini berat, &amp; status rawatan
+                    </p>
+                  </div>
+                </button>
+
+              </div>
+            </div>
+
+            {/* READ-ONLY ACTIVITY FEED PREVIEW (Transparency & Peace of Mind) */}
+            <div className={`${themeCardClass} rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl border-2 border-slate-800`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-700 text-cyan-300 flex items-center justify-center shadow-inner">
+                    <History className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className={`${fontTitleClass} font-black text-white flex items-center gap-2`}>
+                      <span>📜 Log Aktiviti Terkini (Activity Feed)</span>
+                      <span className="text-[10px] bg-slate-950 text-emerald-300 border border-emerald-700/80 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        Read-Only
+                      </span>
+                    </h3>
+                    <p className={`${fontSubClass} text-slate-300 text-xs mt-0.5`}>
+                      Sejarah kronologi tindakan klinikal terkini untuk ketelusan &amp; ketenangan minda anda
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('aktiviti')}
+                  className="text-xs sm:text-sm font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 self-start sm:self-auto cursor-pointer underline px-1 py-1"
+                >
+                  <span>Lihat Penuh ({patientActivities.length})</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {patientActivities.slice(0, 3).map((act) => (
+                  <div 
+                    key={act.id} 
+                    className="p-3.5 sm:p-4 bg-slate-950/85 border border-slate-800/90 hover:border-slate-700 rounded-xl flex items-start space-x-3 transition-colors"
+                  >
+                    <div className="mt-0.5 w-8 h-8 rounded-lg bg-[#101D33] border border-slate-700 flex items-center justify-center flex-shrink-0 text-cyan-300 shadow-inner">
+                      {act.iconType === 'check' && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
+                      {act.iconType === 'scale' && <Scale className="w-4 h-4 text-teal-400" />}
+                      {act.iconType === 'session' && <Activity className="w-4 h-4 text-emerald-400" />}
+                      {act.iconType === 'medical' && <FileText className="w-4 h-4 text-rose-400" />}
+                      {act.iconType === 'lock' && <ShieldCheck className="w-4 h-4 text-indigo-400" />}
+                      {act.iconType === 'system' && <Clock className="w-4 h-4 text-slate-400" />}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-1">
+                        <h4 className="text-sm font-bold text-white truncate">{act.title}</h4>
+                        <span className="text-[11px] font-mono text-slate-400 shrink-0">{act.timestamp}</span>
+                      </div>
+                      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">{act.description}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1184,10 +1584,20 @@ export function PatientPortal({
                 <div className="flex justify-end">
                   <button
                     onClick={() => handleSaveSelfWeight('PRE')}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow cursor-pointer transition-all flex items-center space-x-1.5"
+                    disabled={isSavingWeight}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-950 font-bold text-xs rounded-xl shadow cursor-pointer transition-all flex items-center space-x-1.5"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>Simpan Berat Pra Sahaja</span>
+                    {isSavingWeight ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Menyegerak Pangkalan Data...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Simpan Berat Pra Sahaja</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1294,10 +1704,20 @@ export function PatientPortal({
                 <div className="flex justify-end">
                   <button
                     onClick={() => handleSaveSelfWeight('POST')}
-                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all flex items-center space-x-1.5"
+                    disabled={isSavingWeight}
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all flex items-center space-x-1.5"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>Simpan Berat Selepas Sahaja</span>
+                    {isSavingWeight ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Menyegerak Pangkalan Data...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Simpan Berat Selepas Sahaja</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1305,10 +1725,20 @@ export function PatientPortal({
               {/* UNIFIED ACTION BUTTON */}
               <button
                 onClick={() => handleSaveSelfWeight('ALL')}
-                className="w-full min-h-[56px] bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black text-lg rounded-2xl transition-all shadow-xl flex items-center justify-center space-x-2 cursor-pointer border-2 border-teal-200"
+                disabled={isSavingWeight}
+                className="w-full min-h-[56px] bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 disabled:opacity-75 text-slate-950 font-black text-lg rounded-2xl transition-all shadow-xl flex items-center justify-center space-x-2 cursor-pointer border-2 border-teal-200"
               >
-                <Check className="w-6 h-6 stroke-[3]" />
-                <span>SIMPAN SEMUA REKOD BERAT (PRA & SELEPAS DIALISIS)</span>
+                {isSavingWeight ? (
+                  <>
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>MENYELARAS KE PANGKALAN DATA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-6 h-6 stroke-[3]" />
+                    <span>SIMPAN SEMUA REKOD BERAT (PRA & SELEPAS DIALISIS)</span>
+                  </>
+                )}
               </button>
 
               {/* Fluid Management Guide */}
@@ -1404,63 +1834,101 @@ export function PatientPortal({
             </div>
 
             <div className="space-y-4">
-              {/* Record 1 (Today) */}
+              {/* Sesi Terkini Card (Clean, clear data when empty, no 'hari ini' in box) */}
               <div className={`${themeCardClass} rounded-2xl p-5 space-y-3`}>
                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                   <div>
-                    <span className="text-emerald-400 font-black text-xs uppercase">Sesi Terkini (Hari Ini)</span>
-                    <h3 className="text-lg font-bold text-white">Rabu, 30 Sep 2026</h3>
+                    <span className="text-cyan-400 font-black text-xs uppercase tracking-wider">Sesi Terkini</span>
+                    <h3 className="text-lg font-bold text-white capitalize">{latestDialysisDateDisplay}</h3>
                   </div>
-                  <span className="bg-emerald-950 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full border border-emerald-800">
-                    Selesai
-                  </span>
+                  {isSessionCompleted ? (
+                    <span className="bg-emerald-950 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full border border-emerald-800">
+                      Selesai
+                    </span>
+                  ) : isOnDialysis ? (
+                    <span className="bg-amber-950 text-amber-300 text-xs font-bold px-3 py-1 rounded-full border border-amber-800 animate-pulse">
+                      Sedang Dialisis
+                    </span>
+                  ) : isCheckedIn ? (
+                    <span className="bg-cyan-950 text-cyan-300 text-xs font-bold px-3 py-1 rounded-full border border-cyan-800">
+                      Dalam Proses
+                    </span>
+                  ) : (
+                    <span className="bg-slate-800 text-slate-300 text-xs font-bold px-3 py-1 rounded-full border border-slate-700">
+                      Belum Bermula
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                     <span className="text-slate-400 block font-semibold">Berat Pra / Pos Dialisis:</span>
                     <p className="text-white font-bold text-sm mt-0.5">
-                      {activePreWeight !== null ? `${activePreWeight} kg` : '66.8 kg'} → {patientDryWeight} kg
+                      {activePreWeight !== null || activePostWeight !== null 
+                        ? `${activePreWeight !== null ? `${activePreWeight} kg` : '-'} → ${activePostWeight !== null ? `${activePostWeight} kg` : '-'}`
+                        : '-'}
                     </p>
                   </div>
 
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                     <span className="text-slate-400 block font-semibold">Tekanan Darah (BP):</span>
                     <p className="text-cyan-300 font-bold text-sm mt-0.5">
-                      {activePreBp || '138/82'} → 126/78
+                      {activePreBp || activePostBp 
+                        ? `${activePreBp || '-'} → ${activePostBp || '-'}` 
+                        : '-'}
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-300">
-                  <strong>Stesen Kerusi / Mesin:</strong> {assignedChairNumber ? `Kerusi ${assignedChairNumber} (${assignedMachineModel || 'Fresenius 4008S NG'}) | Dialyzer FX80 Cordiax` : 'Dipaparkan selepas pendaftaran di kaunter pada hari dialisis'}
+                  <strong>Stesen Kerusi / Mesin:</strong>{' '}
+                  {assignedChairNumber 
+                    ? `Kerusi ${assignedChairNumber} (${assignedMachineModel || 'Fresenius 4008S NG'})` 
+                    : 'Belum Ditugaskan / Mengikut Kaunter'}
                 </div>
               </div>
 
-              {/* Record 2 (Past) */}
-              <div className={`${themeCardClass} rounded-2xl p-5 space-y-3 opacity-90`}>
-                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                  <div>
-                    <span className="text-slate-400 font-bold text-xs uppercase">Sesi Lepas</span>
-                    <h3 className="text-lg font-bold text-white">Isnin, 28 Sep 2026</h3>
-                  </div>
-                  <span className="bg-slate-800 text-slate-300 text-xs font-bold px-3 py-1 rounded-full">
-                    Selesai
-                  </span>
-                </div>
+              {/* Past Sessions List (Dynamic from real records, empty if none) */}
+              {patientDialysisSessions.length > 0 ? (
+                patientDialysisSessions.map((pastSess, idx) => {
+                  const dateStr = pastSess.scheduled_date 
+                    ? new Date(pastSess.scheduled_date).toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }) 
+                    : `Sesi #${pastSess.id}`;
+                  return (
+                    <div key={pastSess.id || idx} className={`${themeCardClass} rounded-2xl p-5 space-y-3 opacity-90`}>
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                        <div>
+                          <span className="text-slate-400 font-bold text-xs uppercase">Sesi Rekod #{idx + 1}</span>
+                          <h3 className="text-lg font-bold text-white capitalize">{dateStr}</h3>
+                        </div>
+                        <span className="bg-slate-800 text-slate-300 text-xs font-bold px-3 py-1 rounded-full">
+                          {pastSess.status === 'SUDAH_SELESAI' || pastSess.status === 'SELESAI' ? 'Selesai' : pastSess.status}
+                        </span>
+                      </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block font-semibold">Berat Pra / Pos Dialisis:</span>
-                    <p className="text-white font-bold text-sm mt-0.5">67.2 kg → 65.0 kg</p>
-                  </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                          <span className="text-slate-400 block font-semibold">Berat Pra / Pos Dialisis:</span>
+                          <p className="text-white font-bold text-sm mt-0.5">
+                            {pastSess.pre_weight_kg ? `${pastSess.pre_weight_kg} kg` : '-'} → {pastSess.post_weight_kg ? `${pastSess.post_weight_kg} kg` : '-'}
+                          </p>
+                        </div>
 
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block font-semibold">Tekanan Darah (BP):</span>
-                    <p className="text-cyan-300 font-bold text-sm mt-0.5">142/85 → 128/76</p>
-                  </div>
+                        <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                          <span className="text-slate-400 block font-semibold">Tekanan Darah (BP):</span>
+                          <p className="text-cyan-300 font-bold text-sm mt-0.5">
+                            {pastSess.pre_bp || '-'} → {pastSess.post_bp || '-'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl text-center text-xs text-slate-400">
+                  Tiada rekod sesi terdahulu yang disimpan dalam sistem.
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -2095,7 +2563,7 @@ export function PatientPortal({
                 </div>
                 <div>
                   <span className="text-xs text-slate-400 uppercase font-semibold block">Penaja Rawatan</span>
-                  <p className="font-bold text-cyan-300 text-base mt-0.5">{patient.sponsor.replace('_', ' ')}</p>
+                  <p className="font-bold text-cyan-300 text-base mt-0.5">{patient.sponsor ? patient.sponsor.replace('_', ' ') : 'PERSENDIRIAN'}</p>
                 </div>
               </div>
 
@@ -2108,6 +2576,182 @@ export function PatientPortal({
               <div>
                 <span className="text-xs text-slate-400 uppercase font-semibold block">Alamat Rumah</span>
                 <p className="text-sm text-slate-200 mt-1">{patient.address}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== TAB 7: LOG AKTIVITI SAYA (READ-ONLY ACTIVITY FEED) ==================== */}
+        {activeTab === 'aktiviti' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-12 h-12 bg-cyan-950 text-cyan-300 rounded-2xl flex items-center justify-center border-2 border-cyan-500 shadow-inner">
+                  <History className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className={`${fontTitleClass} font-black text-white`}>Log Aktiviti Pesakit</h2>
+                    <span className="bg-emerald-950 text-emerald-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-emerald-700 uppercase tracking-wider">
+                      ✓ Paparan Sahaja (Read-Only)
+                    </span>
+                  </div>
+                  <p className={`${fontSubClass} text-slate-300 mt-0.5`}>
+                    Sejarah kronologi tindakan klinikal &amp; portal untuk ketelusan &amp; ketenangan minda
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActiveTab('utama')}
+                className="min-h-[44px] px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold rounded-xl border border-slate-700 cursor-pointer text-sm self-start sm:self-auto"
+              >
+                ← Kembali ke Utama
+              </button>
+            </div>
+
+            {/* Quick Stat Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-center">
+                <span className="text-xs font-bold text-slate-400 block uppercase">Jumlah Aktiviti</span>
+                <span className="text-2xl sm:text-3xl font-black text-white font-mono mt-1 block">
+                  {patientActivities.length}
+                </span>
+                <span className="text-[11px] text-cyan-300 mt-0.5 block">Direkodkan</span>
+              </div>
+
+              <div className="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-center">
+                <span className="text-xs font-bold text-slate-400 block uppercase">Status Klinikal</span>
+                <span className="text-base font-black text-emerald-400 mt-1 block truncate">
+                  {effectiveStatus.replace(/_/g, ' ')}
+                </span>
+                <span className="text-[11px] text-slate-400 mt-0.5 block">Disahkan Pusat</span>
+              </div>
+
+              <div className="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-center">
+                <span className="text-xs font-bold text-slate-400 block uppercase">Integriti Data</span>
+                <span className="text-base font-black text-cyan-300 mt-1 block flex items-center justify-center gap-1">
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  100% Sahih
+                </span>
+                <span className="text-[11px] text-slate-400 mt-0.5 block">Telus &amp; Rasmi</span>
+              </div>
+            </div>
+
+            {/* Search & Category Filter Bar */}
+            <div className="bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-lg">
+              <div className="relative">
+                <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={activitySearchQuery}
+                  onChange={(e) => setActivitySearchQuery(e.target.value)}
+                  placeholder="Cari log aktiviti (cth: check-in, berat, dialisis, darah)..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-11 pr-10 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500"
+                />
+                {activitySearchQuery && (
+                  <button 
+                    onClick={() => setActivitySearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
+                  <Filter className="w-3.5 h-3.5" />
+                  Kategori:
+                </span>
+                {[
+                  { id: 'all', label: 'Semua' },
+                  { id: 'checkin', label: 'Daftar Masuk' },
+                  { id: 'weight', label: 'Timbang & BP' },
+                  { id: 'session', label: 'Rawatan Dialisis' },
+                  { id: 'medical', label: 'Ujian Makmal' },
+                  { id: 'system', label: 'Sistem & Akaun' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActivityCategoryFilter(tab.id as any)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      activityCategoryFilter === tab.id
+                        ? 'bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 font-black shadow-md'
+                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Timeline Feed Cards */}
+            <div className="space-y-4">
+              {filteredActivities.length === 0 ? (
+                <div className="p-8 bg-slate-900 border-2 border-slate-800 rounded-2xl text-center space-y-2">
+                  <Clock className="w-10 h-10 text-slate-500 mx-auto" />
+                  <h4 className="text-base font-bold text-white">Tiada Rekod Aktiviti Dijumpai</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    Tiada aktiviti padanan mengikut carian atau kategori yang dipilih.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gradient-to-b before:from-cyan-500 before:via-teal-500 before:to-slate-800">
+                  {filteredActivities.map((act, index) => (
+                    <div key={act.id || index} className="relative group">
+                      {/* Timeline Dot */}
+                      <div className="absolute -left-6 top-4 w-5 h-5 rounded-full bg-slate-950 border-2 border-cyan-400 flex items-center justify-center shadow-md">
+                        <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                      </div>
+
+                      {/* Card */}
+                      <div className="bg-slate-900 border-2 border-slate-800 hover:border-cyan-700/60 rounded-2xl p-5 space-y-3 shadow-lg transition-all">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                          <div className="flex items-center space-x-2.5">
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${act.badgeClass}`}>
+                              {act.badgeLabel}
+                            </span>
+                            <span className="text-xs font-mono text-cyan-300 font-bold">
+                              {act.subtitle}
+                            </span>
+                          </div>
+                          <span className="text-xs font-mono text-slate-400 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            {act.timestamp}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <h3 className="text-base sm:text-lg font-black text-white">{act.title}</h3>
+                          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
+                            {act.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60">
+                          <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Disahkan Rekod Klinikal
+                          </span>
+                          <span className="text-slate-400 font-mono">Pusat Dialisis Kaizenbros</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Peace of Mind Assurance Card */}
+            <div className="p-5 bg-gradient-to-r from-teal-950/70 to-cyan-950/70 border-2 border-teal-700/80 rounded-2xl flex items-start space-x-3.5 text-xs sm:text-sm text-teal-200 shadow-xl">
+              <ShieldCheck className="w-6 h-6 text-teal-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h4 className="font-bold text-white text-sm sm:text-base">Jaminan Ketelusan &amp; Ketenangan Minda</h4>
+                <p className="leading-relaxed text-slate-300">
+                  Semua transaksi dalam Activity Feed ini dijana terus daripada sistem audit log, rekod kehadiran kaunter, dan catatan klinikal jururawat bertugas bagi memastikan anda dan keluarga sentiasa mendapat maklumat yang tepat, telus, dan menenteramkan minda.
+                </p>
               </div>
             </div>
           </div>

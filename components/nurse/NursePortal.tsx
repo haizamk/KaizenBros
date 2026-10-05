@@ -43,7 +43,15 @@ import {
   TrendingUp,
   Scale,
   Zap,
-  Upload
+  Upload,
+  Loader2,
+  Layers,
+  Flame,
+  Eye,
+  ClipboardCheck,
+  PhoneCall,
+  MessageSquare,
+  ArrowUpRight
 } from 'lucide-react';
 import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
 import { TreatmentScheduleManager } from '@/components/schedule/TreatmentScheduleManager';
@@ -61,7 +69,8 @@ import {
   DialysisChair,
   CentreProfile,
   ShiftSlot,
-  MedicalRecord
+  MedicalRecord,
+  NewRegistration
 } from '@/types';
 import { 
   INITIAL_TODAY_SESSIONS, 
@@ -72,7 +81,8 @@ import {
   INITIAL_CHAIRS,
   INITIAL_MACHINES,
   INITIAL_NURSES,
-  VERIFIED_CENTRE_INFO
+  VERIFIED_CENTRE_INFO,
+  INITIAL_REGISTRATIONS
 } from '@/lib/mock-data';
 
 export function DialysisCountdownTimer({ session }: { session?: DialysisSession }) {
@@ -187,6 +197,7 @@ interface NursePortalProps {
   currentNurseName?: string;
   patients?: Patient[];
   sessions?: DialysisSession[];
+  registrations?: NewRegistration[];
   medicalRecords?: MedicalRecord[];
   onUpdateMedicalRecords?: (records: MedicalRecord[]) => void;
   onUpdateSession?: (session: DialysisSession) => void;
@@ -202,6 +213,7 @@ export function NursePortal({
   currentNurseName = 'Sister Siti Fatimah',
   patients: propPatients,
   sessions: propSessions,
+  registrations: propRegistrations,
   medicalRecords: propMedicalRecords = [],
   onUpdateMedicalRecords,
   onUpdateSession,
@@ -213,8 +225,36 @@ export function NursePortal({
   onStaffLogout
 }: NursePortalProps) {
   // Navigation tabs:
-  // 🏠 Hari Ini, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 📋 Rekod, 📊 Laporan, ⚙️ Tetapan
-  const [activeNav, setActiveNav] = useState<'hari_ini' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'rekod_darah' | 'laporan' | 'tetapan'>('hari_ini');
+  // 🏠 Hari Ini, ⏱️ Ringkasan Syif, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 📋 Rekod, 📊 Laporan, ⚙️ Tetapan
+  const [activeNav, setActiveNav] = useState<'hari_ini' | 'shift_overview' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'rekod_darah' | 'laporan' | 'tetapan'>('hari_ini');
+
+  // Subtle loading animation key for database synchronization feedback
+  const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
+
+  // Registrations state
+  const [registrationsList, setRegistrationsList] = useState<NewRegistration[]>(() => {
+    if (propRegistrations && propRegistrations.length > 0) return propRegistrations;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kaizenbros_registrations');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return INITIAL_REGISTRATIONS;
+  });
+
+  // Sync registrations when prop updates
+  useEffect(() => {
+    if (propRegistrations && propRegistrations.length > 0) {
+      setRegistrationsList(propRegistrations);
+    }
+  }, [propRegistrations]);
+
+  // Nurse Shift Overview Filter States
+  const [shiftSubTab, setShiftSubTab] = useState<'ALL' | 'ALERTS' | 'REGISTRATIONS' | 'STATIONS'>('ALL');
+  const [shiftRegFilter, setShiftRegFilter] = useState<'ALL' | 'CRITICAL' | 'SOCSO' | 'ZAKAT'>('ALL');
+  const [shiftAlertFilter, setShiftAlertFilter] = useState<'ALL' | 'CRITICAL' | 'FLUID' | 'BP' | 'ENDING' | 'WAIT'>('ALL');
+  const [selectedRegForDetail, setSelectedRegForDetail] = useState<NewRegistration | null>(null);
 
   const [sessions, setSessions] = useState<DialysisSession[]>(() => {
     if (propSessions && propSessions.length > 0) return propSessions;
@@ -329,6 +369,189 @@ export function NursePortal({
   });
 
   const [selectedShiftForNurseTetapan, setSelectedShiftForNurseTetapan] = useState<ShiftSlot>('PETANG');
+
+  // Nurse Shift Overview Data Computations
+  const shiftOverviewData = useMemo(() => {
+    // 1. Pending Registrations
+    const pendingRegs = registrationsList.filter(r => 
+      r.status === 'BARU' || r.status === 'PENDING' || r.status === 'DISEMAK' || r.status === 'MENUNGGU_KELULUSAN' || (!r.status || (r.status !== 'DITERIMA' && r.status !== 'DITOLAK' && r.status !== 'APPROVED'))
+    );
+    const highPriorityRegs = pendingRegs.filter(r => 
+      (r.medical_notes && (r.medical_notes.toLowerCase().includes('kritikal') || r.medical_notes.toLowerCase().includes('sesak') || r.medical_notes.toLowerCase().includes('catheter') || r.medical_notes.toLowerCase().includes('cvc'))) ||
+      r.sponsor_type === 'PERKESO' ||
+      r.sponsor_type === 'PERKESO_SOCSO' ||
+      r.sponsor_type === 'ZAKAT_SELANGOR' ||
+      r.patient_category === 'KRITIKAL'
+    );
+
+    // 2. Urgent Patient Status Changes & Alarms for Today / Current Shift
+    const urgentAlertsList: Array<{
+      id: string;
+      patientId: number;
+      patientName: string;
+      patientIdCode: string;
+      chairNumber?: string;
+      alertType: 'FLUID_OVERLOAD' | 'HIGH_BP' | 'LOW_BP' | 'NEARING_END' | 'LONG_WAIT';
+      severity: 'CRITICAL' | 'HIGH' | 'WARNING';
+      title: string;
+      description: string;
+      currentValue: string;
+      targetValue: string;
+      actionRecommended: string;
+      timeAgo: string;
+    }> = [];
+
+    // A. Check Fluid Overload in Queue & Sessions (> 2.5 kg above dry weight)
+    queueList.forEach(q => {
+      const pt = patientsList.find(p => p.id === q.patient_id);
+      const dryW = pt?.dry_weight_kg || q.dry_weight_kg || 65;
+      const preW = q.pre_weight_kg;
+      if (preW && preW - dryW >= 2.5) {
+        const excess = (preW - dryW).toFixed(1);
+        urgentAlertsList.push({
+          id: `fluid-q-${q.patient_id}`,
+          patientId: q.patient_id,
+          patientName: q.patient_name,
+          patientIdCode: q.patient_id_code,
+          chairNumber: q.assigned_chair,
+          alertType: 'FLUID_OVERLOAD',
+          severity: Number(excess) >= 3.5 ? 'CRITICAL' : 'HIGH',
+          title: '🚨 Kenaikan Cecair Kritikal (Fluid Overload)',
+          description: `Berat pra-dialisis (${preW} kg) melebihi berat kering (${dryW} kg) sebanyak +${excess} kg.`,
+          currentValue: `${preW} kg`,
+          targetValue: `${dryW} kg (Kering)`,
+          actionRecommended: 'Selaras sasaran ultrafiltrasi (UF) dan pantau tekanan darah secara berkala.',
+          timeAgo: q.check_in_time || 'Hari Ini'
+        });
+      }
+    });
+
+    sessions.forEach(s => {
+      const dryW = s.dry_weight_kg || 65;
+      const preW = s.pre_weight_kg;
+      if (preW && preW - dryW >= 2.5 && !urgentAlertsList.some(a => a.patientId === s.patient_id && a.alertType === 'FLUID_OVERLOAD')) {
+        const excess = (preW - dryW).toFixed(1);
+        urgentAlertsList.push({
+          id: `fluid-s-${s.patient_id}`,
+          patientId: s.patient_id,
+          patientName: s.patient_name,
+          patientIdCode: s.patient_id_code,
+          chairNumber: s.chair_number,
+          alertType: 'FLUID_OVERLOAD',
+          severity: Number(excess) >= 3.5 ? 'CRITICAL' : 'HIGH',
+          title: '🚨 Kenaikan Cecair Kritikal (Fluid Overload)',
+          description: `Berat pra-dialisis (${preW} kg) melebihi berat kering (${dryW} kg) sebanyak +${excess} kg.`,
+          currentValue: `${preW} kg`,
+          targetValue: `${dryW} kg (Kering)`,
+          actionRecommended: 'Selaras sasaran ultrafiltrasi (UF) dan pantau kadar penurunan berat.',
+          timeAgo: s.actual_start_time || s.scheduled_time || 'Hari Ini'
+        });
+      }
+
+      // B. Blood Pressure Abnormalities (Systolic >= 160 or Diastolic >= 100, or < 100/60)
+      const bpStr = s.current_bp || s.pre_bp || '';
+      if (bpStr && bpStr.includes('/')) {
+        const [sys, dia] = bpStr.split('/').map(Number);
+        if (!isNaN(sys) && !isNaN(dia)) {
+          if (sys >= 160 || dia >= 100) {
+            urgentAlertsList.push({
+              id: `bp-high-${s.patient_id}`,
+              patientId: s.patient_id,
+              patientName: s.patient_name,
+              patientIdCode: s.patient_id_code,
+              chairNumber: s.chair_number,
+              alertType: 'HIGH_BP',
+              severity: sys >= 180 || dia >= 110 ? 'CRITICAL' : 'HIGH',
+              title: '⚠️ Hipertensi Teruk / Krisis Tekanan Darah',
+              description: `Bacaan tekanan darah terkini (${bpStr} mmHg) melepasi had selamat.`,
+              currentValue: `${bpStr} mmHg`,
+              targetValue: '< 140/90 mmHg',
+              actionRecommended: 'Semak pematuhan ubat antihipertensi & laporkan kepada doktor perunding jika berterusan.',
+              timeAgo: 'Semasa Sesi'
+            });
+          } else if (sys < 100 || dia < 60) {
+            urgentAlertsList.push({
+              id: `bp-low-${s.patient_id}`,
+              patientId: s.patient_id,
+              patientName: s.patient_name,
+              patientIdCode: s.patient_id_code,
+              chairNumber: s.chair_number,
+              alertType: 'LOW_BP',
+              severity: sys < 90 ? 'CRITICAL' : 'WARNING',
+              title: '⚠️ Risiko Hipotensi (Tekanan Darah Rendah)',
+              description: `Bacaan tekanan darah terkini (${bpStr} mmHg) terlalu rendah. Pesakit berisiko pening/kekejangan.`,
+              currentValue: `${bpStr} mmHg`,
+              targetValue: '>= 110/70 mmHg',
+              actionRecommended: 'Turunkan kadar UF atau beri posisi Trendelenburg serta periksa nadi.',
+              timeAgo: 'Semasa Sesi'
+            });
+          }
+        }
+      }
+
+      // C. Dialysis Session nearing completion (< 30 mins)
+      if (s.status === 'SEDANG_DIALISIS' && s.start_timestamp) {
+        const elapsed = Date.now() - s.start_timestamp;
+        const remaining = (4 * 3600 * 1000) - elapsed;
+        if (remaining > 0 && remaining <= 30 * 60 * 1000) {
+          const minsLeft = Math.ceil(remaining / (60 * 1000));
+          urgentAlertsList.push({
+            id: `ending-${s.patient_id}`,
+            patientId: s.patient_id,
+            patientName: s.patient_name,
+            patientIdCode: s.patient_id_code,
+            chairNumber: s.chair_number,
+            alertType: 'NEARING_END',
+            severity: 'WARNING',
+            title: '⏱️ Sesi Menghampiri 4 Jam (Sedia Tamatkan)',
+            description: `Baki masa rawatan tinggal kira-kira ${minsLeft} minit di Kerusi ${s.chair_number}.`,
+            currentValue: `${minsLeft} minit`,
+            targetValue: 'Tamat 4 Jam',
+            actionRecommended: 'Sediakan pek pengembalian darah (washback/rinseback) dan semak BP pos-dialisis.',
+            timeAgo: 'Baki < 30m'
+          });
+        }
+      }
+    });
+
+    // D. Queue long wait alerts (> 15 mins waiting for chair assignment)
+    queueList.forEach(q => {
+      if (q.status === 'MENUNGGU_GILIRAN' && !q.assigned_chair) {
+        urgentAlertsList.push({
+          id: `wait-${q.patient_id}`,
+          patientId: q.patient_id,
+          patientName: q.patient_name,
+          patientIdCode: q.patient_id_code,
+          alertType: 'LONG_WAIT',
+          severity: 'WARNING',
+          title: '🟡 Menunggu Penugasan Kerusi (Dalam Giliran FCFS)',
+          description: `Pesakit No. Giliran ${q.queue_number} telah mendaftar masuk dan sedang menunggu pemilihan kerusi oleh jururawat.`,
+          currentValue: `Giliran: ${q.queue_number}`,
+          targetValue: 'Tugaskan Kerusi',
+          actionRecommended: 'Tugaskan stesen kerusi kosong (Bay A / Bay B) yang telah disanitasi.',
+          timeAgo: q.check_in_time || 'Hari Ini'
+        });
+      }
+    });
+
+    // 3. Shift Capacity Summary
+    const totalChairs = 18;
+    const occupiedChairs = sessions.filter(s => s.status === 'SEDANG_DIALISIS').length;
+    const waitingPatients = queueList.filter(q => !q.assigned_chair).length;
+    const finishedToday = sessions.filter(s => s.status === 'SUDAH_SELESAI' || s.status === 'SELESAI').length;
+    const availableChairs = Math.max(0, totalChairs - occupiedChairs);
+
+    return {
+      pendingRegs,
+      highPriorityRegs,
+      urgentAlertsList,
+      totalChairs,
+      occupiedChairs,
+      waitingPatients,
+      finishedToday,
+      availableChairs
+    };
+  }, [registrationsList, queueList, sessions, patientsList]);
 
   // Station Allocation Modal State
   const [assigningPatient, setAssigningPatient] = useState<PatientCheckIn | null>(null);
@@ -1073,8 +1296,63 @@ export function NursePortal({
       onAssignStation(assigningPatient.patient_id, selectedChairNumber, selectedMachineModel);
     }
 
-    showToast(`✓ Pesakit ${assigningPatient.patient_name} berjaya ditugaskan ke Kerusi ${selectedChairNumber}.`);
-    setAssigningPatient(null);
+    setActionLoadingKey('assign-start-dialysis');
+    setTimeout(() => {
+      showToast(`✓ Pesakit ${assigningPatient.patient_name} berjaya ditugaskan ke Kerusi ${selectedChairNumber}.`);
+      setAssigningPatient(null);
+      setActionLoadingKey(null);
+    }, 450);
+  };
+
+  // ACTION: APPROVE REGISTRATION DIRECTLY FROM SHIFT OVERVIEW
+  const handleApproveRegistrationInShift = (reg: NewRegistration) => {
+    setActionLoadingKey(`approve-reg-${reg.id}`);
+    setTimeout(() => {
+      const updatedRegs = registrationsList.map(r => r.id === reg.id ? { ...r, status: 'DITERIMA' } : r);
+      setRegistrationsList(updatedRegs);
+      try {
+        localStorage.setItem('kaizenbros_registrations', JSON.stringify(updatedRegs));
+      } catch {}
+
+      const existingPatient = patientsList.find(p => p.ic_number === reg.ic_number);
+      if (!existingPatient) {
+        const nextId = patientsList.length > 0 ? Math.max(...patientsList.map(p => p.id)) + 1 : 1;
+        const newPatientCode = `KB-${(patientsList.length + 1).toString().padStart(3, '0')}`;
+        const newPt: Patient = {
+          id: nextId,
+          patient_id_code: newPatientCode,
+          name: reg.full_name,
+          ic_number: reg.ic_number,
+          phone: reg.phone_number,
+          age: typeof reg.age === 'number' ? reg.age : parseInt(String(reg.age), 10) || 50,
+          gender: reg.gender === 'LELAKI' || reg.gender === 'Male' ? 'Lelaki' : 'Perempuan',
+          blood_group: 'O+',
+          address: reg.address || 'Semenyih, Selangor',
+          emergency_contact: reg.nok_phone || reg.phone_number,
+          dry_weight_kg: 65,
+          latest_weight_kg: 65,
+          latest_bp: '130/80',
+          vascular_access: (reg.medical_notes?.toLowerCase().includes('catheter') || reg.medical_notes?.toLowerCase().includes('cvc')) ? 'PERMACATH' : 'AVF_LEFT_RADIO_CEPHALIC',
+          access_location: 'Left Forearm',
+          sponsor: reg.sponsor_type || 'PERKESO_SOCSO',
+          schedule_pattern: (reg.preferred_days as any) || 'ISNIN_RABU_JUMAAT',
+          preferred_shift: (reg.preferred_shift as any) || 'SYIF_1',
+          is_active: true,
+          created_at: new Date().toISOString()
+        };
+        const updatedPatients = [...patientsList, newPt];
+        setPatientsList(updatedPatients);
+        try {
+          localStorage.setItem('kaizenbros_patients', JSON.stringify(updatedPatients));
+        } catch {}
+      }
+
+      if (onAuditLog) {
+        onAuditLog('LULUS_PENDAFTARAN_SYIF', `Jururawat ${currentNurseName} meluluskan pendaftaran ${reg.full_name} (${reg.ic_number}) dan menyegerakkan ke pangkalan data syif.`);
+      }
+      showToast(`✓ Pendaftaran ${reg.full_name} berjaya disahkan & disegerakkan ke pangkalan data pesakit.`);
+      setActionLoadingKey(null);
+    }, 450);
   };
 
   // ACTION: CLEAR ALL PATIENT QUEUE (KOSONGKAN PAPAN GILIRAN)
@@ -1199,9 +1477,13 @@ export function NursePortal({
       onCheckInPatient(patient.id, preW, finalBp, counterNotes);
     }
 
-    showToast(`✓ ${patient.name} berjaya didaftar masuk (No Giliran: ${nextQNum}).`);
-    setShowCounterCheckInModal(false);
-    setCounterNotes('');
+    setActionLoadingKey('counter-checkin');
+    setTimeout(() => {
+      showToast(`✓ ${patient.name} berjaya didaftar masuk (No Giliran: ${nextQNum}).`);
+      setShowCounterCheckInModal(false);
+      setCounterNotes('');
+      setActionLoadingKey(null);
+    }, 450);
   };
 
   // ACTION 1: CHECK-IN PESAKIT
@@ -1259,8 +1541,12 @@ export function NursePortal({
       );
     }
 
-    showToast(`✓ Pesakit ${selectedSessionForCheckIn.patient_name} berjaya check-in.`);
-    setSelectedSessionForCheckIn(null);
+    setActionLoadingKey('checkin-modal');
+    setTimeout(() => {
+      showToast(`✓ Pesakit ${selectedSessionForCheckIn.patient_name} berjaya check-in.`);
+      setSelectedSessionForCheckIn(null);
+      setActionLoadingKey(null);
+    }, 450);
   };
 
   // ACTION 2: RECORD HOURLY READING
@@ -1588,6 +1874,23 @@ export function NursePortal({
           >
             <Home className="w-4 h-4" />
             <span>🏠 Hari Ini</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('shift_overview')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              activeNav === 'shift_overview'
+                ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-md border border-cyan-400'
+                : 'text-cyan-300 hover:text-white hover:bg-cyan-950/40 border border-cyan-900/50'
+            }`}
+          >
+            <Clock className="w-4 h-4 text-cyan-400" />
+            <span>⏱️ Ringkasan Syif</span>
+            {(shiftOverviewData.pendingRegs.length > 0 || shiftOverviewData.urgentAlertsList.length > 0) && (
+              <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                {shiftOverviewData.pendingRegs.length + shiftOverviewData.urgentAlertsList.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -2293,6 +2596,698 @@ export function NursePortal({
           </div>
         )}
 
+        {/* ========================================================================= */}
+        {/* VIEW 1.2: RINGKASAN SYIF JURURAWAT (NURSE SHIFT OVERVIEW DASHBOARD)        */}
+        {/* Summarises pending registrations and urgent patient status changes         */}
+        {/* ========================================================================= */}
+        {activeNav === 'shift_overview' && (
+          <div className="space-y-6">
+            {/* Shift Command Banner */}
+            <div className="bg-gradient-to-br from-slate-900 via-[#0B1528] to-cyan-950 border-2 border-cyan-500/80 rounded-3xl p-6 sm:p-7 text-white shadow-2xl space-y-4 relative overflow-hidden">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-3 h-3 rounded-full bg-cyan-400 animate-ping" />
+                    <span className="text-xs font-black text-cyan-400 uppercase tracking-widest">
+                      Pusat Kawalan Klinikal Jururawat • Syif Semasa
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2">
+                    <span>⏱️ Ringkasan Syif:</span>
+                    <span className="text-cyan-300 font-extrabold">{currentNurseName}</span>
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-300 font-medium">
+                    {nurseShiftDisplay} • Waktu Malaysia: <strong className="text-white font-mono">{malaysiaTime.formattedTime}</strong> ({malaysiaTime.formattedDate})
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="bg-emerald-950/80 border border-emerald-600 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black flex items-center space-x-2 shadow-inner">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Pangkalan Data Segerak</span>
+                  </div>
+                  <button
+                    onClick={() => setShowCounterCheckInModal(true)}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>+ Check-In Kaunter</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveNav('hari_ini')}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition-all border border-slate-700 flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Home className="w-4 h-4 text-cyan-400" />
+                    <span>Lihat Papan Hari Ini</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-view switcher tabs */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => setShiftSubTab('ALL')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    shiftSubTab === 'ALL'
+                      ? 'bg-cyan-600 text-white shadow-md'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Semua Ringkasan Syif</span>
+                </button>
+                <button
+                  onClick={() => setShiftSubTab('REGISTRATIONS')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    shiftSubTab === 'REGISTRATIONS'
+                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      : 'bg-slate-900/80 text-amber-300 hover:text-white border border-amber-900/60'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>📋 Pendaftaran Tertunggak ({shiftOverviewData.pendingRegs.length})</span>
+                  {shiftOverviewData.highPriorityRegs.length > 0 && (
+                    <span className="bg-rose-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                      {shiftOverviewData.highPriorityRegs.length} Prioriti
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShiftSubTab('ALERTS')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    shiftSubTab === 'ALERTS'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'bg-slate-900/80 text-rose-300 hover:text-white border border-rose-900/60'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>🚨 Amaran Mendesak ({shiftOverviewData.urgentAlertsList.length})</span>
+                </button>
+                <button
+                  onClick={() => setShiftSubTab('STATIONS')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    shiftSubTab === 'STATIONS'
+                      ? 'bg-teal-600 text-white shadow-md'
+                      : 'bg-slate-900/80 text-teal-300 hover:text-white border border-teal-900/60'
+                  }`}
+                >
+                  <Stethoscope className="w-3.5 h-3.5" />
+                  <span>💺 Matriks Stesen ({shiftOverviewData.occupiedChairs}/{shiftOverviewData.totalChairs})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Executive KPI Metric Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card 1: Pending Registrations */}
+              <div 
+                onClick={() => setShiftSubTab('REGISTRATIONS')}
+                className="bg-[#0B1528] hover:bg-[#10203a] border-2 border-amber-500/70 rounded-2xl p-5 shadow-xl transition-all cursor-pointer space-y-3 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                    Pendaftaran Tertunggak
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-amber-950/90 text-amber-400 flex items-center justify-center border border-amber-700">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-4xl font-black text-white font-mono">
+                    {shiftOverviewData.pendingRegs.length}
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">permohonan</span>
+                </div>
+                <div className="text-[11px] flex items-center justify-between text-slate-300 border-t border-slate-800 pt-2 font-medium">
+                  <span>{shiftOverviewData.highPriorityRegs.length} Keutamaan Tinggi</span>
+                  <span className="text-amber-400 font-bold group-hover:underline flex items-center">
+                    Semak <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 2: Urgent Patient Status Changes */}
+              <div 
+                onClick={() => setShiftSubTab('ALERTS')}
+                className="bg-[#0B1528] hover:bg-[#10203a] border-2 border-rose-500/70 rounded-2xl p-5 shadow-xl transition-all cursor-pointer space-y-3 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-rose-300 uppercase tracking-wider">
+                    Amaran &amp; Status Mendesak
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-rose-950/90 text-rose-400 flex items-center justify-center border border-rose-700 animate-pulse">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-4xl font-black text-rose-400 font-mono">
+                    {shiftOverviewData.urgentAlertsList.length}
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">kes perlu tindakan</span>
+                </div>
+                <div className="text-[11px] flex items-center justify-between text-slate-300 border-t border-slate-800 pt-2 font-medium">
+                  <span>{shiftOverviewData.urgentAlertsList.filter(a => a.severity === 'CRITICAL').length} Amaran Kritikal</span>
+                  <span className="text-rose-400 font-bold group-hover:underline flex items-center">
+                    Lihat <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Shift Chair Occupancy */}
+              <div 
+                onClick={() => setShiftSubTab('STATIONS')}
+                className="bg-[#0B1528] hover:bg-[#10203a] border-2 border-cyan-500/70 rounded-2xl p-5 shadow-xl transition-all cursor-pointer space-y-3 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-cyan-300 uppercase tracking-wider">
+                    Penggunaan Kerusi Syif
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-cyan-950/90 text-cyan-400 flex items-center justify-center border border-cyan-700">
+                    <Stethoscope className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-4xl font-black text-white font-mono">
+                    {shiftOverviewData.occupiedChairs}
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">/ {shiftOverviewData.totalChairs} Stesen Aktif</span>
+                </div>
+                <div className="text-[11px] flex items-center justify-between text-slate-300 border-t border-slate-800 pt-2 font-medium">
+                  <span>{shiftOverviewData.availableChairs} Kerusi Sedia Kosong</span>
+                  <span className="text-cyan-400 font-bold group-hover:underline flex items-center">
+                    Matriks <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 4: Patient Flow & Throughput */}
+              <div 
+                onClick={() => setActiveNav('hari_ini')}
+                className="bg-[#0B1528] hover:bg-[#10203a] border-2 border-emerald-500/70 rounded-2xl p-5 shadow-xl transition-all cursor-pointer space-y-3 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-emerald-300 uppercase tracking-wider">
+                    Aliran Pesakit Syif
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-950/90 text-emerald-400 flex items-center justify-center border border-emerald-700">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-4xl font-black text-emerald-400 font-mono">
+                    {shiftOverviewData.finishedToday}
+                  </span>
+                  <span className="text-xs text-slate-400 font-bold">Selesai • {shiftOverviewData.waitingPatients} Giliran</span>
+                </div>
+                <div className="text-[11px] flex items-center justify-between text-slate-300 border-t border-slate-800 pt-2 font-medium">
+                  <span>Disiplin Rawatan 100%</span>
+                  <span className="text-emerald-400 font-bold group-hover:underline flex items-center">
+                    Papan Giliran <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 1: PENDING REGISTRATIONS SUMMARY (RINGKASAN PENDAFTARAN TERTUNGGAK) */}
+            {(shiftSubTab === 'ALL' || shiftSubTab === 'REGISTRATIONS') && (
+              <div className="bg-[#0B1528] border-2 border-amber-500/80 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-lg bg-amber-950 text-amber-400 flex items-center justify-center border border-amber-700">
+                        <UserCheck className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-black text-white">
+                        📋 Ringkasan Pendaftaran Pesakit Tertunggak Syif Ini
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Pendaftaran baru yang memerlukan semakan status klinikal &amp; pengesahan jururawat bertugas bagi syif.
+                    </p>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      onClick={() => setShiftRegFilter('ALL')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftRegFilter === 'ALL'
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Semua ({shiftOverviewData.pendingRegs.length})
+                    </button>
+                    <button
+                      onClick={() => setShiftRegFilter('CRITICAL')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftRegFilter === 'CRITICAL'
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'text-rose-300 hover:text-white'
+                      }`}
+                    >
+                      Prioriti Tinggi ({shiftOverviewData.highPriorityRegs.length})
+                    </button>
+                    <button
+                      onClick={() => setShiftRegFilter('SOCSO')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftRegFilter === 'SOCSO'
+                          ? 'bg-teal-600 text-white shadow-sm'
+                          : 'text-teal-300 hover:text-white'
+                      }`}
+                    >
+                      PERKESO / Zakat
+                    </button>
+                  </div>
+                </div>
+
+                {/* Registrations List */}
+                {(() => {
+                  const filteredRegs = shiftOverviewData.pendingRegs.filter(r => {
+                    if (shiftRegFilter === 'CRITICAL') {
+                      return (r.medical_notes && (r.medical_notes.toLowerCase().includes('kritikal') || r.medical_notes.toLowerCase().includes('sesak') || r.medical_notes.toLowerCase().includes('catheter'))) || r.patient_category === 'KRITIKAL';
+                    }
+                    if (shiftRegFilter === 'SOCSO') {
+                      return r.sponsor_type === 'PERKESO' || r.sponsor_type === 'PERKESO_SOCSO' || r.sponsor_type === 'ZAKAT_SELANGOR';
+                    }
+                    return true;
+                  });
+
+                  if (filteredRegs.length === 0) {
+                    return (
+                      <div className="bg-slate-950/60 border-2 border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                        <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                        <h4 className="text-white font-bold text-base">Tiada Pendaftaran Tertunggak</h4>
+                        <p className="text-xs text-slate-400 max-w-md mx-auto">
+                          Semua permohonan pendaftaran pesakit untuk syif ini telah disemak dan disahkan. Rekod berada dalam keadaan teratur.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {filteredRegs.map(reg => {
+                        const isHighPri = (reg.medical_notes && (reg.medical_notes.toLowerCase().includes('kritikal') || reg.medical_notes.toLowerCase().includes('sesak') || reg.medical_notes.toLowerCase().includes('catheter'))) || reg.sponsor_type === 'PERKESO' || reg.patient_category === 'KRITIKAL';
+                        const isApproving = actionLoadingKey === `approve-reg-${reg.id}`;
+
+                        return (
+                          <div 
+                            key={reg.id} 
+                            className={`p-4 rounded-2xl border-2 space-y-3 transition-all ${
+                              isHighPri 
+                                ? 'bg-[#121c2e] border-amber-500/80 shadow-lg' 
+                                : 'bg-slate-950 border-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <h4 className="text-base font-black text-white">{reg.full_name}</h4>
+                                  {isHighPri && (
+                                    <span className="bg-rose-950 text-rose-300 border border-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                                      Keutamaan Tinggi
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-300 font-mono mt-0.5">
+                                  No. IC: <strong className="text-cyan-300">{reg.ic_number}</strong> • Tel: {reg.phone_number}
+                                </p>
+                              </div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800">
+                                {reg.status || 'BARU'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-900/90 p-2.5 rounded-xl border border-slate-800/80">
+                              <div>
+                                <span className="text-slate-400 block font-semibold">Syif / Jadual:</span>
+                                <strong className="text-emerald-300">{reg.preferred_days || 'ISNIN-RABU-JUMAAT'} ({reg.preferred_shift || 'SYIF_1'})</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block font-semibold">Penaja / Sponsor:</span>
+                                <strong className="text-amber-300">{reg.sponsor_type || 'PERKESO / Zakat'}</strong>
+                              </div>
+                              {reg.medical_notes && (
+                                <div className="col-span-2 pt-1 border-t border-slate-800/60">
+                                  <span className="text-slate-400 block font-semibold">Catatan Klinikal:</span>
+                                  <p className="text-slate-200 line-clamp-1 italic text-[11px]">"{reg.medical_notes}"</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <button
+                                onClick={() => setSelectedRegForDetail(reg)}
+                                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-cyan-300 hover:text-white font-bold text-xs rounded-xl border border-slate-800 transition-all cursor-pointer flex items-center space-x-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Butiran</span>
+                              </button>
+
+                              <button
+                                disabled={isApproving}
+                                onClick={() => handleApproveRegistrationInShift(reg)}
+                                className="flex-1 py-2 px-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-75 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                              >
+                                {isApproving ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Menyegerak Pangkalan Data...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span>Luluskan Masuk Syif</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* SECTION 2: URGENT PATIENT STATUS CHANGES & CLINICAL ALARMS */}
+            {(shiftSubTab === 'ALL' || shiftSubTab === 'ALERTS') && (
+              <div className="bg-[#0B1528] border-2 border-rose-500/80 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-lg bg-rose-950 text-rose-400 flex items-center justify-center border border-rose-700 animate-pulse">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-black text-white">
+                        🚨 Perubahan Status Pesakit Mendesak &amp; Amaran Klinikal Syif
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Pemantauan automatik bagi kenaikan cecair mendadak, krisis tekanan darah, &amp; pesakit tamat rawatan.
+                    </p>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      onClick={() => setShiftAlertFilter('ALL')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftAlertFilter === 'ALL'
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Semua ({shiftOverviewData.urgentAlertsList.length})
+                    </button>
+                    <button
+                      onClick={() => setShiftAlertFilter('FLUID')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftAlertFilter === 'FLUID'
+                          ? 'bg-cyan-600 text-white shadow-sm'
+                          : 'text-cyan-300 hover:text-white'
+                      }`}
+                    >
+                      💧 Fluid Overload
+                    </button>
+                    <button
+                      onClick={() => setShiftAlertFilter('BP')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftAlertFilter === 'BP'
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'text-amber-300 hover:text-white'
+                      }`}
+                    >
+                      🩺 BP Abnormal
+                    </button>
+                    <button
+                      onClick={() => setShiftAlertFilter('ENDING')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        shiftAlertFilter === 'ENDING'
+                          ? 'bg-teal-600 text-white shadow-sm'
+                          : 'text-teal-300 hover:text-white'
+                      }`}
+                    >
+                      ⏱️ Baki &lt;30m
+                    </button>
+                  </div>
+                </div>
+
+                {/* Urgent Alerts Cards */}
+                {(() => {
+                  const filteredAlerts = shiftOverviewData.urgentAlertsList.filter(a => {
+                    if (shiftAlertFilter === 'FLUID') return a.alertType === 'FLUID_OVERLOAD';
+                    if (shiftAlertFilter === 'BP') return a.alertType === 'HIGH_BP' || a.alertType === 'LOW_BP';
+                    if (shiftAlertFilter === 'ENDING') return a.alertType === 'NEARING_END';
+                    if (shiftAlertFilter === 'WAIT') return a.alertType === 'LONG_WAIT';
+                    return true;
+                  });
+
+                  if (filteredAlerts.length === 0) {
+                    return (
+                      <div className="bg-slate-950/60 border-2 border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                        <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                        <h4 className="text-white font-bold text-base">Semua Pesakit Stabil &amp; Selamat</h4>
+                        <p className="text-xs text-slate-400 max-w-md mx-auto">
+                          Tiada amaran kenaikan cecair kritikal atau anomali tekanan darah dikesan semasa syif berjalan.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {filteredAlerts.map(alert => {
+                        const isCritical = alert.severity === 'CRITICAL';
+                        const matchingSession = sessions.find(s => s.patient_id === alert.patientId);
+
+                        return (
+                          <div 
+                            key={alert.id}
+                            className={`p-4 rounded-2xl border-2 space-y-3 transition-all ${
+                              isCritical 
+                                ? 'bg-[#18111e] border-rose-500 shadow-xl' 
+                                : 'bg-slate-950 border-amber-600/70'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                                    isCritical 
+                                      ? 'bg-rose-950 text-rose-300 border border-rose-600' 
+                                      : 'bg-amber-950 text-amber-300 border border-amber-600'
+                                  }`}>
+                                    {alert.severity} • {alert.alertType.replace('_', ' ')}
+                                  </span>
+                                  {alert.chairNumber && (
+                                    <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+                                      Kerusi {alert.chairNumber}
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className="text-base font-black text-white mt-1">{alert.patientName}</h4>
+                                <span className="text-xs text-slate-400 font-mono font-bold">
+                                  {alert.patientIdCode} • {alert.timeAgo}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+                              <p className="font-bold text-white leading-snug">{alert.title}</p>
+                              <p className="text-slate-300 leading-relaxed text-[11px]">{alert.description}</p>
+                              
+                              <div className="flex justify-between items-center pt-1 border-t border-slate-800 text-[11px]">
+                                <span className="text-slate-400">Nilai Semasa: <strong className="text-amber-300 font-mono">{alert.currentValue}</strong></span>
+                                <span className="text-slate-400">Sasaran: <strong className="text-emerald-300 font-mono">{alert.targetValue}</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 bg-rose-950/30 border border-rose-900/60 rounded-xl text-[11px] text-rose-200">
+                              <strong>Tindakan Disyorkan:</strong> {alert.actionRecommended}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              {matchingSession ? (
+                                <button
+                                  onClick={() => setSelectedSessionForActive(matchingSession)}
+                                  className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                                >
+                                  <Stethoscope className="w-4 h-4" />
+                                  <span>Buka Pemantauan Sesi (Kerusi {matchingSession.chair_number})</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const checkInRec = queueList.find(q => q.patient_id === alert.patientId);
+                                    if (checkInRec) {
+                                      setAssigningPatient(checkInRec);
+                                    }
+                                  }}
+                                  className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                                >
+                                  <UserCheck className="w-4 h-4" />
+                                  <span>Tugaskan Stesen Kerusi</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* SECTION 3: SHIFT LIVE RADAR MATRIX (STATUS KERUSI SEMASA SYIF) */}
+            {(shiftSubTab === 'ALL' || shiftSubTab === 'STATIONS') && (
+              <div className="bg-[#0B1528] border-2 border-cyan-500/80 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-950 text-cyan-400 flex items-center justify-center border border-cyan-700">
+                        <Stethoscope className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-black text-white">
+                        💺 Matriks Pantas Status Stesen Syif Semasa
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Status langsung 12 stesen hemodialisis (Bay A &amp; Bay B) bagi syif bertugas.
+                    </p>
+                  </div>
+                  <div className="text-xs text-slate-300 font-bold bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+                    Kapasiti Digunakan: <strong className="text-cyan-300 font-mono">{shiftOverviewData.occupiedChairs} / {shiftOverviewData.totalChairs} Kerusi</strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {INITIAL_CHAIRS.map(chair => {
+                    const activeSession = sessions.find(s => s.chair_number === chair.chair_number && s.status === 'SEDANG_DIALISIS');
+                    const isOccupied = Boolean(activeSession);
+
+                    return (
+                      <div
+                        key={chair.id}
+                        onClick={() => {
+                          if (activeSession) {
+                            setSelectedSessionForActive(activeSession);
+                          }
+                        }}
+                        className={`p-3 rounded-2xl border-2 transition-all flex flex-col justify-between min-h-[110px] cursor-pointer ${
+                          isOccupied
+                            ? 'bg-emerald-950/60 border-emerald-500 shadow-md hover:border-emerald-400'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-black text-white text-base">
+                            {chair.chair_number}
+                          </span>
+                          <span className={`w-2.5 h-2.5 rounded-full ${isOccupied ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                        </div>
+
+                        {isOccupied && activeSession ? (
+                          <div className="space-y-1 mt-1">
+                            <p className="text-xs font-bold text-white truncate">{activeSession.patient_name}</p>
+                            <div className="text-[10px] text-emerald-300 font-mono font-semibold">
+                              UF: {activeSession.target_uf_litres}L • {activeSession.current_bp || '130/80'}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5 mt-1">
+                            <span className="text-[10px] text-slate-500 block font-semibold">Kosong / Sedia</span>
+                            <span className="text-[10px] text-cyan-400 font-bold">Boleh Ditugaskan</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* MODAL: PENDING REGISTRATION DETAIL */}
+            {selectedRegForDetail && (
+              <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-2xl w-full p-6 sm:p-8 text-white space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
+                  <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                    <div>
+                      <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                        Butiran Permohonan Pendaftaran Pesakit
+                      </span>
+                      <h3 className="text-2xl font-black text-white">{selectedRegForDetail.full_name}</h3>
+                      <p className="text-xs text-slate-300 font-mono">No. IC: {selectedRegForDetail.ic_number}</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedRegForDetail(null)}
+                      className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 block font-semibold">Umur / Jantina:</span>
+                      <strong className="text-white text-sm">{selectedRegForDetail.age} tahun • {selectedRegForDetail.gender}</strong>
+                    </div>
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 block font-semibold">Nombor Telefon:</span>
+                      <strong className="text-cyan-300 text-sm">{selectedRegForDetail.phone_number}</strong>
+                    </div>
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 block font-semibold">Jadual &amp; Syif Dimohon:</span>
+                      <strong className="text-emerald-300">{selectedRegForDetail.preferred_days || 'ISNIN-RABU-JUMAAT'} ({selectedRegForDetail.preferred_shift || 'SYIF_1'})</strong>
+                    </div>
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 block font-semibold">Penaja Perubatan:</span>
+                      <strong className="text-amber-300">{selectedRegForDetail.sponsor_type || 'PERKESO / Zakat'}</strong>
+                    </div>
+                    <div className="col-span-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 block font-semibold">Alamat Kediaman:</span>
+                      <p className="text-slate-200">{selectedRegForDetail.address || '-'}, {selectedRegForDetail.city || 'Semenyih'}, {selectedRegForDetail.state || 'Selangor'}</p>
+                    </div>
+                    <div className="col-span-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 block font-semibold">Waris Kecemasan:</span>
+                      <p className="text-slate-200">{selectedRegForDetail.nok_name || '-'} ({selectedRegForDetail.nok_relationship || 'Waris'}) • Tel: {selectedRegForDetail.nok_phone || '-'}</p>
+                    </div>
+                    {selectedRegForDetail.medical_notes && (
+                      <div className="col-span-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                        <span className="text-slate-400 block font-semibold">Nota &amp; Riwayat Klinikal:</span>
+                        <p className="text-amber-200">{selectedRegForDetail.medical_notes}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+                    <button
+                      onClick={() => setSelectedRegForDetail(null)}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                    <button
+                      disabled={actionLoadingKey === `approve-reg-${selectedRegForDetail.id}`}
+                      onClick={() => {
+                        handleApproveRegistrationInShift(selectedRegForDetail);
+                        setSelectedRegForDetail(null);
+                      }}
+                      className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 text-slate-950 font-black rounded-xl text-xs shadow-lg transition-all cursor-pointer flex items-center space-x-1.5"
+                    >
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>Sahkan &amp; Luluskan Pendaftaran Masuk Syif</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* VIEW 1.5: JADUAL RAWATAN (DAILY & WEEKLY TREATMENT SCHEDULE) */}
         {activeNav === 'jadual' && (
           <TreatmentScheduleManager
@@ -2379,8 +3374,17 @@ export function NursePortal({
                            })()}
                           </td>
                           <td className="px-5 py-4 text-xs">
-                            <strong className="text-cyan-400 block font-bold">{p.assigned_chair}</strong>
-                            <span>{p.vascular_access}</span>
+                            {pSession && pSession.status === 'SEDANG_DIALISIS' && pSession.chair_number ? (
+                              <div className="flex items-center space-x-1.5 mb-0.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                <strong className="text-cyan-400 block font-black text-sm font-mono">
+                                  {pSession.chair_number}
+                                </strong>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 font-bold block mb-0.5 font-mono">-</span>
+                            )}
+                            <span className="text-slate-300 font-medium">{p.vascular_access}</span>
                           </td>
                           <td className="px-5 py-4">
                             <DialysisCountdownTimer session={pSession} />
@@ -3840,10 +4844,20 @@ export function NursePortal({
               {/* Submit Button (> 48px Touch Target) */}
               <button
                 type="submit"
-                className="w-full min-h-[58px] bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-lg sm:text-xl rounded-2xl shadow-xl shadow-emerald-950/40 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                disabled={actionLoadingKey === 'checkin-modal'}
+                className="w-full min-h-[58px] bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-75 text-slate-950 font-black text-lg sm:text-xl rounded-2xl shadow-xl shadow-emerald-950/40 transition-all flex items-center justify-center space-x-2 cursor-pointer"
               >
-                <Play className="w-5 h-5 fill-slate-950" />
-                <span>[ SIMPAN & MULAKAN SESI ]</span>
+                {actionLoadingKey === 'checkin-modal' ? (
+                  <>
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>MENYEGERAKKAN PANGKALAN DATA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 fill-slate-950" />
+                    <span>[ SIMPAN & MULAKAN SESI ]</span>
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -4266,10 +5280,20 @@ export function NursePortal({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-sm rounded-xl transition-all shadow-xl cursor-pointer flex items-center justify-center space-x-2"
+                  disabled={actionLoadingKey === 'assign-start-dialysis'}
+                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-75 text-slate-950 font-black text-sm rounded-xl transition-all shadow-xl cursor-pointer flex items-center justify-center space-x-2"
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>Sahkan Penugasan Kerusi {selectedChairNumber} & Mula Dialisis</span>
+                  {actionLoadingKey === 'assign-start-dialysis' ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Menyegerak Pangkalan Data & Memulakan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>Sahkan Penugasan Kerusi {selectedChairNumber} & Mula Dialisis</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -4386,10 +5410,20 @@ export function NursePortal({
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition-all shadow-lg cursor-pointer flex items-center space-x-1.5"
+                  disabled={actionLoadingKey === 'counter-checkin'}
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-75 text-slate-950 font-black rounded-xl transition-all shadow-lg cursor-pointer flex items-center space-x-1.5"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Daftar Masuk Pesakit</span>
+                  {actionLoadingKey === 'counter-checkin' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Menyegerak Pendaftaran Masuk...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Daftar Masuk Pesakit</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -4489,10 +5523,24 @@ export function NursePortal({
                     <strong className="text-white text-sm block">{selectedPatientForDetail.schedule_pattern.replace(/_/g, ' ')}</strong>
                   </div>
 
-                  <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Chair</span>
-                    <strong className="text-2xl font-black text-cyan-400 block">{selectedPatientForDetail.assigned_chair}</strong>
-                  </div>
+                  {(() => {
+                    const activePtSession = sessions.find(s => s.patient_id === selectedPatientForDetail.id);
+                    const isPtOnDialysis = activePtSession?.status === 'SEDANG_DIALISIS';
+                    return (
+                      <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                        <span className="text-[11px] text-slate-400 block font-semibold">Stesen Kerusi</span>
+                        {isPtOnDialysis && activePtSession?.chair_number ? (
+                          <strong className="text-2xl font-black text-cyan-400 block font-mono">
+                            {activePtSession.chair_number}
+                          </strong>
+                        ) : (
+                          <strong className="text-xl font-black text-slate-500 block font-mono">
+                            -
+                          </strong>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
                     <span className="text-[11px] text-slate-400 block font-semibold">Dry Weight</span>
@@ -5537,21 +6585,33 @@ export function NursePortal({
                     <span className="text-slate-400 font-mono">Stesen {s.chair_number} • {s.status.replace(/_/g, ' ')}</span>
                   </div>
                   <button
+                    disabled={actionLoadingKey === `start-dialysis-${s.id}`}
                     onClick={() => {
-                      const updated: DialysisSession = {
-                        ...s,
-                        status: 'SEDANG_DIALISIS',
-                        actual_start_time: new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true }),
-                        start_timestamp: Date.now(),
-                        updated_at: new Date().toISOString()
-                      };
-                      setSessions(prev => prev.map(item => item.id === s.id ? updated : item));
-                      if (onUpdateSession) onUpdateSession(updated);
-                      showToast(`✓ Pesakit ${s.patient_name} ditukar ke 'Sedang Dialisis'`);
+                      setActionLoadingKey(`start-dialysis-${s.id}`);
+                      setTimeout(() => {
+                        const updated: DialysisSession = {
+                          ...s,
+                          status: 'SEDANG_DIALISIS',
+                          actual_start_time: new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                          start_timestamp: Date.now(),
+                          updated_at: new Date().toISOString()
+                        };
+                        setSessions(prev => prev.map(item => item.id === s.id ? updated : item));
+                        if (onUpdateSession) onUpdateSession(updated);
+                        showToast(`✓ Pesakit ${s.patient_name} ditukar ke 'Sedang Dialisis' (Pangkalan Data Disegerak)`);
+                        setActionLoadingKey(null);
+                      }, 400);
                     }}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg cursor-pointer"
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-75 text-white font-bold rounded-lg cursor-pointer flex items-center space-x-1"
                   >
-                    Mula Dialisis
+                    {actionLoadingKey === `start-dialysis-${s.id}` ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Memulakan...</span>
+                      </>
+                    ) : (
+                      <span>Mula Dialisis</span>
+                    )}
                   </button>
                 </div>
               ))}

@@ -44,7 +44,7 @@ import {
 export default function Home() {
   const malaysiaTime = useMalaysiaTime();
 
-  const [currentView, setCurrentView] = useState<'public' | 'patient' | 'nurse' | 'admin' | 'database' | 'registration'>('patient');
+  const [currentView, setCurrentView] = useState<'public' | 'patient' | 'nurse' | 'admin' | 'database' | 'registration'>('public');
   const [showGlobalHelpModal, setShowGlobalHelpModal] = useState(false);
   const [showPatientLoginModal, setShowPatientLoginModal] = useState(false);
 
@@ -107,6 +107,14 @@ export default function Home() {
           localStorage.removeItem('kaizenbros_medical_records_clean');
           setMedicalRecords([]);
           localStorage.setItem('kaizenbros_blood_purge_v6', 'true');
+        }
+
+        // Migration v7: Reset dialysis sessions to clear clean state as requested by user
+        const isResetDialysisV7 = localStorage.getItem('kaizenbros_dialysis_records_reset_v7');
+        if (isResetDialysisV7 !== 'true') {
+          localStorage.removeItem('kaizenbros_sessions');
+          setSessions([]);
+          localStorage.setItem('kaizenbros_dialysis_records_reset_v7', 'true');
         }
 
         const storedPatients = localStorage.getItem('kaizenbros_patients');
@@ -983,6 +991,7 @@ export default function Home() {
             sessions={sessions}
             medications={medications}
             medicalRecords={medicalRecords}
+            auditLogs={auditLogs}
             checkInRecord={demoPatientCheckIn}
             isLoggedIn={!!authenticatedPatient}
             onUpdateWeights={handlePatientUpdateWeights}
@@ -1033,6 +1042,7 @@ export default function Home() {
             currentNurseName={authenticatedStaff ? authenticatedStaff.name : demoNurseName}
             patients={syncedPatients}
             sessions={sessions}
+            registrations={registrations}
             medicalRecords={medicalRecords}
             onUpdateMedicalRecords={(updatedRecords) => {
               // Find deleted records and delete from Firebase
