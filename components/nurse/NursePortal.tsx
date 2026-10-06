@@ -144,7 +144,7 @@ export function DialysisCountdownTimer({ session }: { session?: DialysisSession 
     }
   }
   if (!startMs) {
-    startMs = Date.now() - (3.5 * 3600 * 1000);
+    startMs = now;
   }
 
   const elapsedMs = Math.max(0, now - startMs);
@@ -225,8 +225,8 @@ export function NursePortal({
   onStaffLogout
 }: NursePortalProps) {
   // Navigation tabs:
-  // 🏠 Hari Ini, ⏱️ Ringkasan Syif, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 📋 Rekod, 📊 Laporan, ⚙️ Tetapan
-  const [activeNav, setActiveNav] = useState<'hari_ini' | 'shift_overview' | 'jadual' | 'pesakit' | 'sesi' | 'rekod' | 'rekod_darah' | 'laporan' | 'tetapan'>('hari_ini');
+  // 🏠 Hari Ini, ⏱️ Ringkasan Syif, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 🩺 Rekod Darah & Analisa, ⚙️ Tetapan
+  const [activeNav, setActiveNav] = useState<'hari_ini' | 'shift_overview' | 'jadual' | 'pesakit' | 'sesi' | 'rekod_darah' | 'tetapan'>('hari_ini');
 
   // Subtle loading animation key for database synchronization feedback
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
@@ -535,7 +535,7 @@ export function NursePortal({
     });
 
     // 3. Shift Capacity Summary
-    const totalChairs = 18;
+    const totalChairs = INITIAL_CHAIRS.length > 0 ? INITIAL_CHAIRS.length : 12;
     const occupiedChairs = sessions.filter(s => s.status === 'SEDANG_DIALISIS').length;
     const waitingPatients = queueList.filter(q => !q.assigned_chair).length;
     const finishedToday = sessions.filter(s => s.status === 'SUDAH_SELESAI' || s.status === 'SELESAI').length;
@@ -1930,18 +1930,6 @@ export function NursePortal({
           </button>
 
           <button
-            onClick={() => setActiveNav('rekod')}
-            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
-              activeNav === 'rekod'
-                ? 'bg-cyan-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-850'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>📋 Rekod</span>
-          </button>
-
-          <button
             onClick={() => setActiveNav('rekod_darah')}
             className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
               activeNav === 'rekod_darah'
@@ -1951,18 +1939,6 @@ export function NursePortal({
           >
             <Activity className="w-4 h-4" />
             <span>🩺 Rekod Darah & Analisa</span>
-          </button>
-
-          <button
-            onClick={() => setActiveNav('laporan')}
-            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
-              activeNav === 'laporan'
-                ? 'bg-cyan-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-850'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>📊 Laporan</span>
           </button>
 
           <button
@@ -3465,7 +3441,9 @@ export function NursePortal({
                     }`}
                   >
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-lg font-black text-cyan-400">{s.chair_number}</span>
+                      <span className="text-lg font-black text-cyan-400">
+                        {isActive && s.chair_number ? s.chair_number : '-'}
+                      </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                         isActive ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-400'
                       }`}>
@@ -3501,44 +3479,6 @@ export function NursePortal({
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
-
-        {/* VIEW 4: REKOD KLINIKAL */}
-        {activeNav === 'rekod' && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-black text-white">Rekod Sesi Dialisis Selesai</h2>
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-              <div className="divide-y divide-slate-800">
-                {sessions.filter(s => s.status === 'SUDAH_SELESAI').map(s => (
-                  <div key={s.id} className="py-3 flex justify-between items-center flex-wrap gap-2">
-                    <div>
-                      <strong className="text-white text-base block font-bold">{s.patient_name} ({s.patient_id_code})</strong>
-                      <p className="text-xs text-slate-400">
-                        {s.scheduled_date} | Stesen {s.chair_number} | {s.actual_start_time} - {s.actual_end_time}
-                      </p>
-                      <p className="text-xs text-slate-300 mt-1">
-                        Pra: <strong className="text-amber-300">{s.pre_weight_kg || '--'} kg</strong> (BP: {s.pre_bp || '--'}) • Selepas: <strong className="text-cyan-300">{s.post_weight_kg || '--'} kg</strong> (BP: {s.post_bp || '--'})
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="text-right">
-                        <span className="text-xs text-slate-400 block">Cecair Ditapis</span>
-                        <strong className="text-cyan-400 text-sm font-bold">{s.actual_uf_litres ? `${s.actual_uf_litres} L` : '--'}</strong>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => openWeightModalForSession(s)}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-cyan-950 text-cyan-300 border border-slate-700 hover:border-cyan-600 rounded-lg text-xs font-bold flex items-center space-x-1 cursor-pointer"
-                      >
-                        <Scale className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Edit Berat</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         )}
@@ -4352,59 +4292,6 @@ export function NursePortal({
                 )}
               </div>
             )}
-          </div>
-        )}
-
-        {/* VIEW 5: LAPORAN OPERASI */}
-        {activeNav === 'laporan' && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap justify-between items-center gap-3">
-              <div>
-                <h2 className="text-2xl font-black text-white">Laporan Operasi Klinikal Harian</h2>
-                <p className="text-xs text-slate-400">Ringkasan kehadiran pesakit, penapisan ultrafiltration, dan kualiti rawatan</p>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => {
-                    const csvContent = "data:text/csv;charset=utf-8," + 
-                      "ID,Nama Pesakit,Stesen,Status,Berat Sebelum,Berat Selepas,BP Sebelum,BP Selepas,UF Ditapis\n" +
-                      sessions.map(s => `${s.patient_id_code},${s.patient_name},${s.chair_number},${s.status},${s.pre_weight_kg || ''},${s.post_weight_kg || ''},${s.pre_bp || ''},${s.post_bp || ''},${s.actual_uf_litres || ''}`).join("\n");
-                    const encodedUri = encodeURI(csvContent);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", `laporan_dialisis_${new Date().toISOString().slice(0,10)}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    showToast('✓ Laporan CSV berjaya dimuat turun.');
-                  }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 cursor-pointer shadow"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Eksport CSV</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Kadar Kehadiran Sesi</span>
-                <div className="text-3xl font-black text-emerald-400 mt-1">100%</div>
-                <p className="text-xs text-slate-500 mt-1">Tiada pesakit tidak hadir (No-Show: 0)</p>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Jumlah Cecair Dikeluarkan</span>
-                <div className="text-3xl font-black text-cyan-400 mt-1">28.4 L</div>
-                <p className="text-xs text-slate-500 mt-1">Purata 1.57 L setiap pesakit selesai</p>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Insiden Klinikal</span>
-                <div className="text-3xl font-black text-white mt-1">0</div>
-                <p className="text-xs text-slate-500 mt-1">Tiada komplikasi hipotensi teruk dilaporkan</p>
-              </div>
-            </div>
           </div>
         )}
 

@@ -127,8 +127,8 @@ Sila balas DALAM FORMAT JSON SAHAJA mengikut skema berikut:
       }, { status: 503 });
     }
 
-    // Try reliable candidate models: gemini-3.8-flash first as primary, followed by gemini-3.1-pro-preview
-    const candidateModels = ["gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite"];
+    // Try reliable standard Gemini models: gemini-2.5-flash first, followed by gemini-1.5-flash, gemini-2.0-flash, and gemini-2.5-pro
+    const candidateModels = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
     let lastError: any = null;
 
     for (const modelName of candidateModels) {
@@ -185,11 +185,18 @@ Sila balas DALAM FORMAT JSON SAHAJA mengikut skema berikut:
     }
 
     console.error("All Gemini models failed for blood report analysis:", lastError);
+    
+    // Check if error is quota exceeded (429)
+    const isQuotaExceeded = String(lastError?.message || '').includes('429') || String(lastError?.message || '').includes('RESOURCE_EXHAUSTED') || String(lastError?.message || '').includes('quota');
+    const userMessage = isQuotaExceeded
+      ? "Had kuota penggunaan Gemini API sementara ini telah dipenuhi (Rate limit 429). Sila masukkan nilai ujian darah secara manual atau cuba sebentar lagi."
+      : "AI tidak dapat membaca fail ini dengan jelas (" + (lastError?.message || 'Ralat sambungan') + "). Sila semak format dokumen atau masukkan bacaan secara manual.";
+
     return NextResponse.json({
-      error: "AI tidak dapat membaca fail ini dengan jelas (" + (lastError?.message || 'Ralat sambungan') + "). Sila semak format dokumen atau masukkan bacaan secara manual.",
+      error: userMessage,
       extracted_results: null,
       ai_analysis: null
-    }, { status: 500 });
+    }, { status: isQuotaExceeded ? 429 : 500 });
 
   } catch (error: any) {
     console.error("Analysis route error:", error);

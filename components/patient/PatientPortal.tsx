@@ -51,6 +51,8 @@ import { VERIFIED_CENTRE_INFO } from '@/lib/mock-data';
 import { parseMalaysianIC, getAgeDisplayFromIC } from '@/lib/ic-utils';
 import { calculateNextDialysis, getMalaysiaDate } from '@/lib/malaysia-time';
 import { useMalaysiaTime } from '@/hooks/useMalaysiaTime';
+import { parseTimeStringToTodayMs } from '@/lib/dialysis-timer';
+import { HistoricalWeightChart } from '@/components/patient/HistoricalWeightChart';
 
 interface PatientPortalProps {
   patient?: Patient | null;
@@ -223,6 +225,94 @@ export function PatientPortal({
   const [inputPostDiastolic, setInputPostDiastolic] = useState<string>(activePostBp && activePostBp.includes('/') ? activePostBp.split('/')[1] : '78');
 
   const [saveWeightSuccess, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Live real-time ticker for accurate active dialysis countdown
+  const [liveNowMs, setLiveNowMs] = useState<number>(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setLiveNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Active Dialysis Live Countdown calculation (Standard 4 hours = 14,400 seconds)
+  const activeDialysisTimer = useMemo(() => {
+    const FOUR_HOURS_MS = 4 * 3600 * 1000;
+    
+    // Determine start timestamp
+    let startMs: number | null = null;
+    if (session?.start_timestamp) {
+      startMs = session.start_timestamp;
+    } else if (session?.actual_start_time) {
+      startMs = parseTimeStringToTodayMs(session.actual_start_time);
+    } else if (checkInRecord?.check_in_time && checkInRecord.status === 'SEDANG_DIALISIS') {
+      startMs = parseTimeStringToTodayMs(checkInRecord.check_in_time);
+    }
+
+    // If on dialysis but no start time recorded yet, default to now
+    if (!startMs && isOnDialysis) {
+      startMs = liveNowMs;
+    }
+
+    if (!startMs) {
+      return {
+        elapsedMs: 0,
+        remainingMs: FOUR_HOURS_MS,
+        elapsedSeconds: 0,
+        remainingSeconds: 4 * 3600,
+        hours: 4,
+        minutes: 0,
+        seconds: 0,
+        percentProgress: 0,
+        isLast30Minutes: false,
+        isCompleted: false,
+        formattedRemaining: '~4 Jam 00 Minit',
+        formattedTimeClock: '04:00:00',
+        actualStartTimeDisplay: session?.actual_start_time || 'Baru Bermula'
+      };
+    }
+
+    const elapsedMs = Math.max(0, liveNowMs - startMs);
+    const remainingMs = Math.max(0, FOUR_HOURS_MS - elapsedMs);
+    const elapsedSeconds = Math.floor(elapsedMs / 1000);
+    const remainingSeconds = Math.floor(remainingMs / 1000);
+
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    const seconds = remainingSeconds % 60;
+    const percentProgress = Math.min(100, Math.max(0, Math.floor((elapsedMs / FOUR_HOURS_MS) * 100)));
+
+    const isLast30Minutes = isOnDialysis && remainingSeconds <= 1800 && remainingSeconds > 0;
+    const isCompleted = isOnDialysis && remainingSeconds === 0;
+
+    let formattedRemaining = '';
+    if (isCompleted) {
+      formattedRemaining = 'Masa 4 Jam Telah Lengkap';
+    } else if (hours > 0) {
+      formattedRemaining = `~${hours} Jam ${minutes} Minit`;
+    } else {
+      formattedRemaining = `~${minutes} Minit ${seconds} Saat`;
+    }
+
+    const formattedTimeClock = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    const startDate = new Date(startMs);
+    const actualStartTimeDisplay = session?.actual_start_time || startDate.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    return {
+      elapsedMs,
+      remainingMs,
+      elapsedSeconds,
+      remainingSeconds,
+      hours,
+      minutes,
+      seconds,
+      percentProgress,
+      isLast30Minutes,
+      isCompleted,
+      formattedRemaining,
+      formattedTimeClock,
+      actualStartTimeDisplay
+    };
+  }, [session, checkInRecord, isOnDialysis, liveNowMs]);
 
   // Activity Feed Filter & Search state
   const [activityCategoryFilter, setActivityCategoryFilter] = useState<'all' | 'checkin' | 'weight' | 'session' | 'medical' | 'system'>('all');
@@ -993,33 +1083,100 @@ export function PatientPortal({
 
             {/* B2. CASE 2B: SEDANG DIALISIS (HANYA PAPAR BILA KERUSI TELAH DITUGASKAN DAN STATUS AKTIF SEDANG DIALISIS) */}
             {isOnDialysis && hasAssignedChair && (
-              <div className="bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-900 border-3 border-emerald-500 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden patient-dark-card">
-                <div className="flex items-center space-x-2 text-emerald-400 font-extrabold text-sm sm:text-base tracking-wider uppercase mb-2">
-                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping mr-1" />
-                  <span>RAWATAN DIALISIS SEDANG BERJALAN</span>
+              <div className={`bg-gradient-to-br ${
+                activeDialysisTimer.isLast30Minutes
+                  ? 'from-rose-950 via-slate-900 to-rose-950/50 border-3 border-rose-500 shadow-2xl shadow-rose-950/70'
+                  : 'from-emerald-950 via-slate-900 to-slate-900 border-3 border-emerald-500 shadow-2xl'
+              } rounded-3xl p-6 sm:p-7 relative overflow-hidden patient-dark-card transition-all`}>
+                
+                {/* Header Badge */}
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <div className={`flex items-center space-x-2 font-extrabold text-sm sm:text-base tracking-wider uppercase ${
+                    activeDialysisTimer.isLast30Minutes ? 'text-rose-400' : 'text-emerald-400'
+                  }`}>
+                    <span className={`w-3.5 h-3.5 rounded-full ${
+                      activeDialysisTimer.isLast30Minutes ? 'bg-rose-500 animate-ping' : 'bg-emerald-400 animate-ping'
+                    } mr-1`} />
+                    <span>{activeDialysisTimer.isLast30Minutes ? '⚠️ RAWATAN HAMPIR TAMAT (30 MINIT TERAKHIR)' : 'RAWATAN DIALISIS SEDANG BERJALAN'}</span>
+                  </div>
+                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-950/80 border border-slate-700 text-slate-300">
+                    Mula: {activeDialysisTimer.actualStartTimeDisplay}
+                  </span>
                 </div>
 
                 <div className="space-y-2 mb-5">
                   <div className="text-3xl sm:text-4xl font-extrabold text-white flex items-baseline gap-3">
                     <span>Stesen Kerusi</span>
-                    <span className="text-emerald-300 font-black font-mono">
+                    <span className={`font-black font-mono ${activeDialysisTimer.isLast30Minutes ? 'text-rose-300' : 'text-emerald-300'}`}>
                       Kerusi {assignedChairNumber}
                     </span>
                   </div>
                   <div className="flex items-center text-slate-200 text-base font-bold">
-                    <MapPin className="w-5 h-5 mr-2 text-emerald-400 flex-shrink-0" />
+                    <MapPin className={`w-5 h-5 mr-2 ${activeDialysisTimer.isLast30Minutes ? 'text-rose-400' : 'text-emerald-400'} flex-shrink-0`} />
                     <span>Mesin: {assignedMachineModel || 'Fresenius 4008S NG'}</span>
                   </div>
                 </div>
 
-                <div className="inline-flex items-center bg-emerald-950 text-emerald-200 border border-emerald-700 px-4 py-2 rounded-full text-base font-bold mb-6">
-                  <Clock className="w-5 h-5 mr-2 text-emerald-300" />
-                  <span>Baki Rawatan: ~3 Jam 15 Minit</span>
+                {/* Live Real-Time Countdown Display */}
+                <div className="space-y-3 mb-6">
+                  <div className={`inline-flex items-center ${
+                    activeDialysisTimer.isLast30Minutes
+                      ? 'bg-rose-950 text-rose-200 border-2 border-rose-500 animate-pulse ring-4 ring-rose-500/30'
+                      : 'bg-emerald-950 text-emerald-200 border border-emerald-700'
+                  } px-4 py-2.5 rounded-2xl text-base font-bold shadow-md`}>
+                    {activeDialysisTimer.isLast30Minutes ? (
+                      <AlertTriangle className="w-5 h-5 mr-2 text-rose-400 animate-bounce" />
+                    ) : (
+                      <Clock className="w-5 h-5 mr-2 text-emerald-300 animate-spin" style={{ animationDuration: '6s' }} />
+                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                      <span>Baki Rawatan: {activeDialysisTimer.formattedRemaining}</span>
+                      <span className="font-mono text-sm font-black px-2 py-0.5 rounded bg-black/40 border border-white/10 mt-1 sm:mt-0">
+                        [ {activeDialysisTimer.formattedTimeClock} ]
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Real-time Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-400">Kemajuan Masa (Piawaian 4 Jam):</span>
+                      <span className={activeDialysisTimer.isLast30Minutes ? 'text-rose-300 font-bold' : 'text-emerald-400 font-bold'}>
+                        {activeDialysisTimer.percentProgress}% ({activeDialysisTimer.elapsedSeconds >= 3600 ? `${Math.floor(activeDialysisTimer.elapsedSeconds / 3600)}j ` : ''}${Math.floor((activeDialysisTimer.elapsedSeconds % 3600) / 60)}m berlalu)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800 p-0.5">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-1000 ${
+                          activeDialysisTimer.isLast30Minutes
+                            ? 'bg-gradient-to-r from-rose-600 via-amber-500 to-rose-400 animate-pulse'
+                            : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400'
+                        }`}
+                        style={{ width: `${activeDialysisTimer.percentProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {activeDialysisTimer.isLast30Minutes && (
+                    <div className="p-3 bg-rose-950/80 rounded-xl border border-rose-500/80 text-xs text-rose-200 space-y-1 animate-pulse">
+                      <div className="flex items-center space-x-1.5 font-bold text-rose-300">
+                        <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                        <span>Pemberitahuan Klinikal (30 Minit Terakhir):</span>
+                      </div>
+                      <p className="leading-relaxed">
+                        Rawatan anda kini berbaki kurang daripada 30 minit. Sila bersedia untuk proses bilas darah (washback) dan pemeriksaan tekanan darah akhir oleh jururawat bertugas.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <button
                   onClick={() => setShowSessionDetail(true)}
-                  className="w-full min-h-[56px] py-4 px-6 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-lg sm:text-xl rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-3 cursor-pointer border-2 border-emerald-300"
+                  className={`w-full min-h-[56px] py-4 px-6 ${
+                    activeDialysisTimer.isLast30Minutes
+                      ? 'bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white border-2 border-rose-400'
+                      : 'bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 border-2 border-emerald-300'
+                  } font-black text-lg sm:text-xl rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-3 cursor-pointer`}
                 >
                   <span>LIHAT PEMANTAUAN DIALISIS SAYA</span>
                   <ChevronRight className="w-6 h-6 stroke-[3]" />
@@ -1249,81 +1406,6 @@ export function PatientPortal({
                   </div>
                 </button>
 
-                {/* 7. Log Aktiviti Saya (Activity Feed) */}
-                <button
-                  onClick={() => setActiveTab('aktiviti')}
-                  className="min-h-[96px] bg-slate-900 hover:bg-slate-850 active:bg-slate-800 border-2 border-slate-800 hover:border-cyan-400 rounded-2xl p-5 text-left transition-all flex items-center space-x-4 cursor-pointer shadow-lg sm:col-span-2"
-                >
-                  <div className="w-14 h-14 rounded-2xl bg-cyan-950 border-2 border-cyan-500 flex items-center justify-center flex-shrink-0 text-cyan-300 shadow-inner">
-                    <History className="w-8 h-8 stroke-[2.5]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className={`${fontTitleClass} font-black text-white portal-light-black`}>📜 Log Aktiviti Saya (Activity Feed)</h3>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                        Read-Only • Sahih
-                      </span>
-                    </div>
-                    <p className={`${fontSubClass} text-slate-300 font-medium mt-0.5 portal-light-black truncate`}>
-                      Kronologi sejarah daftar masuk, kemaskini berat, &amp; status rawatan
-                    </p>
-                  </div>
-                </button>
-
-              </div>
-            </div>
-
-            {/* READ-ONLY ACTIVITY FEED PREVIEW (Transparency & Peace of Mind) */}
-            <div className={`${themeCardClass} rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl border-2 border-slate-800`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-700 text-cyan-300 flex items-center justify-center shadow-inner">
-                    <History className="w-5 h-5 stroke-[2.5]" />
-                  </div>
-                  <div>
-                    <h3 className={`${fontTitleClass} font-black text-white flex items-center gap-2`}>
-                      <span>📜 Log Aktiviti Terkini (Activity Feed)</span>
-                      <span className="text-[10px] bg-slate-950 text-emerald-300 border border-emerald-700/80 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                        Read-Only
-                      </span>
-                    </h3>
-                    <p className={`${fontSubClass} text-slate-300 text-xs mt-0.5`}>
-                      Sejarah kronologi tindakan klinikal terkini untuk ketelusan &amp; ketenangan minda anda
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setActiveTab('aktiviti')}
-                  className="text-xs sm:text-sm font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 self-start sm:self-auto cursor-pointer underline px-1 py-1"
-                >
-                  <span>Lihat Penuh ({patientActivities.length})</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {patientActivities.slice(0, 3).map((act) => (
-                  <div 
-                    key={act.id} 
-                    className="p-3.5 sm:p-4 bg-slate-950/85 border border-slate-800/90 hover:border-slate-700 rounded-xl flex items-start space-x-3 transition-colors"
-                  >
-                    <div className="mt-0.5 w-8 h-8 rounded-lg bg-[#101D33] border border-slate-700 flex items-center justify-center flex-shrink-0 text-cyan-300 shadow-inner">
-                      {act.iconType === 'check' && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
-                      {act.iconType === 'scale' && <Scale className="w-4 h-4 text-teal-400" />}
-                      {act.iconType === 'session' && <Activity className="w-4 h-4 text-emerald-400" />}
-                      {act.iconType === 'medical' && <FileText className="w-4 h-4 text-rose-400" />}
-                      {act.iconType === 'lock' && <ShieldCheck className="w-4 h-4 text-indigo-400" />}
-                      {act.iconType === 'system' && <Clock className="w-4 h-4 text-slate-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center justify-between gap-1">
-                        <h4 className="text-sm font-bold text-white truncate">{act.title}</h4>
-                        <span className="text-[11px] font-mono text-slate-400 shrink-0">{act.timestamp}</span>
-                      </div>
-                      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">{act.description}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
 
@@ -1741,6 +1823,13 @@ export function PatientPortal({
                 )}
               </button>
 
+              {/* HISTORICAL WEIGHT TRACKING CHART (12 SESSIONS - RECHARTS) */}
+              <HistoricalWeightChart
+                patient={patient}
+                sessions={sessions}
+                patientDryWeight={patientDryWeight}
+              />
+
               {/* Fluid Management Guide */}
               <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs sm:text-sm text-slate-300 space-y-2">
                 <h4 className="font-black text-white text-base">📌 Nasihat Penjagaan Cecair & Berat:</h4>
@@ -1887,6 +1976,13 @@ export function PatientPortal({
                     : 'Belum Ditugaskan / Mengikut Kaunter'}
                 </div>
               </div>
+
+              {/* HISTORICAL WEIGHT TRACKING CHART (12 SESSIONS - RECHARTS) */}
+              <HistoricalWeightChart
+                patient={patient}
+                sessions={sessions}
+                patientDryWeight={patientDryWeight}
+              />
 
               {/* Past Sessions List (Dynamic from real records, empty if none) */}
               {patientDialysisSessions.length > 0 ? (
@@ -2923,6 +3019,48 @@ export function PatientPortal({
                   <p className="text-xs sm:text-sm text-teal-200">
                     Mesin: {assignedMachineModel || 'Fresenius 4008S NG'}
                   </p>
+                </div>
+              )}
+
+              {/* LIVE TIMER SECTION INSIDE MODAL (IF DIALYSIS IS ACTIVE) */}
+              {isOnDialysis && (
+                <div className={`p-4 rounded-2xl border-2 ${
+                  activeDialysisTimer.isLast30Minutes
+                    ? 'bg-rose-950/80 border-rose-500 animate-pulse text-rose-200'
+                    : 'bg-emerald-950/80 border-emerald-600 text-emerald-200'
+                } space-y-3`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase font-extrabold tracking-wider flex items-center gap-1.5">
+                      {activeDialysisTimer.isLast30Minutes ? (
+                        <AlertTriangle className="w-4 h-4 text-rose-400" />
+                      ) : (
+                        <Clock className="w-4 h-4 text-emerald-300" />
+                      )}
+                      <span>{activeDialysisTimer.isLast30Minutes ? 'Hampir Tamat (30 Minit Akhir)' : 'Baki Masa Rawatan'}</span>
+                    </span>
+                    <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-black/50 border border-white/10">
+                      {activeDialysisTimer.formattedTimeClock}
+                    </span>
+                  </div>
+
+                  <div className="text-xl sm:text-2xl font-black font-mono">
+                    {activeDialysisTimer.formattedRemaining}
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-mono text-slate-300">
+                      <span>Kemajuan: {activeDialysisTimer.percentProgress}%</span>
+                      <span>Mula: {activeDialysisTimer.actualStartTimeDisplay}</span>
+                    </div>
+                    <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-1000 ${
+                          activeDialysisTimer.isLast30Minutes ? 'bg-rose-500' : 'bg-emerald-400'
+                        }`}
+                        style={{ width: `${activeDialysisTimer.percentProgress}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

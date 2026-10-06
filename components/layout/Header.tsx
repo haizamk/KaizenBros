@@ -37,6 +37,7 @@ interface HeaderProps {
   onStaffLoginSuccess?: (staff: StaffAccount) => void;
   onStaffLogout?: () => void;
   onAuditLog?: (action: string, description: string) => void;
+  nurseAttentionCount?: number;
 }
 
 export function Header({
@@ -47,7 +48,8 @@ export function Header({
   authenticatedStaff,
   onStaffLoginSuccess,
   onStaffLogout,
-  onAuditLog
+  onAuditLog,
+  nurseAttentionCount = 0
 }: HeaderProps) {
   const {
     formattedDate,
@@ -155,7 +157,7 @@ export function Header({
         </div>
       </div>
 
-      {/* Main Bar with Branding & Discrete Staff Trigger */}
+      {/* Main Bar with Branding & Navigation Items */}
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         {/* Brand */}
         <div 
@@ -180,13 +182,78 @@ export function Header({
           </div>
         </div>
 
+        {/* Navigation Bar Menu Items */}
+        <nav className="hidden lg:flex items-center space-x-1.5 bg-[#0E1A30]/80 p-1.5 rounded-2xl border border-[#1F385C]">
+          <button
+            onClick={() => onViewChange('public')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              currentView === 'public'
+                ? 'bg-cyan-600 text-white shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            Laman Utama
+          </button>
+
+          <button
+            onClick={() => onViewChange('patient')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              currentView === 'patient'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            Portal Pesakit
+          </button>
+
+          {/* Nurse Portal Menu Item with Real-Time Notification Badge */}
+          <button
+            onClick={() => onViewChange('nurse')}
+            className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              currentView === 'nurse'
+                ? 'bg-gradient-to-r from-cyan-700 to-teal-700 text-white shadow-md border border-cyan-400/40'
+                : 'text-slate-200 hover:text-cyan-300 hover:bg-slate-800/60'
+            }`}
+            title="Portal Jururawat (Nurse Portal)"
+          >
+            <Stethoscope className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Portal Nurse</span>
+            {nurseAttentionCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-black text-white bg-rose-500 rounded-full animate-pulse shadow-sm shadow-rose-900 border border-rose-300/40">
+                {nurseAttentionCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => onViewChange('admin')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              currentView === 'admin'
+                ? 'bg-indigo-700 text-white shadow-md'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Admin</span>
+          </button>
+        </nav>
+
         {/* Action Controls */}
-        <div className="flex items-center space-x-3">
-          {Boolean(currentView && currentView !== 'public' && currentView !== 'patient') && (
-            <span className="hidden md:inline-flex items-center bg-[#0E1A30] text-cyan-300 border border-cyan-700/80 px-3.5 py-1.5 rounded-full text-xs font-black font-mono shadow-sm">
-              ⚡ AKTIF: {String(currentView || '').toUpperCase()}
-            </span>
-          )}
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Quick Staff Selector / Nurse button on smaller screens */}
+          <button
+            onClick={() => onViewChange('nurse')}
+            className="lg:hidden relative flex items-center space-x-1 px-2.5 py-2 bg-teal-950/90 text-teal-200 border border-teal-600/80 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[42px]"
+            title="Portal Jururawat (Nurse Portal)"
+          >
+            <Stethoscope className="w-4 h-4 text-teal-400" />
+            <span className="hidden xs:inline">Nurse</span>
+            {nurseAttentionCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-black text-white bg-rose-500 rounded-full animate-pulse border border-slate-950">
+                {nurseAttentionCount}
+              </span>
+            )}
+          </button>
 
           {/* Staff Login / Active Staff Trigger */}
           {authenticatedStaff ? (
@@ -261,17 +328,30 @@ export function Header({
                   onViewChange('nurse');
                   setShowStaffModal(false);
                 }}
-                className={`w-full p-4 text-left rounded-2xl border transition-all flex items-center space-x-4 cursor-pointer group ${
+                className={`w-full p-4 text-left rounded-2xl border transition-all flex items-center space-x-4 cursor-pointer group relative ${
                   currentView === 'nurse'
                     ? 'bg-cyan-950/60 border-cyan-500 text-white'
                     : 'bg-slate-950 hover:bg-slate-800/80 border-slate-800 hover:border-cyan-500/50 text-slate-300'
                 }`}
               >
-                <div className="w-12 h-12 rounded-xl bg-cyan-900/50 border border-cyan-800 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-xl bg-cyan-900/50 border border-cyan-800 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform relative">
                   <Stethoscope className="w-6 h-6" />
+                  {nurseAttentionCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-black min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center border-2 border-slate-950 animate-pulse shadow-md">
+                      {nurseAttentionCount}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors">Portal Jururawat (Nurse)</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors">Portal Jururawat (Nurse)</h4>
+                    {nurseAttentionCount > 0 && (
+                      <span className="bg-rose-500/20 text-rose-300 border border-rose-500/60 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
+                        {nurseAttentionCount} Perlu Perhatian / Selesai
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400 font-medium mt-0.5">Sesi rawatan, penugasan kerusi & vitals.</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-slate-500 group-hover:translate-x-1 transition-transform" />

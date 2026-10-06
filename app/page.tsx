@@ -554,11 +554,12 @@ export default function Home() {
       const next = prev.map(s => {
         if (s.patient_id === ptId) {
           found = true;
+          const isStartingDialysis = s.status !== 'SEDANG_DIALISIS';
           const updated = {
             ...s,
             status: 'SEDANG_DIALISIS' as SessionStatus,
-            actual_start_time: s.actual_start_time || nowStr,
-            start_timestamp: s.start_timestamp || nowMs,
+            actual_start_time: isStartingDialysis ? nowStr : (s.actual_start_time || nowStr),
+            start_timestamp: isStartingDialysis ? nowMs : (s.start_timestamp || nowMs),
             updated_at: new Date().toISOString()
           };
           saveDocument('dialysis_sessions', String(updated.id), updated).catch(console.error);
@@ -779,7 +780,20 @@ export default function Home() {
         let changed = false;
         const next = prev.map(s => {
           if (s.status === 'SEDANG_DIALISIS') {
-            const startMs = s.start_timestamp || (s.actual_start_time ? Date.now() - 3.5 * 3600 * 1000 : null);
+            let startMs = s.start_timestamp;
+            if (!startMs && s.actual_start_time) {
+              const match = s.actual_start_time.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+              if (match) {
+                let hrs = parseInt(match[1], 10);
+                const mins = parseInt(match[2], 10);
+                const ampm = match[3];
+                if (ampm && ampm.toUpperCase() === 'PM' && hrs < 12) hrs += 12;
+                if (ampm && ampm.toUpperCase() === 'AM' && hrs === 12) hrs = 0;
+                const d = new Date();
+                d.setHours(hrs, mins, 0, 0);
+                startMs = d.getTime();
+              }
+            }
             if (startMs && (nowMs - startMs) >= FIVE_HOURS_MS) {
               changed = true;
               return {
@@ -916,6 +930,28 @@ export default function Home() {
     } catch {}
   };
 
+  // Real-time calculation of patients needing attention or who have completed their dialysis
+  const nurseAttentionCount = useMemo(() => {
+    // 1. Sessions completed (needing post-dialysis review / discharge)
+    const completedCount = sessions.filter(s => s.status === 'SUDAH_SELESAI' || s.status === 'SELESAI').length;
+    // 2. Queue patients waiting for chair allocation
+    const waitingQueueCount = checkInQueue.filter(q => q.status === 'MENUNGGU_GILIRAN' && !q.assigned_chair).length;
+    // 3. Checked-in patients waiting at station to start dialysis
+    const waitingStartCount = sessions.filter(s => s.status === 'SUDAH_HADIR' || (s.chair_number && s.status === 'MENUNGGU_GILIRAN')).length;
+    // 4. Dialysis in final 30 minutes or over time
+    const urgentActiveCount = sessions.filter(s => {
+      if (s.status !== 'SEDANG_DIALISIS') return false;
+      if (s.start_timestamp) {
+        const elapsedMin = (Date.now() - s.start_timestamp) / 60000;
+        const targetMin = s.target_duration_minutes || (s.duration_hours ? s.duration_hours * 60 : 240);
+        if (elapsedMin >= targetMin - 30) return true;
+      }
+      return false;
+    }).length;
+
+    return completedCount + waitingQueueCount + waitingStartCount + urgentActiveCount;
+  }, [sessions, checkInQueue]);
+
   return (
     <div suppressHydrationWarning className="min-h-screen flex flex-col bg-[#0B132B] text-slate-100 dark">
       <Header
@@ -924,6 +960,7 @@ export default function Home() {
         activePatientName={activePatient ? activePatient.name : 'Tiada Pesakit Dipilih'}
         activeNurseName={authenticatedStaff ? authenticatedStaff.name : demoNurseName}
         authenticatedStaff={authenticatedStaff}
+        nurseAttentionCount={nurseAttentionCount}
         onStaffLoginSuccess={(staff) => {
           setAuthenticatedStaff(staff);
           handleAuditLog('LOGIN_STAFF', `Kakitangan ${staff.name} log masuk.`);

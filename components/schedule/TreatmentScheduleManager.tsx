@@ -36,6 +36,7 @@ import { QuickStatusModal } from '@/components/shared/QuickStatusModal';
 import { getSessionTimerInfo } from '@/lib/dialysis-timer';
 import { parseMalaysianIC } from '@/lib/ic-utils';
 import { getMalaysiaDate } from '@/lib/malaysia-time';
+import { RecurringScheduleGeneratorModal } from './RecurringScheduleGeneratorModal';
 
 export const PATIENT_SHIFTS_CONFIG = [
   {
@@ -83,6 +84,7 @@ interface TreatmentScheduleManagerProps {
   nurses?: Nurse[];
   onUpdateSession: (updated: DialysisSession) => void;
   onAddSession: (newSession: Omit<DialysisSession, 'id'>) => void;
+  onAddBatchSessions?: (newSessions: Omit<DialysisSession, 'id'>[]) => void;
   onDeleteSession: (sessionId: number) => void;
   onAuditLog?: (action: string, details: string) => void;
   isNurseView?: boolean;
@@ -94,6 +96,7 @@ export function TreatmentScheduleManager({
   nurses = [],
   onUpdateSession,
   onAddSession,
+  onAddBatchSessions,
   onDeleteSession,
   onAuditLog,
   isNurseView = false
@@ -106,6 +109,8 @@ export function TreatmentScheduleManager({
   // Modals state
   const [editingSession, setEditingSession] = useState<DialysisSession | null>(null);
   const [isAddSessionOpen, setIsAddSessionOpen] = useState(false);
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
+  const [recurringPatientId, setRecurringPatientId] = useState<number | undefined>(undefined);
   const [prefilledStation, setPrefilledStation] = useState<string | null>(null);
   const [prefilledShift, setPrefilledShift] = useState<ShiftSlot>('SYIF_1');
   const [prefilledDate, setPrefilledDate] = useState<string>(selectedDate);
@@ -292,6 +297,20 @@ export function TreatmentScheduleManager({
                 <span>Paparan Mingguan (Weekly)</span>
               </button>
             </div>
+
+            {/* 30-Day Recurring Calendar Auto-Generator Button */}
+            {!isNurseView && (
+              <button
+                onClick={() => {
+                  setRecurringPatientId(undefined);
+                  setIsRecurringModalOpen(true);
+                }}
+                className="px-4 py-2.5 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-black text-xs rounded-xl shadow-lg transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 border border-cyan-400/40"
+              >
+                <Sparkles className="w-4 h-4 fill-cyan-300 text-cyan-200" />
+                <span>✨ Jana Jadual Berulang 30 Hari</span>
+              </button>
+            )}
 
             {/* Quick Add Session Button */}
             <button
@@ -1043,6 +1062,26 @@ export function TreatmentScheduleManager({
         onClose={() => setWhatsAppPatient(null)}
         patient={whatsAppPatient}
         onLogAudit={onAuditLog}
+      />
+
+      {/* 30-Day Recurring Dialysis Schedule Generator Modal */}
+      <RecurringScheduleGeneratorModal
+        isOpen={isRecurringModalOpen}
+        onClose={() => {
+          setIsRecurringModalOpen(false);
+          setRecurringPatientId(undefined);
+        }}
+        patients={patients}
+        existingSessions={sessions}
+        preselectedPatientId={recurringPatientId}
+        onAuditLog={onAuditLog}
+        onGenerateBatch={(newBatch) => {
+          if (onAddBatchSessions) {
+            onAddBatchSessions(newBatch);
+          } else {
+            newBatch.forEach(sess => onAddSession(sess));
+          }
+        }}
       />
     </div>
   );

@@ -268,7 +268,7 @@ Hantar daripada Borang Pertanyaan Laman Web KaizenBros.`;
             {/* Quick Navigation Buttons */}
             <div className="flex flex-wrap items-center gap-3">
               <a
-                href="https://maps.app.goo.gl/Ksh1rVT4KpRzeJpp8?g_st=ac"
+                href="https://maps.google.com/?q=2.92592,101.86000"
                 target="_blank"
                 rel="noreferrer"
                 className="px-5 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-xl shadow-md flex items-center space-x-2 transition-all min-h-[48px]"
@@ -278,7 +278,7 @@ Hantar daripada Borang Pertanyaan Laman Web KaizenBros.`;
               </a>
 
               <a
-                href="https://waze.com/ul?ll=2.925749,101.859613&navigate=yes"
+                href="https://waze.com/ul?ll=2.92592,101.86000&navigate=yes"
                 target="_blank"
                 rel="noreferrer"
                 className="px-5 py-3 bg-teal-800 hover:bg-teal-700 text-white font-bold text-sm rounded-xl shadow-md flex items-center space-x-2 transition-all border border-teal-600 min-h-[48px]"
@@ -293,7 +293,7 @@ Hantar daripada Borang Pertanyaan Laman Web KaizenBros.`;
           <div className="bg-[#0B132B] border border-[#1F385C] rounded-3xl overflow-hidden shadow-2xl relative h-[380px] sm:h-[450px]">
             <iframe
               title="Peta Lokasi Pusat Dialisis KaizenBros Semenyih"
-              src="https://maps.google.com/maps?q=2.925749,101.859613+(Pusat+Dialisis+Kaizenbros)&z=18&output=embed"
+              src="https://maps.google.com/maps?q=2.92592,101.86000+(Pusat+Dialisis+Kaizenbros)&z=19&output=embed"
               width="100%"
               height="100%"
               style={{ border: 0 }}
@@ -302,6 +302,19 @@ Hantar daripada Borang Pertanyaan Laman Web KaizenBros.`;
               referrerPolicy="no-referrer-when-downgrade"
               className="w-full h-full filter saturate-[0.85] contrast-[1.05]"
             />
+
+            {/* Interactive "Kami Disini" Marker Pin & Red Point (Covers kanda.my area) */}
+            <div className="absolute top-[48%] left-[58%] sm:left-[55%] transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">
+              {/* Badge "Kami Disini" */}
+              <div className="bg-rose-600 text-white font-black text-xs sm:text-sm px-3.5 py-1.5 rounded-full shadow-2xl border-2 border-white flex items-center space-x-1.5 animate-bounce mb-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+                <span>📍 Kami Disini</span>
+              </div>
+              {/* Red Point Circle Marker */}
+              <div className="w-8 h-8 rounded-full bg-rose-500/50 border-2 border-rose-500 flex items-center justify-center animate-pulse shadow-lg">
+                <div className="w-4 h-4 rounded-full bg-rose-600 border-2 border-white" />
+              </div>
+            </div>
             
             {/* Map Overlay Location Card */}
             <div className="absolute bottom-4 left-4 right-4 sm:right-auto sm:max-w-md bg-[#0B132B]/95 backdrop-blur-md border border-[#1F385C] p-5 rounded-2xl shadow-2xl space-y-2">

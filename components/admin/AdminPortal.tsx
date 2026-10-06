@@ -50,10 +50,12 @@ import {
   Check,
   Send,
   CalendarDays,
-  Pill
+  Pill,
+  Sparkles
 } from 'lucide-react';
 import { WhatsAppReminderModal } from '@/components/shared/WhatsAppReminderModal';
 import { TreatmentScheduleManager } from '@/components/schedule/TreatmentScheduleManager';
+import { RecurringScheduleGeneratorModal } from '@/components/schedule/RecurringScheduleGeneratorModal';
 import { NewPatientRegistration } from '@/components/public/NewPatientRegistration';
 import { parseMalaysianIC, getAgeDisplayFromIC } from '@/lib/ic-utils';
 import { calculateNextDialysis } from '@/lib/malaysia-time';
@@ -83,6 +85,7 @@ interface AdminPortalProps {
   onDeleteMedication?: (medId: number) => void;
   onUpdateSession?: (session: DialysisSession) => void;
   onAddSession?: (session: Omit<DialysisSession, 'id'>) => void;
+  onAddBatchSessions?: (sessions: Omit<DialysisSession, 'id'>[]) => void;
   onDeleteSession?: (sessionId: number) => void;
   onUpdateRegistration?: (updatedReg: NewRegistration) => void;
   onDeleteRegistration?: (regId: string) => void;
@@ -156,6 +159,7 @@ export function AdminPortal({
   onDeleteMedication: propOnDeleteMedication,
   onUpdateSession,
   onAddSession,
+  onAddBatchSessions,
   onDeleteSession,
   onUpdateRegistration,
   onDeleteRegistration,
@@ -487,6 +491,29 @@ export function AdminPortal({
     } catch {}
     if (onAddSession) onAddSession(newSess);
   };
+
+  const handleAddBatchSessions = (newSessions: Omit<DialysisSession, 'id'>[]) => {
+    let currentMaxId = sessionsList.length > 0 ? Math.max(...sessionsList.map(s => s.id)) : 0;
+    const addedList: DialysisSession[] = newSessions.map(sess => {
+      currentMaxId += 1;
+      return { ...sess, id: currentMaxId };
+    });
+    const next = [...addedList, ...sessionsList];
+    setSessionsList(next);
+    try {
+      localStorage.setItem('kaizenbros_sessions', JSON.stringify(next));
+    } catch {}
+    if (onAddBatchSessions) {
+      onAddBatchSessions(newSessions);
+    } else {
+      newSessions.forEach(s => {
+        if (onAddSession) onAddSession(s);
+      });
+    }
+  };
+
+  const [isAdminRecurringModalOpen, setIsAdminRecurringModalOpen] = useState(false);
+  const [recurringPatientForModal, setRecurringPatientForModal] = useState<Patient | null>(null);
 
   const handleDeleteSession = (sessionId: number) => {
     const next = sessionsList.filter(s => s.id !== sessionId);
@@ -1586,6 +1613,18 @@ export function AdminPortal({
                         </button>
 
                         <button
+                          onClick={() => {
+                            setRecurringPatientForModal(p);
+                            setIsAdminRecurringModalOpen(true);
+                          }}
+                          className="flex-1 py-2 px-3 bg-cyan-700 hover:bg-cyan-600 active:bg-cyan-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow"
+                          title="Jana Jadual Rawatan Berulang 30 Hari"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 fill-cyan-300" />
+                          <span>30 Hari</span>
+                        </button>
+
+                        <button
                           onClick={() => setMedsPatient(p)}
                           className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow"
                           title="Urus Preskripsi & Ubat-Ubatan Pesakit (Doktor & Admin Sahaja)"
@@ -1711,6 +1750,18 @@ export function AdminPortal({
 
                         <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
                           <button
+                            onClick={() => {
+                              setRecurringPatientForModal(p);
+                              setIsAdminRecurringModalOpen(true);
+                            }}
+                            className="px-2.5 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg transition-colors cursor-pointer inline-flex items-center space-x-1 font-bold text-xs shadow"
+                            title="Jana Jadual Rawatan Berulang 30 Hari"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 fill-cyan-300" />
+                            <span>30 Hari</span>
+                          </button>
+
+                          <button
                             onClick={() => setWhatsAppPatient(p)}
                             className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors cursor-pointer inline-flex items-center space-x-1 font-bold text-xs shadow"
                             title="Hantar Peringatan Sesi (WhatsApp Fonnte)"
@@ -1769,6 +1820,7 @@ export function AdminPortal({
             nurses={nursesList}
             onUpdateSession={handleUpdateSession}
             onAddSession={handleAddSession}
+            onAddBatchSessions={handleAddBatchSessions}
             onDeleteSession={handleDeleteSession}
             onAuditLog={triggerLog}
           />
@@ -3705,6 +3757,20 @@ export function AdminPortal({
         patient={whatsAppPatient}
         onLogAudit={triggerLog}
         onNavigateToSettings={() => setActiveTab('tetapan')}
+      />
+
+      {/* 13. MODAL JANA JADUAL RAWATAN BERULANG 30 HARI */}
+      <RecurringScheduleGeneratorModal
+        isOpen={isAdminRecurringModalOpen}
+        onClose={() => {
+          setIsAdminRecurringModalOpen(false);
+          setRecurringPatientForModal(null);
+        }}
+        patients={patientsList}
+        existingSessions={sessionsList}
+        preselectedPatientId={recurringPatientForModal?.id}
+        onAuditLog={triggerLog}
+        onGenerateBatch={handleAddBatchSessions}
       />
 
     </div>

@@ -11,6 +11,8 @@ export type SessionStatus =
 
 export type ShiftSlot = 'PAGI' | 'PETANG' | 'MALAM' | 'SYIF_1' | 'SYIF_2' | 'SYIF_3' | string;
 
+export type SchedulePattern = 'ISNIN_RABU_JUMAAT' | 'SELASA_KHAMIS_SABTU' | 'SETIAP_HARI' | 'CUSTOM' | string;
+
 export type SponsorType = 
   | 'PERKESO_SOCSO' 
   | 'JPA_KWAP' 
@@ -50,6 +52,8 @@ export interface DialysisSession {
   actual_start_time?: string;
   actual_end_time?: string;
   start_timestamp?: number;
+  duration_hours?: number;
+  target_duration_minutes?: number;
   auto_completed?: boolean;
   status_reason?: string;
   status: SessionStatus;
