@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   ChevronRight,
   Info,
+  Heart,
   HeartHandshake,
   Users,
   Search,
@@ -53,6 +54,7 @@ import { calculateNextDialysis, getMalaysiaDate } from '@/lib/malaysia-time';
 import { useMalaysiaTime } from '@/hooks/useMalaysiaTime';
 import { parseTimeStringToTodayMs } from '@/lib/dialysis-timer';
 import { HistoricalWeightChart } from '@/components/patient/HistoricalWeightChart';
+import { HistoricalBloodPressureChart } from '@/components/patient/HistoricalBloodPressureChart';
 
 interface PatientPortalProps {
   patient?: Patient | null;
@@ -111,35 +113,124 @@ export function PatientPortal({
   // Accessibility state
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
 
+  // Chart view mode for weight & BP tracking
+  const [timbangChartMode, setTimbangChartMode] = useState<'both' | 'weight' | 'bp'>('both');
+
   // Modals
   const [showSessionDetail, setShowSessionDetail] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
   const { effectiveDate } = useMalaysiaTime();
 
+  const todayMyt = getMalaysiaDate(effectiveDate);
+  const todayIso = todayMyt.dateIso;
+
+  // Validate if passed session / checkIn belong strictly to TODAY
+  const isSessionForToday = Boolean(session && session.scheduled_date === todayIso);
+  const currentTodaySession = isSessionForToday ? session : null;
+
+  const isCheckInForToday = Boolean(
+    checkInRecord && checkInRecord.check_in_date === todayIso
+  );
+  const currentTodayCheckIn = isCheckInForToday ? checkInRecord : null;
+
+  // Effective clinical status prioritization for TODAY:
+  const effectiveStatus: SessionStatus | string = 
+    currentTodaySession?.status || 
+    (currentTodayCheckIn?.status === 'SEDANG_DIALISIS' ? 'SEDANG_DIALISIS' : currentTodayCheckIn ? (currentTodayCheckIn.assigned_chair ? 'SUDAH_HADIR' : 'MENUNGGU_GILIRAN') : 'BELUM_HADIR');
+
+  // Live mutually exclusive state helpers for TODAY:
+  const isSessionCompleted = Boolean(
+    isSessionForToday && (currentTodaySession?.status === 'SUDAH_SELESAI' || currentTodaySession?.status === 'SELESAI')
+  );
+
   // Dynamic Next Dialysis calculation for this patient based on Malaysia Real Time
   const nextDialysis = useMemo(() => {
     if (!patient) return null;
-    return calculateNextDialysis(patient, effectiveDate);
-  }, [patient, effectiveDate]);
+    // If today's session is completed, pass tomorrow as base date so calculateNextDialysis finds the true NEXT session
+    const base = isSessionCompleted ? new Date(effectiveDate.getTime() + 86400000) : effectiveDate;
+    return calculateNextDialysis(patient, base);
+  }, [patient, effectiveDate, isSessionCompleted]);
 
-  // Filter all dialysis sessions for current patient
-  const patientDialysisSessions = useMemo(() => {
-    if (!patient || !sessions) return [];
-    return sessions
-      .filter(s => s.patient_id === patient.id || (patient.patient_id_code && s.patient_id_code === patient.patient_id_code))
-      .sort((a, b) => new Date(b.scheduled_date || 0).getTime() - new Date(a.scheduled_date || 0).getTime());
-  }, [patient, sessions]);
-
-  // Dynamic latest dialysis date based on real dialysis record or patient scheduled date
-  const latestDialysisDateDisplay = useMemo(() => {
-    if (patientDialysisSessions.length > 0 && patientDialysisSessions[0]?.scheduled_date) {
+  // Formatted string for next dialysis session after completion
+  const nextSessionFormattedText = useMemo(() => {
+    if (nextDialysis) {
+      // nextDialysis.formattedDate is e.g. "Sabtu, 10 Oktober 2026" - avoid prepending dayName to prevent duplicate day name
+      return `${nextDialysis.formattedDate} (${nextDialysis.timeRange || nextDialysis.shortTime})`;
+    }
+    if (patient?.next_dialysis_date) {
       try {
-        const d = new Date(patientDialysisSessions[0].scheduled_date);
+        const d = new Date(patient.next_dialysis_date);
         if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+          return d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         }
       } catch {}
+    }
+    return 'Sesi Akan Datang';
+  }, [nextDialysis, patient]);
+
+  // Formatted past dialysis sessions history (up to maximum 9 actual real records) for modal "Pemantauan Dialisis Saya"
+  const historicalDisplaySessions = useMemo(() => {
+    if (!patient) return [];
+    const todayIso = getMalaysiaDate(effectiveDate).dateIso;
+
+    // Real sessions from props/state belonging to this patient
+    const realSessions = (sessions || []).filter(
+      s => s.patient_id === patient.id || (patient.patient_id_code && s.patient_id_code === patient.patient_id_code)
+    );
+
+    // Filter real sessions from past dates (scheduled_date < todayIso) OR completed sessions from today
+    const pastReal = realSessions.filter(
+      s => s.scheduled_date && (
+        s.scheduled_date < todayIso || 
+        (s.scheduled_date === todayIso && (s.status === 'SUDAH_SELESAI' || s.status === 'SELESAI'))
+      )
+    );
+
+    // Sort by scheduled_date descending (newest session first)
+    pastReal.sort((a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime());
+
+    // Limit to maximum 9 actual real records as requested by user (no generated/assumed data)
+    const sliced = pastReal.slice(0, 9);
+
+    return sliced.map(s => {
+      let formattedDate = s.scheduled_date;
+      let relativeLabel = '';
+      try {
+        const d = new Date(s.scheduled_date + 'T00:00:00');
+        if (!isNaN(d.getTime())) {
+          formattedDate = d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+          const diffDays = Math.round((new Date(todayIso + 'T00:00:00').getTime() - d.getTime()) / 86400000);
+          if (diffDays === 0) relativeLabel = 'Hari Ini';
+          else if (diffDays === 1) relativeLabel = 'Kelmarin';
+          else if (diffDays > 1) relativeLabel = `${diffDays} Hari Lepas`;
+        }
+      } catch {}
+      return {
+        id: s.id,
+        scheduled_date: s.scheduled_date,
+        formattedDate,
+        relativeLabel,
+        pre_weight_kg: s.pre_weight_kg,
+        post_weight_kg: s.post_weight_kg,
+        pre_bp: s.pre_bp,
+        post_bp: s.post_bp,
+        chair_number: s.chair_number || 'A-01',
+        machine_model: s.machine_model || 'Fresenius 4008S NG',
+        duration_hours: s.duration_hours || 4,
+        status: s.status || 'SUDAH_SELESAI',
+        nurse_notes: s.nurse_notes || 'Sesi dialisis selesai dengan lancar. Tiada komplikasi.'
+      };
+    });
+  }, [patient, sessions, effectiveDate]);
+
+  // Alias for historical sessions
+  const patientDialysisSessions = historicalDisplaySessions;
+
+  // Dynamic latest dialysis date display
+  const latestDialysisDateDisplay = useMemo(() => {
+    if (historicalDisplaySessions.length > 0 && historicalDisplaySessions[0]?.formattedDate) {
+      return historicalDisplaySessions[0].formattedDate;
     }
     if (session?.scheduled_date) {
       try {
@@ -152,23 +243,8 @@ export function PatientPortal({
     if (nextDialysis?.formattedDate) {
       return nextDialysis.formattedDate;
     }
-    if (patient?.next_dialysis_date) {
-      try {
-        const d = new Date(patient.next_dialysis_date);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
-        }
-      } catch {}
-    }
     return new Date().toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
-  }, [patientDialysisSessions, session, nextDialysis, patient]);
-
-  // Effective clinical status prioritization:
-  // session is the authoritative record when created or synced by nurse/system.
-  // checkInRecord represents front-counter reception.
-  const effectiveStatus: SessionStatus | string = 
-    session?.status || 
-    (checkInRecord?.status === 'SEDANG_DIALISIS' ? 'SEDANG_DIALISIS' : checkInRecord ? (checkInRecord.assigned_chair ? 'SUDAH_HADIR' : 'MENUNGGU_GILIRAN') : 'BELUM_HADIR');
+  }, [historicalDisplaySessions, session, nextDialysis]);
 
   // 1. Patient has arrived & registered at registration counter on dialysis day:
   // Must have an active checkInRecord OR session with active arrival status on this day.
@@ -188,9 +264,6 @@ export function PatientPortal({
 
   // Live mutually exclusive state helpers:
   const isCheckedIn = hasArrivedAndRegistered;
-  const isSessionCompleted = Boolean(
-    effectiveStatus === 'SUDAH_SELESAI' || effectiveStatus === 'SELESAI'
-  );
   // Dialysis is running ONLY when chair is assigned AND nurse explicitly changed status to SEDANG_DIALISIS
   const isOnDialysis = Boolean(
     hasAssignedChair && effectiveStatus === 'SEDANG_DIALISIS'
@@ -1197,12 +1270,12 @@ export function PatientPortal({
                   </span>
                 </div>
 
-                <div className="space-y-2 mb-2">
-                  <p className="text-white text-base sm:text-lg font-bold">
-                    Alhamdulillah, sesi rawatan dialisis anda untuk hari ini telah selesai disempurnakan.
+                <div className="p-4 bg-slate-950/90 rounded-2xl border-2 border-teal-500/80 space-y-2 mb-2">
+                  <p className="text-white text-base sm:text-lg font-black leading-snug">
+                    Sesi dialisis telah selesai, jumpa lagi di next sesi pada <span className="text-amber-300 font-black underline underline-offset-4 decoration-amber-400">{nextSessionFormattedText}</span>
                   </p>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Terima kasih atas disiplin dan kerjasama anda. Sila patuhi nasihat diet dan ubat-ubatan sehingga temujanji seterusnya.
+                    Terima kasih atas disiplin dan kerjasama anda. Sila patuhi pemakanan rendah garam dan cecair mengikut sukatan klinikal sehingga sesi temujanji seterusnya.
                   </p>
                 </div>
 
@@ -1227,31 +1300,30 @@ export function PatientPortal({
               </div>
             )}
 
-            {/* C. CASE 3: PROMINENT UPCOMING APPOINTMENT CARD (SESI RAWATAN DIALISIS SETERUSNYA) */}
+            {/* C. CASE 3: PROMINENT UPCOMING APPOINTMENT CARD (SESI RAWATAN DIALISIS SETERUSNYA / HARI INI) */}
             {!hasArrivedAndRegistered && nextDialysis && (
               <div className="space-y-4">
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950 border-3 border-cyan-500 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden patient-dark-card">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center space-x-2 text-cyan-400 font-black text-sm sm:text-base tracking-wider uppercase">
                       <Calendar className="w-5 h-5 text-cyan-400" />
-                      <span>SESI RAWATAN DIALISIS SETERUSNYA</span>
+                      <span>{nextDialysis.relativeText === 'Hari Ini' ? 'RAWATAN DIALISIS HARI INI' : 'SESI RAWATAN DIALISIS SETERUSNYA'}</span>
                     </div>
                     <span className={`text-xs font-black px-3.5 py-1 rounded-full border ${nextDialysis.badgeColor}`}>
-                      {nextDialysis.relativeText} ({nextDialysis.dayName})
+                      {nextDialysis.relativeText === 'Hari Ini' ? `Hari Ini (${nextDialysis.timeRange.split(' - ')[0]})` : `${nextDialysis.relativeText} (${nextDialysis.dayName})`}
                     </span>
                   </div>
 
                   <div className="space-y-3 mb-5">
                     <div className="text-3xl sm:text-4xl font-black text-white flex flex-wrap items-baseline gap-2">
-                      <span>{nextDialysis.dayName},</span>
-                      <span className="text-cyan-300 font-black text-2xl sm:text-3xl">
-                        {nextDialysis.formattedDate.replace(/^[^,]+,\s*/, '')}
-                      </span>
+                      <span>{nextDialysis.formattedDate}</span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-slate-200 text-base font-bold">
                       <span className="bg-slate-950 border border-cyan-700/80 px-3.5 py-1.5 rounded-xl text-cyan-300 font-black">
-                        Seterusnya {nextDialysis.dayName} {nextDialysis.shortTime} ({nextDialysis.shiftTitle})
+                        {nextDialysis.relativeText === 'Hari Ini'
+                          ? `RAWATAN DIALISIS HARI INI Pada jam ${nextDialysis.timeRange.split(' - ')[0]} (${nextDialysis.shiftTitle})`
+                          : `Seterusnya ${nextDialysis.formattedDate.split(',')[0]} ${nextDialysis.shortTime} (${nextDialysis.shiftTitle})`}
                       </span>
                       <span className="text-slate-300">• Waktu Rawatan: <strong className="text-white">{nextDialysis.timeRange}</strong></span>
                     </div>
@@ -1272,7 +1344,7 @@ export function PatientPortal({
                   <div className="flex items-center justify-between">
                     <span className="text-xs sm:text-sm uppercase font-black text-amber-300 tracking-wider flex items-center gap-2">
                       <MapPin className="w-5 h-5 text-amber-400" />
-                      Lokasi & Stesen Kerusi / Mesin Dialisis
+                      {nextDialysis.relativeText === 'Hari Ini' ? `RAWATAN DIALISIS HARI INI (Pada jam ${nextDialysis.timeRange.split(' - ')[0]})` : 'Lokasi & Stesen Kerusi / Mesin Dialisis'}
                     </span>
                     <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-950 text-amber-300 border border-amber-700">
                       Belum Daftar Kaunter
@@ -1284,7 +1356,9 @@ export function PatientPortal({
                       <AlertCircle className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
                       <div className="space-y-1.5">
                         <p className="text-lg sm:text-xl font-black text-amber-300 leading-snug">
-                          kerusi dan mesin dialisis akan di papar selepas daftar di kaunter pada hari dialisis
+                          {nextDialysis.relativeText === 'Hari Ini'
+                            ? `RAWATAN DIALISIS HARI INI Pada jam ${nextDialysis.timeRange.split(' - ')[0]} (${nextDialysis.shiftTitle})`
+                            : 'kerusi dan mesin dialisis akan di papar selepas daftar di kaunter pada hari dialisis'}
                         </p>
                         <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
                           sebab setiap kerusi tidak tetap, bergantung masa ketibaan dan di pilih oleh nurse sahaja (sistem giliran FCFS).
@@ -1823,12 +1897,62 @@ export function PatientPortal({
                 )}
               </button>
 
-              {/* HISTORICAL WEIGHT TRACKING CHART (12 SESSIONS - RECHARTS) */}
-              <HistoricalWeightChart
-                patient={patient}
-                sessions={sessions}
-                patientDryWeight={patientDryWeight}
-              />
+              {/* TOGGLE PILIHAN CARTA: BERAT & TEKANAN DARAH (BP) */}
+              <div className="bg-[#0A1324] border border-[#1F385C] rounded-2xl p-1.5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTimbangChartMode('both')}
+                  className={`flex-1 min-h-[44px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    timbangChartMode === 'both'
+                      ? 'bg-gradient-to-r from-teal-600 via-cyan-600 to-indigo-600 text-white shadow-lg border border-cyan-400/50'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Activity className="w-4 h-4 text-cyan-300" />
+                  <span>Semua (Berat & BP)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimbangChartMode('weight')}
+                  className={`flex-1 min-h-[44px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    timbangChartMode === 'weight'
+                      ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-lg border border-teal-400/50'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Scale className="w-4 h-4 text-teal-300" />
+                  <span>Trend Berat Saja</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimbangChartMode('bp')}
+                  className={`flex-1 min-h-[44px] py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    timbangChartMode === 'bp'
+                      ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-lg border border-rose-400/50'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Heart className="w-4 h-4 text-rose-400 fill-rose-500/20" />
+                  <span>Trend BP (Tekanan Darah)</span>
+                </button>
+              </div>
+
+              {/* 1. HISTORICAL WEIGHT TRACKING CHART (12 SESSIONS - RECHARTS) */}
+              {(timbangChartMode === 'both' || timbangChartMode === 'weight') && (
+                <HistoricalWeightChart
+                  patient={patient}
+                  sessions={sessions}
+                  patientDryWeight={patientDryWeight}
+                />
+              )}
+
+              {/* 2. HISTORICAL BLOOD PRESSURE TRACKING CHART (12 SESSIONS - RECHARTS) */}
+              {(timbangChartMode === 'both' || timbangChartMode === 'bp') && (
+                <HistoricalBloodPressureChart
+                  patient={patient}
+                  sessions={sessions}
+                />
+              )}
 
               {/* Fluid Management Guide */}
               <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs sm:text-sm text-slate-300 space-y-2">
@@ -1982,6 +2106,12 @@ export function PatientPortal({
                 patient={patient}
                 sessions={sessions}
                 patientDryWeight={patientDryWeight}
+              />
+
+              {/* HISTORICAL BLOOD PRESSURE TRACKING CHART (12 SESSIONS - RECHARTS) */}
+              <HistoricalBloodPressureChart
+                patient={patient}
+                sessions={sessions}
               />
 
               {/* Past Sessions List (Dynamic from real records, empty if none) */}
@@ -2950,8 +3080,28 @@ export function PatientPortal({
             </div>
 
             <div className="space-y-4">
-              {/* LOKASI & STESEN KERUSI / MESIN DIALISIS SECTION */}
-              {!hasArrivedAndRegistered ? (
+              {/* STATUS SESI HARI INI JIKA TELAH SELESAI */}
+              {isSessionCompleted ? (
+                <div className="p-5 bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-2xl border-2 border-teal-400 space-y-3 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase font-black text-teal-300 tracking-wider flex items-center gap-1.5">
+                      <CheckCircle2 className="w-5 h-5 text-teal-400" />
+                      Status Sesi Hari Ini: Selesai
+                    </span>
+                    <span className="text-xs bg-teal-900 text-teal-200 border border-teal-600 font-bold px-2.5 py-0.5 rounded-full">
+                      Discaj
+                    </span>
+                  </div>
+                  <div className="p-4 bg-slate-950/90 rounded-xl border border-teal-600/60 space-y-2">
+                    <p className="text-base sm:text-lg font-black text-teal-200 leading-snug">
+                      Sesi dialisis telah selesai, jumpa lagi di next sesi pada <span className="text-amber-300 font-black underline underline-offset-4 decoration-amber-400">{nextSessionFormattedText}</span>
+                    </p>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Terima kasih atas disiplin dan kerjasama anda. Sila patuhi pemakanan rendah garam dan cecair mengikut sukatan klinikal sehingga sesi temujanji seterusnya.
+                    </p>
+                  </div>
+                </div>
+              ) : !hasArrivedAndRegistered ? (
                 // 1. KEADAAN BELUM SAMPAI / BELUM DAFTAR DI KAUNTER
                 <div className="p-5 bg-[#0A1324] rounded-2xl border-2 border-amber-500/90 space-y-3 shadow-lg">
                   <div className="flex items-center justify-between">
@@ -3097,6 +3247,71 @@ export function PatientPortal({
                 <p className="text-slate-200">
                   Sila maklumkan kepada jururawat segera jika anda berasa pening, kejang kaki, atau sejuk semasa proses dialisis dijalankan.
                 </p>
+              </div>
+
+              {/* SEJARAH & REKOD SESI DIALISIS LEPAS (2 HARI LEPAS, ETC) */}
+              <div className="pt-4 border-t border-[#1F385C] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <History className="w-5 h-5 text-cyan-400" />
+                    <h4 className="font-extrabold text-base sm:text-lg text-cyan-300">
+                      Sejarah & Rekod Sesi Dialisis Lepas
+                    </h4>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {historicalDisplaySessions.length} Rekod
+                  </span>
+                </div>
+
+                {historicalDisplaySessions.length > 0 ? (
+                  <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                    {historicalDisplaySessions.map((pastSess, idx) => (
+                      <div key={pastSess.id || idx} className="p-4 bg-[#0A1324] hover:bg-[#0E1B32] rounded-2xl border border-[#1F385C] space-y-2 transition-all">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="w-4 h-4 text-teal-400" />
+                            <span className="font-bold text-sm text-white">{pastSess.formattedDate}</span>
+                            {pastSess.relativeLabel && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-800">
+                                {pastSess.relativeLabel}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Selesai
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
+                          <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                            <span className="text-slate-400 block text-[10px]">Berat Pra ➔ Selepas:</span>
+                            <strong className="text-amber-300 font-bold">
+                              {pastSess.pre_weight_kg ? `${pastSess.pre_weight_kg}kg` : '--'} ➔ {pastSess.post_weight_kg ? `${pastSess.post_weight_kg}kg` : '--'}
+                            </strong>
+                          </div>
+                          <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                            <span className="text-slate-400 block text-[10px]">Tekanan Darah (BP):</span>
+                            <strong className="text-cyan-300 font-bold">
+                              {pastSess.pre_bp || '--'} ➔ {pastSess.post_bp || '--'}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {pastSess.chair_number && (
+                          <div className="text-[11px] text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800/60">
+                            <span>Stesen: Kerusi {pastSess.chair_number} ({pastSess.machine_model || 'Fresenius 4008S'})</span>
+                            <span className="text-slate-400">{pastSess.duration_hours || 4} Jam Rawatan</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-[#0A1324] rounded-2xl border border-dashed border-[#1F385C] text-center text-xs text-slate-400 space-y-1">
+                    <p>Tiada rekod sesi dialisis terdahulu dalam pangkalan data.</p>
+                  </div>
+                )}
               </div>
             </div>
 

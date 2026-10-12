@@ -18,7 +18,7 @@ import {
   INITIAL_MEDICAL_RECORDS
 } from '@/lib/mock-data';
 import { AuditLog, PatientCheckIn, DialysisSession, Patient, NewRegistration, PatientMedication, SessionStatus, MedicalRecord } from '@/types';
-import { syncPatientsWithMalaysiaSchedule } from '@/lib/malaysia-time';
+import { syncPatientsWithMalaysiaSchedule, getMalaysiaDate } from '@/lib/malaysia-time';
 import { useMalaysiaTime } from '@/hooks/useMalaysiaTime';
 import { Home as HomeIcon, User, AlertTriangle, PhoneCall, MessageSquare, ShieldAlert } from 'lucide-react';
 import { 
@@ -207,18 +207,26 @@ export default function Home() {
 
         // Keep checkInQueue synchronized with clinical session statuses
         setCheckInQueue(prev => {
-          const next = prev.map(q => {
-            const matched = sorted.find(s => s.patient_id === q.patient_id);
-            if (matched) {
-              return {
-                ...q,
-                status: matched.status,
-                assigned_chair: matched.chair_number || q.assigned_chair,
-                assigned_machine_model: matched.machine_model || q.assigned_machine_model
-              };
-            }
-            return q;
-          });
+          const next = prev
+            .filter(q => {
+              const matched = sorted.find(s => s.patient_id === q.patient_id);
+              if (matched && (matched.status === 'SUDAH_SELESAI' || matched.status === 'SELESAI')) {
+                return false; // Remove completed patient from active queue
+              }
+              return true;
+            })
+            .map(q => {
+              const matched = sorted.find(s => s.patient_id === q.patient_id);
+              if (matched) {
+                return {
+                  ...q,
+                  status: matched.status,
+                  assigned_chair: matched.chair_number || q.assigned_chair,
+                  assigned_machine_model: matched.machine_model || q.assigned_machine_model
+                };
+              }
+              return q;
+            });
           try {
             localStorage.setItem('kaizenbros_queue', JSON.stringify(next));
           } catch {}
@@ -322,17 +330,18 @@ export default function Home() {
   const demoPatient = activePatient;
   const demoPatientCheckIn = useMemo(() => {
     if (!demoPatient) return undefined;
-    return checkInQueue.find(q => q.patient_id === demoPatient.id);
-  }, [demoPatient, checkInQueue]);
+    const todayStr = getMalaysiaDate(malaysiaTime.effectiveDate).dateIso;
+    return checkInQueue.find(q => q.patient_id === demoPatient.id && q.check_in_date === todayStr);
+  }, [demoPatient, checkInQueue, malaysiaTime.effectiveDate]);
 
   const demoSession = useMemo(() => {
     if (!demoPatient) return null;
     const ptSessions = sessions.filter(s => s.patient_id === demoPatient.id);
     if (ptSessions.length === 0) return null;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getMalaysiaDate(malaysiaTime.effectiveDate).dateIso;
     const todaySess = ptSessions.find(s => s.scheduled_date === todayStr);
-    return todaySess || ptSessions[0];
-  }, [demoPatient, sessions]);
+    return todaySess || null;
+  }, [demoPatient, sessions, malaysiaTime.effectiveDate]);
   const demoNurseName = 'Sister Siti Fatimah';
 
   const handleAuditLog = (action: string, details: string) => {
@@ -441,6 +450,7 @@ export default function Home() {
     const currentTimeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
     const finalBp = preBp?.trim() || '-';
 
+    const todayStr = getMalaysiaDate(malaysiaTime.effectiveDate).dateIso;
     const newCheckIn: PatientCheckIn = {
       id: `CHK-${Date.now()}`,
       patient_id: demoPatient.id,
@@ -449,6 +459,7 @@ export default function Home() {
       queue_number: nextQNum,
       check_in_time: currentTimeStr,
       check_in_timestamp: Date.now(),
+      check_in_date: todayStr,
       shift: demoPatient.preferred_shift || 'SYIF_1',
       status: 'MENUNGGU_GILIRAN',
       pre_weight_kg: preWeight,
@@ -907,12 +918,14 @@ export default function Home() {
     const nextQNum = `Q-${(checkInQueue.length + 1).toString().padStart(2, '0')}`;
     const currentTimeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+    const todayIso = getMalaysiaDate(malaysiaTime.effectiveDate).dateIso;
     const newCheckIn: PatientCheckIn = {
       id: `CHK-${Date.now()}`,
       patient_id: pt.id,
       patient_id_code: pt.patient_id_code,
       patient_name: pt.name,
       queue_number: nextQNum,
+      check_in_date: todayIso,
       check_in_time: currentTimeStr,
       check_in_timestamp: Date.now(),
       shift: 'PETANG',
@@ -1110,17 +1123,25 @@ export default function Home() {
 
               // 100% synchronize checkInQueue status with session status
               setCheckInQueue(prevQ => {
-                const nextQ = prevQ.map(q => {
-                  if (q.patient_id === updatedSession.patient_id) {
-                    return {
-                      ...q,
-                      status: updatedSession.status,
-                      assigned_chair: updatedSession.chair_number || q.assigned_chair,
-                      assigned_machine_model: updatedSession.machine_model || q.assigned_machine_model
-                    };
-                  }
-                  return q;
-                });
+                const isFinished = updatedSession.status === 'SUDAH_SELESAI' || updatedSession.status === 'SELESAI';
+                const nextQ = prevQ
+                  .filter(q => {
+                    if (q.patient_id === updatedSession.patient_id && isFinished) {
+                      return false; // Remove completed patient from arrival queue
+                    }
+                    return true;
+                  })
+                  .map(q => {
+                    if (q.patient_id === updatedSession.patient_id) {
+                      return {
+                        ...q,
+                        status: updatedSession.status,
+                        assigned_chair: updatedSession.chair_number || q.assigned_chair,
+                        assigned_machine_model: updatedSession.machine_model || q.assigned_machine_model
+                      };
+                    }
+                    return q;
+                  });
                 try {
                   localStorage.setItem('kaizenbros_queue', JSON.stringify(nextQ));
                 } catch {}

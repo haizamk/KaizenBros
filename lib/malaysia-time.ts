@@ -5,11 +5,34 @@ export function getMalaysiaDate(input?: number | Date): { dateIso: string; dayNa
   if (typeof input === 'number') {
     d.setDate(d.getDate() + input);
   }
-  const dateIso = d.toISOString().slice(0, 10);
-  const dayName = d.toLocaleDateString('ms-MY', { weekday: 'long' });
-  const formattedDate = d.toLocaleDateString('ms-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const dayOfWeek = d.getDay();
+  let dateIso = '';
+  try {
+    dateIso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(d);
+  } catch {
+    dateIso = d.toISOString().slice(0, 10);
+  }
+  const dayName = d.toLocaleDateString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'long' });
+  const formattedDate = d.toLocaleDateString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  
+  let dayOfWeek = d.getDay();
+  try {
+    const shortDay = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuala_Lumpur', weekday: 'short' }).format(d);
+    const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    if (shortDay in dayMap) {
+      dayOfWeek = dayMap[shortDay];
+    }
+  } catch {}
+
   return { dateIso, dayName, formattedDate, dayOfWeek };
+}
+
+export function isPatientScheduledToday(patient: Patient, effectiveDate?: Date): boolean {
+  if (!patient || !patient.is_active) return false;
+  const { dayOfWeek } = getMalaysiaDate(effectiveDate);
+  const pattern = (patient?.schedule_pattern || '').toUpperCase();
+  const isTuesdayGroup = pattern.includes('SELASA') || pattern.includes('KHAMIS') || pattern.includes('SABTU') || pattern === 'TTS';
+  const targetDays = isTuesdayGroup ? [2, 4, 6] : [1, 3, 5];
+  return targetDays.includes(dayOfWeek);
 }
 
 export function syncPatientsWithMalaysiaSchedule(patients: Patient[], effectiveDate?: Date): Patient[] {

@@ -58,6 +58,7 @@ export interface DialysisSession {
   status_reason?: string;
   status: SessionStatus;
   dry_weight_kg: number;
+  last_post_weight_kg?: number; // Berat selepas sesi dialisis lepas
   pre_weight_kg?: number;
   post_weight_kg?: number;
   target_uf_litres?: number;
@@ -71,6 +72,7 @@ export interface DialysisSession {
   nurse_name?: string;
   vital_signs?: VitalSign[];
   doctor_notes?: string;
+  nurse_notes?: string;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -94,6 +96,7 @@ export interface Patient {
   next_of_kin_phone?: string;
   next_of_kin_relation?: string;
   dry_weight_kg: number;
+  last_post_weight_kg?: number;
   latest_weight_kg: number;
   latest_bp: string;
   vascular_access: string;
@@ -244,6 +247,7 @@ export interface PatientCheckIn {
   patient_id_code: string;
   patient_name: string;
   queue_number: string;
+  check_in_date?: string;
   check_in_time: string;
   check_in_timestamp: number;
   shift: string;
