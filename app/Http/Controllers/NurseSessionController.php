@@ -6,9 +6,9 @@ use App\Http\Requests\CheckInSessionRequest;
 use App\Http\Requests\CompleteSessionRequest;
 use App\Http\Requests\RecordIntraBpRequest;
 use App\Models\DialysisSession;
+use App\Models\User;
 use App\Services\DialysisSessionWorkflow;
-use App\Support\MalayDate;
-use App\Support\WhatsAppLink;
+use App\Support\NurseBoard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,37 +19,65 @@ class NurseSessionController extends Controller
 {
     public function __construct(private readonly DialysisSessionWorkflow $workflow) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $sessions = DialysisSession::query()
-            ->with(['patient', 'nurse'])
-            ->whereDate('scheduled_date', today())
-            ->orderBy('scheduled_time')
-            ->orderBy('chair_number')
-            ->get()
-            ->map(function (DialysisSession $session): array {
-                $data = $session->toPortalArray();
-                $data['whatsapp_url'] = WhatsAppLink::sessionReminder(
-                    $session->patient->phone,
-                    $session->patient->name,
-                    $session->scheduled_date->format('d/m/Y'),
-                    $session->scheduled_time,
-                    $session->chair_number,
-                );
-
-                return $data;
-            })
-            ->values();
+        $sessions = NurseBoard::todaySessions();
+        $counts = NurseBoard::counts($sessions);
 
         return Inertia::render('jururawat/hari-ini', [
             'sessions' => $sessions,
-            'today' => $this->malayDate(),
+            'counts' => $counts,
+            'today' => $counts['date_label'],
+            'nurseName' => $request->user()->name,
         ]);
     }
 
-    private function malayDate(): string
+    public function summary(): Response
     {
-        return MalayDate::long(today());
+        $sessions = NurseBoard::todaySessions();
+
+        return Inertia::render('jururawat/ringkasan', [
+            'sessions' => $sessions,
+            'counts' => NurseBoard::counts($sessions),
+        ]);
+    }
+
+    public function schedule(): Response
+    {
+        return Inertia::render('jururawat/jadual', [
+            'patients' => NurseBoard::schedule(),
+        ]);
+    }
+
+    public function patients(): Response
+    {
+        return Inertia::render('jururawat/pesakit', [
+            'patients' => NurseBoard::patients(),
+        ]);
+    }
+
+    public function sessions(Request $request): Response
+    {
+        $sessions = NurseBoard::todaySessions();
+
+        return Inertia::render('jururawat/sesi', [
+            'sessions' => $sessions,
+            'counts' => NurseBoard::counts($sessions),
+            'focus' => $request->integer('fokus') ?: null,
+            'status' => session('status'),
+        ]);
+    }
+
+    public function settings(Request $request): Response
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        return Inertia::render('jururawat/tetapan', [
+            'nurseName' => $user->name,
+            'role' => $user->role->label(),
+            'centre' => config('kaizenbros.centre'),
+        ]);
     }
 
     public function recordDuring(RecordIntraBpRequest $request, DialysisSession $session): RedirectResponse

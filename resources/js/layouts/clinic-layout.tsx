@@ -45,16 +45,6 @@ export default function ClinicLayout({
                                 <span className="col-span-2 hidden text-sm text-slate-300 md:inline">
                                     {user.name}
                                 </span>
-                                {user.role === 'nurse' || user.role === 'admin' ? (
-                                    <>
-                                        <Link href="/jururawat" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#1F385C] px-3 text-sm font-bold">
-                                            Hari ini
-                                        </Link>
-                                        <Link href="/jururawat/darah" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#1F385C] px-3 text-sm font-bold">
-                                            Rekod darah
-                                        </Link>
-                                    </>
-                                ) : null}
                                 {user.role === 'admin' && (
                                     <Link href="/admin" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#1F385C] px-3 text-sm font-bold">
                                         Pentadbir

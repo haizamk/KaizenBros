@@ -1,6 +1,7 @@
 import { Head, useForm } from '@inertiajs/react';
 import BloodAnalysis, { type BloodAnalysisData } from '@/components/blood-analysis';
 import InputError from '@/components/input-error';
+import NurseNav from '@/components/nurse-nav';
 
 type PatientOption = {
     id: number;
@@ -63,6 +64,7 @@ export default function Darah({
         <>
             <Head title="Rekod darah" />
             <div className="space-y-6">
+                <NurseNav />
                 <div>
                     <p className="text-sm font-bold text-teal-300">Portal jururawat</p>
                     <h1 className="text-3xl font-black">Rekod darah</h1>

@@ -185,6 +185,44 @@ class ClinicWorkflowTest extends TestCase
             );
     }
 
+    public function test_nurse_pages_stay_separate_and_share_today_counts_with_admin(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $patientUser = User::factory()->create(['role' => 'patient']);
+        $this->sessionFor($this->patientRecord());
+
+        $this->actingAs($patientUser)->get(route('nurse.summary'))->assertForbidden();
+        $this->actingAs($patientUser)->get(route('nurse.settings'))->assertForbidden();
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.summary'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('jururawat/ringkasan')
+                ->where('counts.total', 1)
+                ->where('counts.belum', 1)
+            );
+
+        foreach ([
+            'nurse.schedule' => 'jururawat/jadual',
+            'nurse.patients' => 'jururawat/pesakit',
+            'nurse.sessions' => 'jururawat/sesi',
+            'nurse.settings' => 'jururawat/tetapan',
+        ] as $name => $component) {
+            $this->actingAs($nurse)->get(route($name))->assertOk()->assertInertia(fn (Assert $page) => $page->component($component));
+        }
+
+        $this->actingAs($admin)
+            ->get(route('admin.home'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('admin/papan')
+                ->where('today.total', 1)
+                ->where('today.belum', 1)
+            );
+    }
+
     public function test_nurse_board_includes_a_whatsapp_reminder_link(): void
     {
         $nurse = User::factory()->create(['role' => 'nurse']);

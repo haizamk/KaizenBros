@@ -1,4 +1,5 @@
-import { Head, useForm } from '@inertiajs/react';
+import { useState } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 
 type PatientRow = {
@@ -47,6 +48,16 @@ type Option = {
     label: string;
 };
 
+type TodayCounts = {
+    date_label: string;
+    total: number;
+    belum: number;
+    hadir: number;
+    sedang: number;
+    selesai: number;
+    percent: number;
+};
+
 type NurseApplicationRow = {
     id: number;
     reference: string;
@@ -58,7 +69,16 @@ type NurseApplicationRow = {
     created_at: string;
 };
 
+const sections = [
+    { id: 'ringkasan', label: 'Ringkasan' },
+    { id: 'pesakit', label: 'Pesakit' },
+    { id: 'dokumen', label: 'Dokumen' },
+    { id: 'permohonan', label: 'Permohonan' },
+    { id: 'jururawat', label: 'Jururawat' },
+] as const;
+
 export default function PapanAdmin({
+    today,
     patients,
     registrations,
     nurseApplications,
@@ -66,6 +86,7 @@ export default function PapanAdmin({
     documentCategories,
     notice,
 }: {
+    today: TodayCounts;
     patients: PatientRow[];
     registrations: RegistrationRow[];
     nurseApplications: NurseApplicationRow[];
@@ -73,6 +94,8 @@ export default function PapanAdmin({
     documentCategories: Option[];
     notice?: string | null;
 }) {
+    const [section, setSection] = useState<(typeof sections)[number]['id']>('ringkasan');
+
     return (
         <>
             <Head title="Portal pentadbir" />
@@ -81,9 +104,44 @@ export default function PapanAdmin({
                     <p className="text-sm font-bold text-teal-300">Portal pentadbir</p>
                     <h1 className="text-3xl font-black">Pesakit dan permohonan</h1>
                 </div>
+                <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Bahagian pentadbir">
+                    {sections.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={section === item.id}
+                            onClick={() => setSection(item.id)}
+                            className={`inline-flex min-h-12 shrink-0 items-center rounded-2xl px-4 font-black ${
+                                section === item.id ? 'bg-teal-500 text-slate-950' : 'border border-[#1F385C] bg-[#132238]'
+                            }`}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                    <Link href="/jururawat/tetapan" className="inline-flex min-h-12 shrink-0 items-center rounded-2xl border border-[#1F385C] bg-[#132238] px-4 font-black">
+                        Tetapan
+                    </Link>
+                </nav>
                 {notice && <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{notice}</p>}
 
-                <section className="space-y-3">
+                {section === 'ringkasan' && (
+                    <section className="space-y-3 rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
+                        <h2 className="text-2xl font-black">Syif hari ini</h2>
+                        <p className="text-lg text-slate-200">{today.date_label}. Angka ini sama dengan portal jururawat.</p>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                            <p className="text-lg">Jumlah <span className="block text-3xl font-black">{today.total}</span></p>
+                            <p className="text-lg">Belum hadir <span className="block text-3xl font-black">{today.belum}</span></p>
+                            <p className="text-lg">Sudah hadir <span className="block text-3xl font-black">{today.hadir}</span></p>
+                            <p className="text-lg">Sedang dialisis <span className="block text-3xl font-black">{today.sedang}</span></p>
+                            <p className="text-lg">Selesai <span className="block text-3xl font-black">{today.selesai}</span></p>
+                        </div>
+                        <Link href="/jururawat" className="inline-flex min-h-12 items-center rounded-2xl bg-teal-500 px-4 font-black text-slate-950">
+                            Buka papan jururawat
+                        </Link>
+                    </section>
+                )}
+
+                {section === 'pesakit' && <section className="space-y-3">
                     <h2 className="text-2xl font-black">Pesakit aktif ({patients.length})</h2>
                     <p className="text-base text-slate-300 md:hidden">Leret jadual ke tepi jika lajur tidak muat pada skrin.</p>
                     <div className="overflow-x-auto rounded-3xl border border-[#1F385C]">
@@ -111,9 +169,9 @@ export default function PapanAdmin({
                             </tbody>
                         </table>
                     </div>
-                </section>
+                </section>}
 
-                <section className="space-y-3">
+                {section === 'dokumen' && <section className="space-y-3">
                     <h2 className="text-2xl font-black">Dokumen pesakit sedia ada</h2>
                     <p className="text-base text-slate-200">PDF dan gambar pesakit disimpan dalam folder dokumen pesakit. Fail ini tidak dipaparkan kepada umum.</p>
                     <PatientDocumentForm patients={patients} categories={documentCategories} />
@@ -132,9 +190,9 @@ export default function PapanAdmin({
                             ))}
                         </ul>
                     )}
-                </section>
+                </section>}
 
-                <section className="space-y-3">
+                {section === 'permohonan' && <section className="space-y-3">
                     <h2 className="text-2xl font-black">Permohonan pesakit baru</h2>
                     <p className="text-base text-slate-200">Permohonan menunggu pengesahan pentadbir. Kelulusan tidak membuka akaun portal.</p>
                     {registrations.length === 0 ? (
@@ -146,9 +204,9 @@ export default function PapanAdmin({
                             ))}
                         </ul>
                     )}
-                </section>
+                </section>}
 
-                <section className="space-y-3">
+                {section === 'jururawat' && <section className="space-y-3">
                     <h2 className="text-2xl font-black">Permohonan jururawat</h2>
                     {nurseApplications.length === 0 ? (
                         <p className="rounded-2xl border border-[#1F385C] bg-[#132238] p-5">Tiada permohonan jururawat.</p>
@@ -165,7 +223,7 @@ export default function PapanAdmin({
                             ))}
                         </ul>
                     )}
-                </section>
+                </section>}
             </div>
         </>
     );

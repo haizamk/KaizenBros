@@ -1,224 +1,180 @@
-import { useEffect, useState } from 'react';
-import { Head, useForm } from '@inertiajs/react';
-import InputError from '@/components/input-error';
+import { useMemo, useState } from 'react';
+import { Head, Link } from '@inertiajs/react';
+import { NursePage } from '@/components/nurse-nav';
+import { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
 
-type SessionCard = {
-    id: number;
-    chair_number: string;
-    scheduled_time: string;
-    shift_label: string;
-    status: string;
-    status_label: string;
-    pre_weight_kg: string | null;
-    post_weight_kg: string | null;
-    pre_bp: string | null;
-    intra_bp: string | null;
-    post_bp: string | null;
-    started_at: string | null;
-    nurse_notes: string | null;
-    whatsapp_url?: string | null;
-    patient: {
-        name: string;
-        patient_id_code: string;
-        dry_weight_kg: string;
-        sponsor: string;
-        allergies: string | null;
-    };
-};
+const stages = [
+    { key: 'BELUM_HADIR', count: 'belum' as const, step: '1', title: 'Tiba di klinik', detail: 'Dijadualkan dan belum daftar masuk di kaunter.' },
+    { key: 'SUDAH_HADIR', count: 'hadir' as const, step: '2', title: 'Check-in dan triage', detail: 'Sudah timbang dan BP. Menunggu mesin.' },
+    { key: 'SEDANG_DIALISIS', count: 'sedang' as const, step: '3', title: 'Sedang dialisis', detail: 'Rawatan aktif. Pemasa 4 jam berjalan.' },
+    { key: 'SUDAH_SELESAI', count: 'selesai' as const, step: '4', title: 'Tamat dan discaj', detail: 'Berat selepas dan BP sudah direkod.' },
+];
 
-const fieldClass = 'min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 text-base text-white';
+const filters = [
+    { key: 'SEMUA', label: 'Semua' },
+    { key: 'BELUM_HADIR', label: 'Belum hadir' },
+    { key: 'SUDAH_HADIR', label: 'Sudah hadir' },
+    { key: 'SEDANG_DIALISIS', label: 'Sedang dialisis' },
+    { key: 'SUDAH_SELESAI', label: 'Selesai' },
+];
 
-function formatClock(totalSeconds: number): string {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
+function actionLabel(status: string): string {
+    if (status === 'BELUM_HADIR') return 'Daftar masuk / Check-in';
+    if (status === 'SUDAH_HADIR') return 'Mula sesi';
+    if (status === 'SEDANG_DIALISIS') return 'Pantau stesen';
+    return 'Lihat rekod';
 }
 
-function DialysisTimer({ startedAt }: { startedAt: string }) {
-    const [now, setNow] = useState(() => Date.now());
+export default function HariIni({
+    sessions,
+    counts,
+    today,
+    nurseName,
+}: {
+    sessions: SessionCard[];
+    counts: ShiftCounts;
+    today: string;
+    nurseName: string;
+}) {
+    const [stage, setStage] = useState<string | null>(null);
+    const [filter, setFilter] = useState('SEMUA');
+    const [query, setQuery] = useState('');
 
-    useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now()), 1000);
-        return () => window.clearInterval(timer);
-    }, []);
+    const visible = useMemo(() => {
+        const selected = stage ?? (filter === 'SEMUA' ? null : filter);
+        const needle = query.trim().toLowerCase();
 
-    const elapsed = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
-    const remaining = Math.max(0, 4 * 3600 - elapsed);
+        return sessions.filter((session) => {
+            if (selected && session.status !== selected) return false;
+            if (!needle) return true;
+            return `${session.patient.name} ${session.patient.patient_id_code}`.toLowerCase().includes(needle);
+        });
+    }, [sessions, stage, filter, query]);
 
-    return (
-        <p className="font-mono text-3xl font-black text-cyan-200" aria-live="polite">
-            {formatClock(remaining)}
-            <span className="ml-2 text-sm font-bold text-slate-300">baki daripada 4 jam</span>
-        </p>
-    );
-}
-
-function statusClass(status: string): string {
-    if (status === 'SEDANG_DIALISIS') return 'bg-emerald-950 text-emerald-200 border-emerald-700';
-    if (status === 'SUDAH_HADIR') return 'bg-cyan-950 text-cyan-200 border-cyan-700';
-    if (status === 'SUDAH_SELESAI') return 'bg-slate-800 text-slate-200 border-slate-600';
-    return 'bg-amber-950 text-amber-100 border-amber-700';
-}
-
-function SessionActions({ session }: { session: SessionCard }) {
-    const checkIn = useForm({ pre_weight_kg: '', pre_bp: '' });
-    const during = useForm({ intra_bp: session.intra_bp ?? '' });
-    const complete = useForm({ post_weight_kg: '', post_bp: '', nurse_notes: '' });
-    const start = useForm({});
-
-    if (session.status === 'BELUM_HADIR') {
-        return (
-            <form
-                className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    checkIn.post(`/jururawat/sesi/${session.id}/daftar-masuk`);
-                }}
-            >
-                <label className="space-y-1">
-                    <span className="text-sm font-bold">Berat sebelum (kg)</span>
-                    <input className={fieldClass} inputMode="decimal" value={checkIn.data.pre_weight_kg} onChange={(event) => checkIn.setData('pre_weight_kg', event.target.value)} required />
-                    <InputError message={checkIn.errors.pre_weight_kg} />
-                </label>
-                <label className="space-y-1">
-                    <span className="text-sm font-bold">BP sebelum</span>
-                    <input className={fieldClass} placeholder="120/80" value={checkIn.data.pre_bp} onChange={(event) => checkIn.setData('pre_bp', event.target.value)} required />
-                    <InputError message={checkIn.errors.pre_bp} />
-                </label>
-                <button type="submit" className="inline-flex min-h-12 items-center justify-center self-end rounded-xl bg-cyan-500 px-4 font-black text-slate-950">
-                    Daftar masuk
-                </button>
-                <InputError message={checkIn.errors.status} />
-            </form>
-        );
-    }
-
-    if (session.status === 'SUDAH_HADIR') {
-        return (
-            <form
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    start.post(`/jururawat/sesi/${session.id}/mula`);
-                }}
-            >
-                <button type="submit" className="inline-flex min-h-14 items-center justify-center rounded-xl bg-emerald-500 px-5 text-lg font-black text-slate-950">
-                    Mula dialisis
-                </button>
-                <InputError message={start.errors.status} />
-            </form>
-        );
-    }
-
-    if (session.status === 'SEDANG_DIALISIS' && session.started_at) {
-        return (
-            <div className="space-y-4">
-                <DialysisTimer startedAt={session.started_at} />
-                <form
-                    className="grid gap-3 sm:grid-cols-[1fr_auto]"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        during.post(`/jururawat/sesi/${session.id}/tekanan-semasa`);
-                    }}
-                >
-                    <label className="space-y-1">
-                        <span className="text-sm font-bold">BP semasa dialisis</span>
-                        <input className={fieldClass} placeholder="120/80" value={during.data.intra_bp} onChange={(event) => during.setData('intra_bp', event.target.value)} required />
-                        <InputError message={during.errors.intra_bp} />
-                    </label>
-                    <button type="submit" className="inline-flex min-h-12 items-center justify-center self-end rounded-xl border border-cyan-600 px-4 font-black text-cyan-100">
-                        Simpan BP semasa
-                    </button>
-                </form>
-                <form
-                    className="grid gap-3"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        complete.post(`/jururawat/sesi/${session.id}/selesai`);
-                    }}
-                >
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1">
-                            <span className="text-sm font-bold">Berat selepas (kg)</span>
-                            <input className={fieldClass} inputMode="decimal" value={complete.data.post_weight_kg} onChange={(event) => complete.setData('post_weight_kg', event.target.value)} required />
-                            <InputError message={complete.errors.post_weight_kg} />
-                        </label>
-                        <label className="space-y-1">
-                            <span className="text-sm font-bold">BP selepas</span>
-                            <input className={fieldClass} placeholder="120/80" value={complete.data.post_bp} onChange={(event) => complete.setData('post_bp', event.target.value)} required />
-                            <InputError message={complete.errors.post_bp} />
-                        </label>
-                    </div>
-                    <label className="space-y-1">
-                        <span className="text-sm font-bold">Nota jururawat</span>
-                        <input className={fieldClass} value={complete.data.nurse_notes} onChange={(event) => complete.setData('nurse_notes', event.target.value)} />
-                    </label>
-                    <button type="submit" className="inline-flex min-h-14 items-center justify-center rounded-xl bg-teal-500 px-5 text-lg font-black text-slate-950">
-                        Tamat sesi
-                    </button>
-                    <InputError message={complete.errors.status} />
-                </form>
-            </div>
-        );
-    }
-
-    return (
-        <p className="text-base text-slate-200">
-            Berat {session.pre_weight_kg} kg → {session.post_weight_kg} kg · BP {session.pre_bp} → {session.intra_bp ?? '—'} → {session.post_bp}
-            {session.nurse_notes ? ` · ${session.nurse_notes}` : ''}
-        </p>
-    );
-}
-
-export default function HariIni({ sessions, today }: { sessions: SessionCard[]; today: string }) {
     return (
         <>
             <Head title="Hari ini" />
-            <div className="space-y-5">
-                <div>
-                    <p className="text-sm font-bold text-teal-300">Portal jururawat</p>
-                    <h1 className="text-3xl font-black">Sesi hari ini</h1>
-                    <p className="text-lg text-slate-200">{today}</p>
-                </div>
-                {sessions.length === 0 && (
-                    <p className="rounded-2xl border border-[#1F385C] bg-[#132238] p-6 text-lg">Tiada sesi dijadualkan untuk hari ini.</p>
-                )}
-                <div className="grid gap-4">
-                    {sessions.map((session) => (
-                        <article key={session.id} className="space-y-4 rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <h2 className="text-2xl font-black">{session.patient.name}</h2>
-                                    <p className="text-base text-slate-200">
-                                        {session.patient.patient_id_code} · Kerusi {session.chair_number} · {session.scheduled_time} · {session.shift_label}
-                                    </p>
-                                    <p className="text-sm text-slate-300">
-                                        Berat kering {session.patient.dry_weight_kg} kg · {session.patient.sponsor}
-                                        {session.patient.allergies ? ` · Alahan: ${session.patient.allergies}` : ''}
-                                    </p>
+            <NursePage title={`Selamat datang, ${nurseName}`} intro={today}>
+                {counts.clinic_closed ? (
+                    <section className="rounded-3xl border border-indigo-700 bg-indigo-950 p-5">
+                        <h2 className="text-xl font-black">Pemberitahuan klinikal automatik, lepas jam 7:00 petang</h2>
+                        <p className="mt-2 text-lg leading-relaxed">
+                            Waktu rawatan hemodialisis bagi syif hari ini telah tamat pada jam 7:00 petang. Sesi yang belum selesai kekal pada papan ini. Jadual seterusnya ada di halaman Jadual Rawatan.
+                        </p>
+                    </section>
+                ) : null}
+
+                <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-bold text-teal-300">Sistem giliran fleksibel, yang awal datang didahulukan</p>
+                            <h2 className="text-2xl font-black">Papan giliran ketibaan hari ini</h2>
+                        </div>
+                        <p className="text-lg font-black text-teal-200">{counts.percent}% selesai</p>
+                    </div>
+                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#0B132B]">
+                        <div className="h-full rounded-full bg-teal-500" style={{ width: `${counts.percent}%` }} />
+                    </div>
+                    <p className="mt-3 text-base text-slate-200">
+                        Klik satu peringkat untuk tapis senarai. Rekod berat dan tekanan darah dibuat di halaman Sesi Dialisis supaya data tidak bercampur di sini.
+                    </p>
+                </section>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                    {stages.map((item) => {
+                        const active = stage === item.key;
+                        return (
+                            <button
+                                key={item.key}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => {
+                                    setStage(active ? null : item.key);
+                                    setFilter(active ? 'SEMUA' : item.key);
+                                }}
+                                className={`rounded-3xl border p-4 text-left ${active ? 'border-teal-400 bg-[#17304F]' : 'border-[#1F385C] bg-[#132238]'}`}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-black text-teal-200">{item.step}</p>
+                                    <p className="text-2xl font-black">{counts[item.count]}</p>
                                 </div>
-                                <span className={`rounded-full border px-3 py-2 text-sm font-black ${statusClass(session.status)}`}>
-                                    {session.status_label}
-                                </span>
-                            </div>
-                            {session.whatsapp_url && (
-                                <a
-                                    href={session.whatsapp_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex min-h-12 items-center rounded-xl bg-emerald-500 px-4 font-black text-slate-950"
-                                >
-                                    Buka WhatsApp untuk peringatan
-                                </a>
-                            )}
-                            {session.pre_weight_kg && session.status !== 'SUDAH_SELESAI' && (
-                                <p className="text-base">Sebelum: {session.pre_weight_kg} kg · {session.pre_bp}</p>
-                            )}
-                            <SessionActions session={session} />
-                        </article>
+                                <h3 className="mt-2 text-xl font-black">{item.title}</h3>
+                                <p className="mt-1 text-base text-slate-200">{item.detail}</p>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <label className="block">
+                    <span className="sr-only">Cari pesakit</span>
+                    <input
+                        className="min-h-14 w-full rounded-2xl border border-[#1F385C] bg-[#132238] px-4 text-lg"
+                        placeholder="Cari nama atau ID pesakit"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                    />
+                </label>
+
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                    {filters.map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            aria-pressed={filter === item.key && stage === null}
+                            onClick={() => {
+                                setFilter(item.key);
+                                setStage(null);
+                            }}
+                            className={`inline-flex min-h-12 shrink-0 items-center rounded-2xl px-4 font-black ${
+                                filter === item.key && stage === null ? 'bg-teal-500 text-slate-950' : 'border border-[#1F385C] bg-[#132238]'
+                            }`}
+                        >
+                            {item.label}
+                        </button>
                     ))}
                 </div>
-            </div>
+
+                {visible.length === 0 ? (
+                    <p className="rounded-3xl border border-[#1F385C] bg-[#132238] p-6 text-lg">Tiada pesakit dalam giliran ini.</p>
+                ) : (
+                    <div className="grid gap-4">
+                        {visible.map((session) => (
+                            <article key={session.id} className="space-y-4 rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <h2 className="text-2xl font-black">{session.patient.name}</h2>
+                                        <p className="text-base text-slate-200">{session.patient.patient_id_code} · Stesen {session.chair_number}</p>
+                                    </div>
+                                    <span className={`rounded-full border px-3 py-2 text-sm font-black ${statusClass(session.status)}`}>{session.status_label}</span>
+                                </div>
+                                <div className="grid gap-2 text-base sm:grid-cols-3">
+                                    <p>Masa temujanji<br /><span className="font-black">{session.scheduled_time}</span></p>
+                                    <p>Berat kering<br /><span className="font-black">{session.patient.dry_weight_kg} kg</span></p>
+                                    <p>Tekanan darah<br /><span className="font-black">{session.pre_bp ?? 'Belum direkod'}</span></p>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <Link
+                                        href={`/jururawat/sesi?fokus=${session.id}`}
+                                        className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-amber-400 px-4 text-lg font-black text-slate-950"
+                                    >
+                                        {actionLabel(session.status)}
+                                    </Link>
+                                    {session.whatsapp_url ? (
+                                        <a
+                                            href={session.whatsapp_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-emerald-500 px-4 text-lg font-black text-slate-950"
+                                        >
+                                            WhatsApp
+                                        </a>
+                                    ) : null}
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                )}
+            </NursePage>
         </>
     );
 }

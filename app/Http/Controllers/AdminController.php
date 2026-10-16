@@ -7,6 +7,7 @@ use App\Models\NurseApplication;
 use App\Models\Patient;
 use App\Models\PatientDocument;
 use App\Models\Registration;
+use App\Support\NurseBoard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -50,7 +51,10 @@ class AdminController extends Controller
             ->map(fn (NurseApplication $application): array => $application->toPortalArray())
             ->values();
 
+        $sessions = NurseBoard::todaySessions();
+
         return Inertia::render('admin/papan', [
+            'today' => NurseBoard::counts($sessions),
             'patients' => $patients,
             'registrations' => $registrations,
             'nurseApplications' => $nurseApplications,
