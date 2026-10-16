@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $pre_weight_kg
  * @property string|null $post_weight_kg
  * @property string|null $pre_bp
+ * @property string|null $intra_bp
  * @property string|null $post_bp
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
@@ -36,6 +37,7 @@ use Illuminate\Support\Carbon;
     'pre_weight_kg',
     'post_weight_kg',
     'pre_bp',
+    'intra_bp',
     'post_bp',
     'started_at',
     'completed_at',
@@ -93,6 +95,7 @@ class DialysisSession extends Model
             'pre_weight_kg' => $this->pre_weight_kg,
             'post_weight_kg' => $this->post_weight_kg,
             'pre_bp' => $this->pre_bp,
+            'intra_bp' => $this->intra_bp,
             'post_bp' => $this->post_bp,
             'started_at' => $this->started_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),

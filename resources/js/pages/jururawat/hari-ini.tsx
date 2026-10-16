@@ -12,6 +12,7 @@ type SessionCard = {
     pre_weight_kg: string | null;
     post_weight_kg: string | null;
     pre_bp: string | null;
+    intra_bp: string | null;
     post_bp: string | null;
     started_at: string | null;
     nurse_notes: string | null;
@@ -62,6 +63,7 @@ function statusClass(status: string): string {
 
 function SessionActions({ session }: { session: SessionCard }) {
     const checkIn = useForm({ pre_weight_kg: '', pre_bp: '' });
+    const during = useForm({ intra_bp: session.intra_bp ?? '' });
     const complete = useForm({ post_weight_kg: '', post_bp: '', nurse_notes: '' });
     const start = useForm({});
 
@@ -113,6 +115,22 @@ function SessionActions({ session }: { session: SessionCard }) {
             <div className="space-y-4">
                 <DialysisTimer startedAt={session.started_at} />
                 <form
+                    className="grid gap-3 sm:grid-cols-[1fr_auto]"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        during.post(`/jururawat/sesi/${session.id}/tekanan-semasa`);
+                    }}
+                >
+                    <label className="space-y-1">
+                        <span className="text-sm font-bold">BP semasa dialisis</span>
+                        <input className={fieldClass} placeholder="120/80" value={during.data.intra_bp} onChange={(event) => during.setData('intra_bp', event.target.value)} required />
+                        <InputError message={during.errors.intra_bp} />
+                    </label>
+                    <button type="submit" className="inline-flex min-h-12 items-center justify-center self-end rounded-xl border border-cyan-600 px-4 font-black text-cyan-100">
+                        Simpan BP semasa
+                    </button>
+                </form>
+                <form
                     className="grid gap-3"
                     onSubmit={(event) => {
                         event.preventDefault();
@@ -146,7 +164,7 @@ function SessionActions({ session }: { session: SessionCard }) {
 
     return (
         <p className="text-base text-slate-200">
-            Berat {session.pre_weight_kg} kg → {session.post_weight_kg} kg · BP {session.pre_bp} → {session.post_bp}
+            Berat {session.pre_weight_kg} kg → {session.post_weight_kg} kg · BP {session.pre_bp} → {session.intra_bp ?? '—'} → {session.post_bp}
             {session.nurse_notes ? ` · ${session.nurse_notes}` : ''}
         </p>
     );

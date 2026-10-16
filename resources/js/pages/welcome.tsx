@@ -87,7 +87,7 @@ export default function Welcome({ centre }: { centre: Centre }) {
                     </div>
                 </section>
 
-                <section className="mx-auto grid max-w-6xl gap-4 px-4 py-10 sm:grid-cols-3" aria-label="Ringkasan pusat">
+                <section className="mx-auto grid max-w-6xl gap-4 px-3 py-8 sm:grid-cols-2 sm:px-4 lg:grid-cols-3 lg:py-10" aria-label="Ringkasan pusat">
                     <article className="rounded-3xl border-2 border-border bg-card p-6">
                         <p className="text-5xl font-black text-primary">{centre.capacity_machines}</p>
                         <h2 className="mt-2 text-2xl font-black">Mesin dialisis</h2>

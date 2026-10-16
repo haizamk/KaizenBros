@@ -14,4 +14,15 @@ enum SchedulePattern: string
             self::SelasaKhamisSabtu => 'Selasa, Khamis, Sabtu',
         };
     }
+
+    /**
+     * @return array<int, int>
+     */
+    public function weekdays(): array
+    {
+        return match ($this) {
+            self::IsninRabuJumaat => [1, 3, 5],
+            self::SelasaKhamisSabtu => [2, 4, 6],
+        };
+    }
 }

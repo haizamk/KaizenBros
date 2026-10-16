@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CheckInSessionRequest;
 use App\Http\Requests\CompleteSessionRequest;
+use App\Http\Requests\RecordIntraBpRequest;
 use App\Models\DialysisSession;
 use App\Services\DialysisSessionWorkflow;
+use App\Support\MalayDate;
 use App\Support\WhatsAppLink;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,11 +49,17 @@ class NurseSessionController extends Controller
 
     private function malayDate(): string
     {
-        $days = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
-        $months = [1 => 'Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
-        $today = today();
+        return MalayDate::long(today());
+    }
 
-        return $days[$today->dayOfWeek].', '.$today->day.' '.$months[$today->month].' '.$today->year;
+    public function recordDuring(RecordIntraBpRequest $request, DialysisSession $session): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $session): void {
+            $locked = $this->lock($session);
+            $this->workflow->recordDuring($locked, $request->user(), (string) $request->validated('intra_bp'));
+        });
+
+        return back()->with('status', 'Tekanan darah semasa disimpan.');
     }
 
     public function checkIn(CheckInSessionRequest $request, DialysisSession $session): RedirectResponse

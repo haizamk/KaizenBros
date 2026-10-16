@@ -85,6 +85,7 @@ export default function PapanAdmin({
 
                 <section className="space-y-3">
                     <h2 className="text-2xl font-black">Pesakit aktif ({patients.length})</h2>
+                    <p className="text-base text-slate-300 md:hidden">Leret jadual ke tepi jika lajur tidak muat pada skrin.</p>
                     <div className="overflow-x-auto rounded-3xl border border-[#1F385C]">
                         <table className="min-w-full text-left text-base">
                             <thead className="bg-[#102033] text-sm text-slate-300">

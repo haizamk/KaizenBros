@@ -32,6 +32,16 @@ class DialysisSessionWorkflow
         ])->save();
     }
 
+    public function recordDuring(DialysisSession $session, User $nurse, string $intraBp): void
+    {
+        $this->assertStatus($session, SessionStatus::SedangDialisis, 'Tekanan darah semasa hanya boleh direkodkan ketika dialisis sedang berjalan.');
+
+        $session->forceFill([
+            'intra_bp' => $intraBp,
+            'nurse_user_id' => $nurse->id,
+        ])->save();
+    }
+
     public function complete(DialysisSession $session, User $nurse, float $postWeight, string $postBp, ?string $notes): void
     {
         $this->assertStatus($session, SessionStatus::SedangDialisis, 'Sesi hanya boleh ditamatkan semasa dialisis sedang berjalan.');

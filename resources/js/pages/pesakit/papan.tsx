@@ -1,31 +1,25 @@
-import { useEffect, useState } from 'react';
-import { Head } from '@inertiajs/react';
-import BloodAnalysis, { type BloodAnalysisData } from '@/components/blood-analysis';
-import TrendChart from '@/components/trend-chart';
+import { Head, Link } from '@inertiajs/react';
+import DialysisTimer from '@/components/dialysis-timer';
+import PatientNav, { MissingPatient } from '@/components/patient-nav';
 
 type PatientCard = {
     patient_id_code: string;
     name: string;
-    age: number;
-    gender: string;
-    phone: string;
-    dry_weight_kg: string;
-    vascular_access: string;
-    access_location: string;
-    sponsor: string;
     schedule_label: string;
     shift_label: string;
-    allergies: string | null;
+    time_range: string;
+    dry_weight_kg: string;
 };
 
 type SessionCard = {
-    id: number;
-    scheduled_date: string;
+    date_label: string;
     scheduled_time: string;
-    chair_number: string;
+    chair_number: string | null;
+    chair_visible: boolean;
     status: string;
     status_label: string;
     shift_label: string;
+    time_range: string;
     pre_weight_kg: string | null;
     post_weight_kg: string | null;
     pre_bp: string | null;
@@ -33,251 +27,154 @@ type SessionCard = {
     started_at: string | null;
 };
 
-type Medication = {
-    id: number;
-    medication_name: string;
-    dosage: string;
-    frequency: string;
-    route: string;
+type Visit = {
+    date_label: string;
+    relative: string;
+    shift_label: string;
+    time_range: string;
+    schedule_label: string;
 };
 
-function formatClock(totalSeconds: number): string {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
-}
-
-function Remaining({ startedAt }: { startedAt: string }) {
-    const [now, setNow] = useState(() => Date.now());
-    useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now()), 1000);
-        return () => window.clearInterval(timer);
-    }, []);
-    const elapsed = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
-    const remaining = Math.max(0, 4 * 3600 - elapsed);
-    return <p className="font-mono text-4xl font-black text-cyan-200">{formatClock(remaining)}</p>;
-}
-
-type ChartPoint = {
-    label: string;
-    value: number;
-};
-
-type BloodRecord = {
-    id: number;
-    examination_label: string;
-    examination_type_label: string;
-    hemoglobin: string | null;
-    potassium: string | null;
-    phosphate: string | null;
-    urea: string | null;
-    creatinine: string | null;
-    potassium_needs_attention: boolean;
-    clinical_notes: string | null;
-    analysis: BloodAnalysisData;
-    report: { id: number; original_name: string } | null;
-};
-
-type PatientDocumentCard = {
-    id: number;
-    category_label: string;
-    original_name: string;
-    size_label: string;
-    created_at: string;
-};
+const cards = [
+    { href: '/pesakit/sesi', title: 'Sesi dialisis saya', detail: 'Kerusi dipapar selepas daftar di kaunter', tone: 'border-emerald-700' },
+    { href: '/pesakit/jadual', title: 'Jadual temujanji', detail: 'Rutin rawatan dan sesi seterusnya', tone: 'border-cyan-700' },
+    { href: '/pesakit/timbang', title: 'Timbang dan tekanan darah', detail: 'Berat kering, sebelum, semasa, dan selepas', tone: 'border-teal-700' },
+    { href: '/pesakit/ubat', title: 'Senarai ubat', detail: 'Ubat aktif yang direkodkan oleh kakitangan', tone: 'border-amber-700' },
+    { href: '/pesakit/rekod', title: 'Rekod dialisis dahulu', detail: 'Sejarah berat dan tekanan darah setiap sesi', tone: 'border-indigo-700' },
+    { href: '/pesakit/darah', title: 'Rekod perubatan dan darah', detail: 'Analisa serta perbandingan 6, 12, dan 24 bulan', tone: 'border-rose-700' },
+];
 
 export default function PapanPesakit({
     patient,
-    sessions,
-    medications,
-    records,
-    documents,
-    charts,
-    today,
+    todaySession,
+    nextVisit,
+    medicationCount,
+    todayLabel,
 }: {
     patient: PatientCard | null;
-    sessions: SessionCard[];
-    medications: Medication[];
-    records: BloodRecord[];
-    documents: PatientDocumentCard[];
-    charts: {
-        weight: ChartPoint[];
-        systolic: ChartPoint[];
-        diastolic: ChartPoint[];
-        hemoglobin: ChartPoint[];
-        potassium: ChartPoint[];
-        phosphate: ChartPoint[];
-        urea: ChartPoint[];
-        creatinine: ChartPoint[];
-    };
-    today: string;
+    todaySession: SessionCard | null;
+    nextVisit: Visit | null;
+    medicationCount: number;
+    todayLabel: string;
 }) {
-    const todaySession = sessions.find((session) => session.scheduled_date === today);
-
     return (
         <>
             <Head title="Portal pesakit" />
             {!patient ? (
-                <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-8">
-                    <h1 className="text-3xl font-black">Rekod pesakit belum dipautkan</h1>
-                    <p className="mt-3 text-lg text-slate-200">Sila hubungi kaunter pusat untuk mengaktifkan portal anda.</p>
-                </section>
+                <MissingPatient />
             ) : (
-                <div className="space-y-5">
-                    <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-6">
-                        <p className="text-sm font-bold text-teal-300">{patient.patient_id_code}</p>
-                        <h1 className="text-4xl font-black">{patient.name}</h1>
-                        <p className="mt-2 text-lg text-slate-200">
-                            {patient.gender === 'LELAKI' ? 'Lelaki' : 'Perempuan'}, {patient.age} tahun · {patient.schedule_label}
+                <div className="space-y-4">
+                    <PatientNav />
+                    <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-4 sm:p-6">
+                        <p className="text-sm font-black tracking-wide text-teal-300">Pusat Dialisis KaizenBros</p>
+                        <h1 className="mt-1 text-3xl font-black leading-tight sm:text-4xl">Selamat datang, {patient.name}</h1>
+                        <p className="mt-3 inline-flex min-h-12 items-center rounded-2xl border border-[#1F385C] px-4 text-lg font-black">
+                            No. ID pesakit {patient.patient_id_code}
                         </p>
-                        <p className="text-lg text-slate-200">{patient.shift_label} · {patient.sponsor}</p>
-                        <p className="mt-3 text-base">Akses vaskular: {patient.vascular_access}, {patient.access_location}</p>
-                        <p className="text-base">Berat kering: {patient.dry_weight_kg} kg · Alahan: {patient.allergies || 'Tiada diketahui'}</p>
+                        <p className="mt-3 text-base text-slate-300">{todayLabel}</p>
                     </section>
 
-                    <section className="rounded-3xl border border-teal-800 bg-[#102033] p-6">
-                        <h2 className="text-2xl font-black">Sesi hari ini</h2>
-                        {!todaySession ? (
-                            <p className="mt-3 text-lg">Tiada sesi dijadualkan hari ini.</p>
-                        ) : (
-                            <div className="mt-3 space-y-2">
-                                <p className="text-xl font-bold">{todaySession.status_label}</p>
-                                <p className="text-lg">Kerusi {todaySession.chair_number} · {todaySession.scheduled_time} · {todaySession.shift_label}</p>
-                                {todaySession.status === 'SEDANG_DIALISIS' && todaySession.started_at && (
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-300">Masa baki</p>
-                                        <Remaining startedAt={todaySession.started_at} />
-                                    </div>
-                                )}
-                                {todaySession.pre_weight_kg && <p>Sebelum: {todaySession.pre_weight_kg} kg · {todaySession.pre_bp}</p>}
-                                {todaySession.post_weight_kg && <p>Selepas: {todaySession.post_weight_kg} kg · {todaySession.post_bp}</p>}
-                            </div>
-                        )}
-                    </section>
+                    {todaySession ? (
+                        <TodayCard session={todaySession} />
+                    ) : nextVisit ? (
+                        <NextCard visit={nextVisit} />
+                    ) : (
+                        <p className="rounded-3xl border border-[#1F385C] bg-[#132238] p-5 text-lg">Tiada sesi dijadualkan.</p>
+                    )}
 
-                    <div className="grid gap-4 lg:grid-cols-2">
-                        <TrendChart
-                            title="Berat sebelum dialisis"
-                            unit="kg"
-                            empty="Belum ada bacaan berat."
-                            series={[{ name: 'Berat (kg)', color: '#22d3ee', points: charts.weight }]}
-                        />
-                        <TrendChart
-                            title="Tekanan darah sebelum dialisis"
-                            unit="mmHg"
-                            empty="Belum ada bacaan tekanan darah."
-                            series={[
-                                { name: 'Sistolik', color: '#fb7185', points: charts.systolic },
-                                { name: 'Diastolik', color: '#14b8a6', points: charts.diastolic },
-                            ]}
-                        />
-                    </div>
-
-                    <h2 className="text-2xl font-black">Perbandingan keputusan darah</h2>
-                    <p className="text-lg leading-relaxed text-slate-200">Graf ini membandingkan keputusan dari semasa ke semasa. Rekod darah disimpan dan tidak dipadam.</p>
-                    <div className="grid gap-4 lg:grid-cols-2">
-                        <TrendChart
-                            title="Hemoglobin"
-                            unit="g/dL"
-                            empty="Belum ada keputusan hemoglobin."
-                            series={[{ name: 'Hb', color: '#fbbf24', points: charts.hemoglobin }]}
-                        />
-                        <TrendChart
-                            title="Kalium"
-                            unit="mmol/L"
-                            empty="Belum ada keputusan kalium."
-                            series={[{ name: 'K', color: '#a78bfa', points: charts.potassium }]}
-                        />
-                        <TrendChart
-                            title="Fosfat"
-                            unit="mmol/L"
-                            empty="Belum ada keputusan fosfat."
-                            series={[{ name: 'PO4', color: '#34d399', points: charts.phosphate }]}
-                        />
-                        <TrendChart
-                            title="Urea"
-                            unit="mmol/L"
-                            empty="Belum ada keputusan urea."
-                            series={[{ name: 'Urea', color: '#fb923c', points: charts.urea }]}
-                        />
-                        <TrendChart
-                            title="Kreatinin"
-                            unit="µmol/L"
-                            empty="Belum ada keputusan kreatinin."
-                            series={[{ name: 'Kreatinin', color: '#38bdf8', points: charts.creatinine }]}
-                        />
-                    </div>
-
-                    <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-6">
-                        <h2 className="text-2xl font-black">Keputusan darah dan analisa</h2>
-                        <p className="mt-2 text-lg leading-relaxed text-slate-200">
-                            Analisa dibuat di pelayan pusat daripada nombor yang ditaip oleh kakitangan. Fail imbasan tidak dihantar keluar. Analisa ini bukan diagnosis.
+                    {todaySession && nextVisit && (
+                        <p className="rounded-2xl border border-cyan-800 bg-[#102033] p-4 text-lg">
+                            Sesi seterusnya: <strong>{nextVisit.date_label}</strong>. {nextVisit.time_range}.
                         </p>
-                        {records.some((record) => record.analysis.has_high) && (
-                            <p className="mt-4 rounded-2xl border-2 border-rose-300 bg-rose-950 p-4 text-xl font-black text-rose-50">
-                                Ada keputusan tinggi. Sila baca analisa di bawah dan bincang dengan jururawat.
-                            </p>
-                        )}
-                        {records.length === 0 ? (
-                            <p className="mt-3 text-lg">Tiada keputusan darah lagi.</p>
-                        ) : (
-                            <ul className="mt-4 space-y-4">
-                                {records.map((record) => (
-                                    <li key={record.id} className="rounded-2xl border border-[#1F385C] p-4">
-                                        <p className="text-2xl font-black">{record.examination_label}</p>
-                                        <p className="text-base text-slate-300">{record.examination_type_label}</p>
-                                        <BloodAnalysis analysis={record.analysis} />
-                                        {record.clinical_notes && <p className="mt-3 text-lg text-slate-200">{record.clinical_notes}</p>}
-                                        {record.report ? (
-                                            <a className="mt-3 inline-flex min-h-12 items-center text-lg font-bold text-teal-200 underline" href={`/pesakit/laporan/${record.report.id}`} download>
-                                                Muat turun salinan imbasan: {record.report.original_name}
-                                            </a>
-                                        ) : (
-                                            <p className="mt-3 text-base text-slate-300">Salinan imbasan belum dimuat naik.</p>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                    )}
+
+                    <section className="space-y-3">
+                        <h2 className="text-lg font-black tracking-wide text-slate-300">Fungsi utama portal pesakit</h2>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {cards.map((card) => (
+                                <Link key={card.href} href={card.href} className={`flex min-h-24 items-center gap-4 rounded-3xl border-2 bg-[#102033] p-4 ${card.tone}`}>
+                                    <span>
+                                        <span className="block text-xl font-black leading-tight">{card.title}</span>
+                                        <span className="mt-1 block text-base leading-snug text-slate-200">
+                                            {card.href === '/pesakit/jadual' ? `${patient.schedule_label} · ${patient.time_range}` : card.href === '/pesakit/ubat' ? `${medicationCount} jenis ubat aktif` : card.href === '/pesakit/timbang' ? `Berat kering ${patient.dry_weight_kg} kg` : card.detail}
+                                        </span>
+                                    </span>
+                                </Link>
+                            ))}
+                        </div>
                     </section>
 
-                    <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-6">
-                        <h2 className="text-2xl font-black">Dokumen anda</h2>
-                        {documents.length === 0 ? (
-                            <p className="mt-3 text-lg">Tiada dokumen tambahan lagi.</p>
-                        ) : (
-                            <ul className="mt-4 space-y-3">
-                                {documents.map((document) => (
-                                    <li key={document.id} className="rounded-2xl border border-[#1F385C] p-4">
-                                        <p className="text-xl font-black">{document.category_label}</p>
-                                        <a className="mt-1 inline-flex min-h-12 items-center text-lg font-bold text-teal-200 underline" href={`/pesakit/dokumen/${document.id}`} download>
-                                            {document.original_name}
-                                        </a>
-                                        <p className="text-base text-slate-300">{document.size_label} · {document.created_at}</p>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </section>
-
-                    <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-6">
-                        <h2 className="text-2xl font-black">Ubat aktif</h2>
-                        {medications.length === 0 ? (
-                            <p className="mt-3 text-lg">Tiada ubat aktif direkodkan.</p>
-                        ) : (
-                            <ul className="mt-4 space-y-3">
-                                {medications.map((medication) => (
-                                    <li key={medication.id} className="rounded-2xl border border-[#1F385C] p-4">
-                                        <p className="text-xl font-black">{medication.medication_name}</p>
-                                        <p className="text-base text-slate-200">{medication.dosage} · {medication.frequency} · {medication.route}</p>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </section>
+                    <a href="tel:0193889922" className="flex min-h-16 items-center justify-center rounded-3xl bg-rose-700 px-4 text-center text-xl font-black text-white">
+                        Panggil pusat dialisis 019-388 9922
+                    </a>
+                    <p className="text-center text-base text-slate-300">Hubungi jika mengalami pening teruk, sesak nafas, atau kecemasan di rumah.</p>
                 </div>
             )}
         </>
+    );
+}
+
+function TodayCard({ session }: { session: SessionCard }) {
+    return (
+        <section className="space-y-4 rounded-3xl border-2 border-cyan-700 bg-[#102033] p-4 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-black tracking-wide text-cyan-200">Status rawatan hari ini</h2>
+                <span className="rounded-full border border-amber-600 px-3 py-1 text-sm font-black text-amber-100">{session.shift_label}</span>
+            </div>
+            <p className="text-2xl font-black leading-snug">{session.status_label}</p>
+            <p className="text-lg">{session.date_label} · {session.time_range}</p>
+            {session.status === 'SEDANG_DIALISIS' && session.started_at && <DialysisTimer startedAt={session.started_at} />}
+            <Chair session={session} />
+            {(session.pre_weight_kg || session.post_weight_kg) && (
+                <p className="text-lg">
+                    Sebelum: {session.pre_weight_kg ?? '—'} kg · {session.pre_bp ?? '—'}
+                    {session.post_weight_kg ? ` · Selepas: ${session.post_weight_kg} kg · ${session.post_bp ?? '—'}` : ''}
+                </p>
+            )}
+            <Link href="/pesakit/sesi" className="inline-flex min-h-12 items-center text-lg font-black text-teal-200 underline">
+                Lihat sesi dialisis
+            </Link>
+        </section>
+    );
+}
+
+function NextCard({ visit }: { visit: Visit }) {
+    return (
+        <section className="space-y-4 rounded-3xl border-2 border-cyan-700 bg-[#102033] p-4 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-black tracking-wide text-cyan-200">Sesi rawatan dialisis seterusnya</h2>
+                <span className="rounded-full border border-cyan-600 px-3 py-1 text-sm font-black text-cyan-100">{visit.relative}</span>
+            </div>
+            <p className="text-3xl font-black leading-tight sm:text-4xl">{visit.date_label}</p>
+            <p className="text-lg">Seterusnya {visit.shift_label}. Waktu rawatan: {visit.time_range}.</p>
+            <div className="rounded-2xl border border-[#1F385C] p-4 text-lg leading-relaxed">
+                <p className="font-black text-cyan-200">Panduan ketibaan pesakit</p>
+                <p>Sila tiba 15 minit lebih awal di kaunter jururawat.</p>
+                <p>Rutin tetap anda: {visit.schedule_label}.</p>
+            </div>
+            <Chair session={null} />
+        </section>
+    );
+}
+
+function Chair({ session }: { session: SessionCard | null }) {
+    if (session?.chair_visible && session.chair_number) {
+        return (
+            <div className="rounded-2xl border-2 border-teal-700 p-4">
+                <p className="text-lg font-black text-teal-200">Kerusi {session.chair_number}</p>
+                <p className="text-base leading-relaxed">Kerusi ini dipilih oleh jururawat selepas anda daftar di kaunter.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="rounded-2xl border-2 border-amber-600 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-lg font-black text-amber-200">Lokasi dan kerusi dialisis</p>
+                <span className="rounded-full border border-amber-600 px-3 py-1 text-sm font-black">Belum daftar kaunter</span>
+            </div>
+            <p className="mt-2 text-xl font-black leading-snug text-amber-100">Kerusi dan mesin dialisis akan dipapar selepas daftar di kaunter pada hari dialisis.</p>
+            <p className="mt-2 text-base leading-relaxed">Setiap kerusi tidak tetap. Jururawat memilih kerusi mengikut giliran ketibaan.</p>
+        </div>
     );
 }

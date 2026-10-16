@@ -93,9 +93,12 @@ class ClinicWorkflowTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('pesakit/papan')
                 ->where('patient.patient_id_code', 'P-1001')
-                ->has('sessions', 1)
+                ->where('todaySession.chair_visible', false)
+                ->where('todaySession.chair_number', null)
+                ->missing('records')
             )
             ->assertDontSee('Siti Aminah binti Hassan')
+            ->assertDontSee('A-09')
             ->assertDontSee('wa.me');
     }
 
@@ -121,14 +124,15 @@ class ClinicWorkflowTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->get(route('patient.home'))
+            ->get(route('patient.blood'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('pesakit/papan')
+                ->component('pesakit/darah')
                 ->has('records', 1)
                 ->where('records.0.hemoglobin', '11.1')
                 ->where('records.0.potassium_needs_attention', false)
                 ->where('charts.hemoglobin.0.value', 11.1)
+                ->where('months', 6)
             )
             ->assertDontSee('7.2')
             ->assertDontSee('wa.me');
@@ -192,6 +196,70 @@ class ClinicWorkflowTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('jururawat/hari-ini')
                 ->where('sessions.0.whatsapp_url', fn (string $url): bool => str_contains($url, 'https://wa.me/60123001001?text='))
+            );
+    }
+
+    public function test_only_staff_can_record_blood_pressure_during_dialysis(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+        $owner = User::factory()->create(['role' => 'patient']);
+        $patient = $this->patientRecord($owner);
+        $session = $this->sessionFor($patient);
+        $session->update([
+            'status' => SessionStatus::SedangDialisis,
+            'started_at' => now(),
+            'pre_weight_kg' => 64.2,
+            'pre_bp' => '148/86',
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('nurse.sessions.intra', $session), ['intra_bp' => '130/80'])
+            ->assertForbidden();
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.intra', $session), ['intra_bp' => '130/80'])
+            ->assertRedirect();
+
+        $this->assertSame('130/80', $session->refresh()->intra_bp);
+
+        $waiting = $this->sessionFor($patient, 'A-02');
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.intra', $waiting), ['intra_bp' => '120/70'])
+            ->assertSessionHasErrors('status');
+    }
+
+    public function test_blood_page_can_compare_six_or_twenty_four_months(): void
+    {
+        $owner = User::factory()->create(['role' => 'patient']);
+        $patient = $this->patientRecord($owner);
+
+        MedicalRecord::query()->create([
+            'patient_id' => $patient->id,
+            'examination_date' => today()->subDays(7),
+            'examination_type' => ExaminationType::Berkala,
+            'hemoglobin' => 11.1,
+        ]);
+        MedicalRecord::query()->create([
+            'patient_id' => $patient->id,
+            'examination_date' => today()->subMonths(10),
+            'examination_type' => ExaminationType::Berkala,
+            'hemoglobin' => 8.1,
+            'potassium' => 5.9,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('patient.blood', ['tempoh' => 6]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->has('records', 1)->where('months', 6))
+            ->assertDontSee('8.1');
+
+        $this->actingAs($owner)
+            ->get(route('patient.blood', ['tempoh' => 24]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('records', 2)
+                ->where('records.1.analysis.statuses.potassium', 'TINGGI')
             );
     }
 

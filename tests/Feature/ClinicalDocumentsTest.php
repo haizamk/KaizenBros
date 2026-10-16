@@ -142,7 +142,7 @@ class ClinicalDocumentsTest extends TestCase
         Storage::disk('medical_reports')->put($secret->path, 'rahsia');
 
         $this->actingAs($owner)
-            ->get(route('patient.home'))
+            ->get(route('patient.blood'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('records.0.analysis.statuses.potassium', 'TINGGI')

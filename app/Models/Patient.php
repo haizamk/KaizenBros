@@ -125,6 +125,7 @@ class Patient extends Model
             'schedule_label' => $this->schedule_pattern->label(),
             'preferred_shift' => $this->preferred_shift->value,
             'shift_label' => $this->preferred_shift->label(),
+            'time_range' => $this->preferred_shift->timeRange(),
             'allergies' => $this->allergies,
         ];
     }

@@ -76,9 +76,9 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     const { centre } = usePage<{ centre: Centre }>().props;
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <div className="min-h-screen overflow-x-clip bg-background text-foreground">
             <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur">
-                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+                <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-3 py-4 sm:px-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
                     <Link href="/" className="min-h-12 text-left">
                         <span className="block text-base font-bold text-primary">{centre.kkm_license}</span>
                         <span className="block text-xl font-black leading-tight">{centre.name}</span>

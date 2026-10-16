@@ -16,4 +16,13 @@ enum ShiftSlot: string
             self::Syif3 => 'Syif 3 · 4:00 petang',
         };
     }
+
+    public function timeRange(): string
+    {
+        return match ($this) {
+            self::Syif1 => '6:00 pagi – 10:00 pagi',
+            self::Syif2 => '11:00 pagi – 3:00 petang',
+            self::Syif3 => '4:00 petang – 8:00 malam',
+        };
+    }
 }

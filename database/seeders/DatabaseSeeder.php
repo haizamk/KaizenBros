@@ -13,6 +13,7 @@ use App\Models\Patient;
 use App\Models\PatientMedication;
 use App\Models\Registration;
 use App\Models\User;
+use App\Support\DemoClinicHistory;
 use App\Support\MalaysianIdentityCard;
 use Illuminate\Database\Seeder;
 
@@ -211,6 +212,8 @@ class DatabaseSeeder extends Seeder
             'nok_phone' => '0123001888',
             'status' => 'BARU',
         ]);
+
+        DemoClinicHistory::ensure();
     }
 
     /**

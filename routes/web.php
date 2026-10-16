@@ -37,10 +37,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/jururawat/sesi/{session}/daftar-masuk', [NurseSessionController::class, 'checkIn'])->name('nurse.sessions.check-in');
         Route::post('/jururawat/sesi/{session}/mula', [NurseSessionController::class, 'start'])->name('nurse.sessions.start');
         Route::post('/jururawat/sesi/{session}/selesai', [NurseSessionController::class, 'complete'])->name('nurse.sessions.complete');
+        Route::post('/jururawat/sesi/{session}/tekanan-semasa', [NurseSessionController::class, 'recordDuring'])->name('nurse.sessions.intra');
     });
 
     Route::middleware('role:patient')->group(function () {
         Route::get('/pesakit', [PatientPortalController::class, 'index'])->name('patient.home');
+        Route::get('/pesakit/sesi', [PatientPortalController::class, 'session'])->name('patient.session');
+        Route::get('/pesakit/jadual', [PatientPortalController::class, 'schedule'])->name('patient.schedule');
+        Route::get('/pesakit/ubat', [PatientPortalController::class, 'medications'])->name('patient.medications');
+        Route::get('/pesakit/darah', [PatientPortalController::class, 'blood'])->name('patient.blood');
+        Route::get('/pesakit/timbang', [PatientPortalController::class, 'weights'])->name('patient.weights');
+        Route::get('/pesakit/rekod', [PatientPortalController::class, 'history'])->name('patient.history');
         Route::get('/pesakit/dokumen/{document}', [ClinicDocumentController::class, 'downloadOwn'])->name('patient.documents.download');
         Route::get('/pesakit/laporan/{report}', [MedicalReportController::class, 'downloadOwn'])->name('patient.reports.download');
     });
