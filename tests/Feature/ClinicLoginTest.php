@@ -94,4 +94,21 @@ class ClinicLoginTest extends TestCase
         Storage::disk('medical_reports')->assertMissing('pesakit/1/laporan.pdf');
         Storage::disk('patient_documents')->assertMissing('permohonan/1/kad.pdf');
     }
+
+    public function test_unverified_user_enters_the_portal_without_an_email_link(): void
+    {
+        $admin = User::factory()->unverified()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.home'))
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->get('/email/verify')
+            ->assertRedirect(route('dashboard'));
+
+        auth()->logout();
+
+        $this->get('/email/verify')->assertRedirect(route('login'));
+    }
 }

@@ -32,7 +32,11 @@ Route::get('/promosi/pengangkutan', [PromotionController::class, 'transport'])->
 Route::get('/promosi/jururawat', [PromotionController::class, 'nurses'])->name('promotions.nurses');
 Route::post('/promosi/jururawat', [PromotionController::class, 'storeNurse'])->name('promotions.nurses.store');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
+    Route::redirect('/email/verify', '/dashboard')->name('verification.notice');
+    Route::get('/email/verify/{id}/{hash}', fn () => redirect()->route('dashboard'))
+        ->name('verification.verify');
+
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::middleware('role:nurse,admin')->group(function () {
