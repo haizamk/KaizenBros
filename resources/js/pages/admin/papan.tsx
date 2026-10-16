@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 
 type PatientRow = {
     id: number;
@@ -17,7 +17,18 @@ type RegistrationRow = {
     full_name: string;
     ic_number: string;
     phone_number: string;
+    email: string | null;
+    gender_label: string;
+    age_label: string | null;
+    address: string | null;
+    patient_category_label: string | null;
+    medical_notes: string | null;
+    nok_name: string | null;
+    nok_relationship_label: string | null;
+    nok_phone: string | null;
     status: string;
+    status_label: string;
+    can_review: boolean;
     created_at: string;
 };
 
@@ -36,10 +47,12 @@ export default function PapanAdmin({
     patients,
     registrations,
     nurseApplications,
+    notice,
 }: {
     patients: PatientRow[];
     registrations: RegistrationRow[];
     nurseApplications: NurseApplicationRow[];
+    notice?: string | null;
 }) {
     return (
         <>
@@ -49,6 +62,7 @@ export default function PapanAdmin({
                     <p className="text-sm font-bold text-teal-300">Portal pentadbir</p>
                     <h1 className="text-3xl font-black">Pesakit dan permohonan</h1>
                 </div>
+                {notice && <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{notice}</p>}
 
                 <section className="space-y-3">
                     <h2 className="text-2xl font-black">Pesakit aktif ({patients.length})</h2>
@@ -80,19 +94,14 @@ export default function PapanAdmin({
                 </section>
 
                 <section className="space-y-3">
-                    <h2 className="text-2xl font-black">Permohonan baru</h2>
+                    <h2 className="text-2xl font-black">Permohonan pesakit baru</h2>
+                    <p className="text-base text-slate-200">Permohonan menunggu pengesahan pentadbir. Kelulusan tidak membuka akaun portal.</p>
                     {registrations.length === 0 ? (
                         <p className="rounded-2xl border border-[#1F385C] bg-[#132238] p-5">Tiada permohonan.</p>
                     ) : (
                         <ul className="grid gap-3">
                             {registrations.map((registration) => (
-                                <li key={registration.id} className="rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
-                                    <p className="text-xl font-black">{registration.full_name}</p>
-                                    <p className="text-base text-slate-200">
-                                        {registration.reference} · {registration.ic_number} · {registration.phone_number}
-                                    </p>
-                                    <p className="text-sm text-teal-200">{registration.status} · {registration.created_at}</p>
-                                </li>
+                                <RegistrationCard key={registration.id} registration={registration} />
                             ))}
                         </ul>
                     )}
@@ -119,4 +128,61 @@ export default function PapanAdmin({
             </div>
         </>
     );
+}
+
+function RegistrationCard({ registration }: { registration: RegistrationRow }) {
+    const approve = useForm({});
+    const reject = useForm({});
+
+    return (
+        <li className="space-y-3 rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <p className="text-2xl font-black">{registration.full_name}</p>
+                    <p className="text-base text-slate-200">{registration.reference} · {registration.created_at}</p>
+                </div>
+                <p className="rounded-full border border-teal-700 px-3 py-2 text-sm font-black text-teal-100">{registration.status_label}</p>
+            </div>
+            <p className="text-lg">Kad pengenalan {registration.ic_number}</p>
+            <p className="text-lg">{registration.gender_label}{registration.age_label ? ` · ${registration.age_label}` : ''}</p>
+            <p className="text-lg">Telefon {registration.phone_number}{registration.email ? ` · ${registration.email}` : ''}</p>
+            {registration.address && <p className="text-lg">Alamat: {registration.address}</p>}
+            {registration.patient_category_label && <p className="text-lg">Kategori: {registration.patient_category_label}</p>}
+            <p className="text-lg">
+                Waris: {registration.nok_name ?? 'Tiada'}
+                {registration.nok_relationship_label ? ` (${registration.nok_relationship_label})` : ''}
+                {registration.nok_phone ? ` · ${registration.nok_phone}` : ''}
+            </p>
+            {registration.medical_notes && <p className="text-lg">Catatan: {registration.medical_notes}</p>}
+            {registration.can_review && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                        type="button"
+                        disabled={approve.processing}
+                        onClick={() => approve.post(`/admin/permohonan/${registration.id}/lulus`)}
+                        className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-teal-500 text-lg font-black text-slate-950"
+                    >
+                        Luluskan permohonan
+                    </button>
+                    <button
+                        type="button"
+                        disabled={reject.processing}
+                        onClick={() => reject.post(`/admin/permohonan/${registration.id}/tolak`)}
+                        className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-rose-700 text-lg font-black text-rose-100"
+                    >
+                        Tolak permohonan
+                    </button>
+                    <InputStatus message={approve.errors.status || reject.errors.status} />
+                </div>
+            )}
+        </li>
+    );
+}
+
+function InputStatus({ message }: { message?: string }) {
+    if (!message) {
+        return null;
+    }
+
+    return <p className="text-base font-bold text-rose-200 sm:col-span-2">{message}</p>;
 }

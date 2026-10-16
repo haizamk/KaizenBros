@@ -13,6 +13,7 @@ use App\Models\Patient;
 use App\Models\PatientMedication;
 use App\Models\Registration;
 use App\Models\User;
+use App\Support\MalaysianIdentityCard;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -190,17 +191,24 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
         ]);
 
+        $ahmadIdentity = MalaysianIdentityCard::parse('710303-10-1123');
+
         Registration::query()->create([
             'reference' => 'KB-REG-240016',
             'full_name' => 'Ahmad Zulkifli bin Osman',
-            'ic_number' => '710303-10-1123',
-            'phone_number' => '012-3001999',
+            'ic_number' => $ahmadIdentity['formatted'],
+            'phone_number' => '0123001999',
             'email' => 'ahmad.zulkifli@demo.kaizenbros.my',
-            'gender' => 'LELAKI',
-            'address' => 'Semenyih, Selangor',
+            'gender' => $ahmadIdentity['gender'],
+            'birth_date' => $ahmadIdentity['birth_date'],
+            'age_years' => $ahmadIdentity['years'],
+            'age_months' => $ahmadIdentity['months'],
+            'address' => 'No. 18, Jalan Rinching, 43500 Semenyih, Selangor',
+            'patient_category' => 'PESAKIT_BARU',
             'medical_notes' => 'Rujukan nefrologi. Menunggu slot dialisis tetap.',
             'nok_name' => 'Farah Ahmad',
-            'nok_phone' => '012-3001888',
+            'nok_relationship' => 'ANAK',
+            'nok_phone' => '0123001888',
             'status' => 'BARU',
         ]);
     }

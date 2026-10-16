@@ -197,20 +197,29 @@ class ClinicWorkflowTest extends TestCase
 
     public function test_public_registration_is_stored_without_creating_a_login(): void
     {
+        $this->travelTo('2026-10-16 08:00:00');
+
         $this->post(route('registrations.store'), [
             'full_name' => 'Ahmad Zulkifli',
-            'ic_number' => '710303-10-1123',
+            'ic_number' => '710303101123',
             'phone_number' => '012-3001999',
             'email' => 'ahmad@demo.test',
-            'gender' => 'LELAKI',
-            'address' => 'Semenyih',
+            'gender' => 'PEREMPUAN',
+            'address' => 'No. 18, Jalan Rinching, Semenyih',
+            'patient_category' => 'PESAKIT_BARU',
             'medical_notes' => 'Rujukan',
-            'nok_name' => 'Farah',
+            'nok_name' => 'Farah Ahmad',
+            'nok_relationship' => 'ANAK',
             'nok_phone' => '012-3001888',
         ])->assertRedirect(route('registrations.create'));
 
         $this->assertDatabaseHas('registrations', [
             'full_name' => 'Ahmad Zulkifli',
+            'ic_number' => '710303-10-1123',
+            'phone_number' => '0123001999',
+            'gender' => 'LELAKI',
+            'age_years' => 55,
+            'age_months' => 7,
             'status' => 'BARU',
         ]);
         $this->assertDatabaseMissing('users', [

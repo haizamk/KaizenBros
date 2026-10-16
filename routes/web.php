@@ -42,6 +42,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role:admin')->group(function () {
         Route::get('/admin', [AdminController::class, 'index'])->name('admin.home');
+        Route::post('/admin/permohonan/{registration}/lulus', [AdminController::class, 'approveRegistration'])->name('admin.registrations.approve');
+        Route::post('/admin/permohonan/{registration}/tolak', [AdminController::class, 'rejectRegistration'])->name('admin.registrations.reject');
     });
 });
 

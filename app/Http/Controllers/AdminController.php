@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\NurseApplication;
 use App\Models\Patient;
 use App\Models\Registration;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,6 +39,36 @@ class AdminController extends Controller
             'patients' => $patients,
             'registrations' => $registrations,
             'nurseApplications' => $nurseApplications,
+            'notice' => session('status'),
+        ]);
+    }
+
+    public function approveRegistration(Registration $registration): RedirectResponse
+    {
+        $this->review($registration, 'DILULUSKAN');
+
+        return back()->with('status', 'Permohonan pesakit diluluskan.');
+    }
+
+    public function rejectRegistration(Registration $registration): RedirectResponse
+    {
+        $this->review($registration, 'DITOLAK');
+
+        return back()->with('status', 'Permohonan pesakit ditolak.');
+    }
+
+    private function review(Registration $registration, string $status): void
+    {
+        if ($registration->status !== 'BARU') {
+            throw ValidationException::withMessages([
+                'status' => 'Permohonan ini sudah disemak.',
+            ]);
+        }
+
+        $registration->update([
+            'status' => $status,
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
         ]);
     }
 }
