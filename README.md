@@ -2,7 +2,7 @@
 
 Sistem pengurusan pusat dialisis KaizenBros, fasa pembangunan baharu. Aplikasi ini menggunakan Laravel 13, React, TypeScript, Inertia.js, Tailwind CSS, dan MariaDB. Data demo disemai semula. Firebase tidak digunakan.
 
-Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, rekod darah, carta berat dan tekanan darah, pautan peringatan WhatsApp, portal pesakit, dan senarai pentadbir. Halaman depan ada paparan gelap (lalai) dan cerah, empat saiz teks dengan lalai sederhana, peta Google pusat di Semenyih, dan banner promosi pesakit baru, van percuma, serta jawatan jururawat. Pemasangan VPS belum dibuat.
+Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, rekod darah, carta berat dan tekanan darah, pautan peringatan WhatsApp, portal pesakit, dan senarai pentadbir. Halaman depan ada paparan gelap (lalai) dan cerah, empat saiz teks dengan lalai sederhana, peta Google pusat di Semenyih, dan banner promosi pesakit baru, van percuma, serta jawatan jururawat. Borang pesakit baru mengira umur dan jantina daripada nombor kad pengenalan, kemudian menghantar permohonan kepada pentadbir untuk diluluskan atau ditolak. Pemasangan VPS belum dibuat.
 
 ## Jalankan secara tempatan
 
