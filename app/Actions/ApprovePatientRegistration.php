@@ -48,8 +48,8 @@ class ApprovePatientRegistration
                 'role' => UserRole::Patient,
                 'phone' => $registration->phone_number,
                 'ic_number' => $registration->ic_number,
-                'email_verified_at' => now(),
             ]);
+            $user->forceFill(['email_verified_at' => now()])->save();
 
             $patient = Patient::query()->create([
                 'user_id' => $user->id,

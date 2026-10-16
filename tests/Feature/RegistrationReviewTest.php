@@ -75,6 +75,7 @@ class RegistrationReviewTest extends TestCase
             'role' => 'patient',
             'phone' => '0123001999',
         ]);
+        $this->assertNotNull(User::query()->where('email', 'pesakit@demo.test')->firstOrFail()->email_verified_at);
         $this->assertDatabaseHas('patients', [
             'patient_id_code' => 'P-1001',
             'ic_number' => '580101-10-1231',

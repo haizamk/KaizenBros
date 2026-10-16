@@ -230,14 +230,16 @@ class DatabaseSeeder extends Seeder
      */
     private function account(array $account, UserRole $role, string $phone): User
     {
-        return User::query()->create([
+        $user = User::query()->create([
             'name' => $account['name'],
             'email' => $account['email'],
             'password' => $account['password'],
             'role' => $role,
             'phone' => $phone,
-            'email_verified_at' => now(),
         ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 
     /**
