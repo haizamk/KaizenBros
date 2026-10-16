@@ -14,7 +14,7 @@ class LabCatalog
     public static function fields(): array
     {
         return [
-            'hemoglobin' => self::field('Hemoglobin', 'g/dL', 1, '#fbbf24', ['Haemoglobin', 'Hemoglobin (Hb)', 'Haemoglobin (Hb)', 'Hemoglobin', 'Hgb', 'Hb'], ['g/dL', 'g/db', 'gm/dL']),
+            'hemoglobin' => self::field('Hemoglobin', 'g/dL', 1, '#fbbf24', ['Haemoglobin', 'Hemoglobin (Hb)', 'Haemoglobin (Hb)', 'Hemoglobin', 'Hgb', 'Hb'], ['g/dL', 'g/db', 'e/db', 'gm/dL']),
             'wbc' => self::field('Sel darah putih', '10^3/uL', 1, '#38bdf8', ['White Cell Count (WCC)', 'Total White Cell Count', 'White Blood Cell (WBC)', 'White Cell Count', 'White Blood Cell', 'Sel darah putih', 'TWBC', 'WCC'], ['10^3/uL', '10^9/L', 'x10^9/L', 'x10^3/uL']),
             'platelet' => self::field('Platelet', '10^3/uL', 0, '#fb7185', ['Platelet Count', 'Kiraan platelet', 'Platelet', 'Platelets', 'PLT'], ['10^3/uL', '10^9/L', 'x10^9/L', 'x10^3/uL']),
             'urea' => self::field('Urea', 'mmol/L', 1, '#fb923c', ['Urea'], ['mmol/L']),

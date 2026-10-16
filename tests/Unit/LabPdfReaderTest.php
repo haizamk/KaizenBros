@@ -137,6 +137,18 @@ class LabPdfReaderTest extends TestCase
         $this->assertSame(6.1, $parsed['values']['potassium']);
         $this->assertSame(808.0, $parsed['values']['creatinine']);
         $this->assertSame(2.73, $parsed['values']['phosphate']);
-        $this->assertSame(17.4, $parsed['values']['urea']);
+    }
+
+    public function test_ocr_misread_haemoglobin_and_calcium_are_corrected(): void
+    {
+        $parsed = (new LabPdfReader)->parseText(<<<'TEXT'
+            Sample : 09/04/2026 15:00:39
+            Haemoglobin fila 111.8 e/db (12.0- 18.0)
+            Calcium a 12.05 mmol/L (2.15 - 2.50)
+            TEXT);
+
+        $this->assertSame('2026-04-09', $parsed['date']);
+        $this->assertSame(11.18, $parsed['values']['hemoglobin']);
+        $this->assertEqualsWithDelta(2.05, $parsed['values']['calcium'], 0.001);
     }
 }

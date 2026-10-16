@@ -248,6 +248,22 @@ class LabPdfReader
             }
         }
 
+        if ($key === 'hemoglobin' && $value > 20 && $value <= 200) {
+            $scaled = $value / 10;
+
+            if ($scaled >= 5 && $scaled <= 20) {
+                return $scaled;
+            }
+        }
+
+        if ($key === 'calcium' && $value > 8 && $value <= 20) {
+            $adjusted = $value - 10;
+
+            if ($adjusted >= 1.5 && $adjusted <= 3.5) {
+                return $adjusted;
+            }
+        }
+
         return $value;
     }
 
@@ -399,6 +415,7 @@ class LabPdfReader
         $text = str_replace(["\u{00B5}", "\u{03BC}"], 'u', $text);
         $text = str_replace("\u{00B2}", '2', $text);
         $text = str_replace(['×', '✕'], 'x', $text);
+        $text = preg_replace('/\be\/db\b/i', 'g/dL', $text) ?? $text;
         $text = preg_replace('/\b1043\/uL/i', '10^3/uL', $text) ?? $text;
         $text = preg_replace('/\b1046\/uL/i', '10^6/uL', $text) ?? $text;
         $text = preg_replace('/\b10\s*4\s*3\s*\/\s*uL/i', '10^3/uL', $text) ?? $text;
