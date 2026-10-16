@@ -46,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/jururawat/laporan/{report}', [MedicalReportController::class, 'download'])->name('nurse.reports.download');
         Route::post('/jururawat/sesi/{session}/tiba', [NurseSessionController::class, 'arrive'])->name('nurse.sessions.arrive');
         Route::post('/jururawat/sesi/{session}/panggil', [NurseSessionController::class, 'call'])->name('nurse.sessions.call');
+        Route::post('/jururawat/kerusi/rosak', [NurseSessionController::class, 'blockChair'])->name('nurse.chairs.block');
+        Route::post('/jururawat/kerusi/pulih', [NurseSessionController::class, 'restoreChair'])->name('nurse.chairs.restore');
         Route::post('/jururawat/sesi/{session}/daftar-masuk', [NurseSessionController::class, 'checkIn'])->name('nurse.sessions.check-in');
         Route::post('/jururawat/sesi/{session}/mula', [NurseSessionController::class, 'start'])->name('nurse.sessions.start');
         Route::post('/jururawat/sesi/{session}/selesai', [NurseSessionController::class, 'complete'])->name('nurse.sessions.complete');

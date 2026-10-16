@@ -14,14 +14,25 @@ class NurseBoard
      */
     public static function todaySessions(): Collection
     {
-        return DialysisSession::query()
+        $models = DialysisSession::query()
             ->with(['patient', 'nurse'])
             ->whereDate('scheduled_date', today())
             ->orderByRaw('queue_number is null')
             ->orderBy('queue_number')
             ->orderBy('scheduled_time')
-            ->get()
-            ->map(function (DialysisSession $session): array {
+            ->get();
+
+        $next = $models->first(
+            fn (DialysisSession $session): bool => $session->status === SessionStatus::Menunggu && $session->chair_number === null,
+        );
+        $free = ChairBoard::free(today());
+        $suggested = $free[0] ?? null;
+        $ahead = $next?->queue_number === null
+            ? null
+            : str_pad((string) $next->queue_number, 3, '0', STR_PAD_LEFT);
+
+        return $models
+            ->map(function (DialysisSession $session) use ($next, $free, $suggested, $ahead): array {
                 $data = $session->toPortalArray();
                 $data['patient']['phone'] = $session->patient->phone;
                 $data['whatsapp_url'] = WhatsAppLink::sessionReminder(
@@ -31,6 +42,11 @@ class NurseBoard
                     $session->scheduled_time,
                     $session->chair_number ?? 'akan ditentukan',
                 );
+                $waiting = $session->status === SessionStatus::Menunggu && $session->chair_number === null;
+                $data['can_call'] = $waiting && $next !== null && $session->id === $next->id;
+                $data['suggested_chair'] = $suggested;
+                $data['free_chairs'] = $free;
+                $data['ahead_label'] = $waiting && $data['can_call'] === false ? $ahead : null;
 
                 return $data;
             })
@@ -53,15 +69,11 @@ class NurseBoard
             'hadir' => $sessions->where('status', SessionStatus::SudahHadir->value)->count(),
             'sedang' => $sessions->where('status', SessionStatus::SedangDialisis->value)->count(),
             'selesai' => $selesai,
-            'kerusi_kosong' => collect(config('kaizenbros.centre.chairs', []))
-                ->diff(
-                    DialysisSession::query()
-                        ->whereDate('scheduled_date', today())
-                        ->whereNotNull('chair_number')
-                        ->where('status', '!=', SessionStatus::SudahSelesai)
-                        ->pluck('chair_number')
-                )
-                ->count(),
+            'kerusi_kosong' => count(ChairBoard::free(today())),
+            'kerusi_rosak' => count(array_filter(
+                ChairBoard::tiles(),
+                fn (array $chair): bool => $chair['state'] === 'rosak',
+            )),
             'percent' => $total === 0 ? 0 : (int) round(($selesai / $total) * 100),
             'clinic_closed' => now()->format('H:i') >= '19:00',
             'date_label' => MalayDate::long(today()),

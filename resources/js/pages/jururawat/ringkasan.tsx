@@ -6,6 +6,7 @@ const cards = [
     { key: 'total' as const, label: 'Jumlah pesakit', detail: 'Jadual hari ini' },
     { key: 'menunggu' as const, label: 'Menunggu panggilan', detail: 'Sudah daftar kaunter' },
     { key: 'kerusi_kosong' as const, label: 'Kerusi kosong', detail: 'Boleh dipanggil sekarang' },
+    { key: 'kerusi_rosak' as const, label: 'Kerusi tidak digunakan', detail: 'Rosak atau tidak sesuai' },
     { key: 'hadir' as const, label: 'Sudah hadir', detail: 'Sudah di kerusi' },
     { key: 'sedang' as const, label: 'Sedang dialisis', detail: 'Aktif di mesin' },
     { key: 'selesai' as const, label: 'Sudah selesai', detail: 'Sesi tamat dan discaj' },
@@ -45,7 +46,9 @@ export default function Ringkasan({ sessions, counts }: { sessions: SessionCard[
                                 <li key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
                                     <div>
                                         <p className="text-xl font-black">{session.patient.name}</p>
-                                        <p className="text-base text-slate-200">{session.patient.patient_id_code} · {session.shift_label} · Stesen {session.chair_number}</p>
+                                        <p className="text-base text-slate-200">
+                                            {session.patient.patient_id_code} · {session.shift_label} · {session.queue_label ? `Giliran ${session.queue_label}` : 'Belum daftar'} · {session.chair_number ? `Kerusi ${session.chair_number}` : 'Kerusi belum ditetapkan'}
+                                        </p>
                                     </div>
                                     <span className={`rounded-full border px-3 py-2 text-sm font-black ${statusClass(session.status)}`}>{session.status_label}</span>
                                 </li>

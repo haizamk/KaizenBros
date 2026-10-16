@@ -18,7 +18,7 @@ class CheckInSessionRequest extends FormRequest
     {
         return [
             'pre_weight_kg' => ['required', 'numeric', 'between:20,200'],
-            'pre_bp' => ['required', 'regex:/^\d{2,3}\/\d{2,3}$/'],
+            'pre_bp' => ['nullable', 'regex:/^\d{2,3}\/\d{2,3}$/'],
         ];
     }
 
@@ -30,7 +30,6 @@ class CheckInSessionRequest extends FormRequest
         return [
             'pre_weight_kg.required' => 'Berat sebelum dialisis diperlukan.',
             'pre_weight_kg.between' => 'Berat mestilah antara 20kg dan 200kg.',
-            'pre_bp.required' => 'Tekanan darah sebelum dialisis diperlukan.',
             'pre_bp.regex' => 'Tekanan darah mestilah dalam format 120/80.',
         ];
     }

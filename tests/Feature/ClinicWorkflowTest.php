@@ -40,28 +40,25 @@ class ClinicWorkflowTest extends TestCase
         $session = $this->sessionFor($this->patientRecord());
 
         $this->actingAs($nurse)
-            ->post(route('nurse.sessions.arrive', $session))
+            ->post(route('nurse.sessions.arrive', $session), [
+                'pre_weight_kg' => 65.4,
+                'pre_bp' => '140/90',
+            ])
             ->assertRedirect();
 
         $session->refresh();
         $this->assertSame(SessionStatus::Menunggu, $session->status);
         $this->assertSame(1, $session->queue_number);
         $this->assertNull($session->chair_number);
+        $this->assertSame('65.40', $session->pre_weight_kg);
 
         $this->actingAs($nurse)
             ->post(route('nurse.sessions.call', $session))
             ->assertRedirect();
 
-        $this->assertSame('A-01', $session->refresh()->chair_number);
-
-        $this->actingAs($nurse)
-            ->post(route('nurse.sessions.check-in', $session), [
-                'pre_weight_kg' => 65.4,
-                'pre_bp' => '140/90',
-            ])
-            ->assertRedirect();
-
-        $this->assertSame(SessionStatus::SudahHadir, $session->refresh()->status);
+        $session->refresh();
+        $this->assertSame('A-01', $session->chair_number);
+        $this->assertSame(SessionStatus::SudahHadir, $session->status);
 
         $this->actingAs($nurse)
             ->post(route('nurse.sessions.start', $session))
@@ -206,7 +203,9 @@ class ClinicWorkflowTest extends TestCase
         $owner = User::factory()->create(['role' => 'patient']);
         $session = $this->sessionFor($this->patientRecord($owner));
 
-        $this->actingAs($nurse)->post(route('nurse.sessions.arrive', $session))->assertRedirect();
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.arrive', $session), ['pre_weight_kg' => 70])
+            ->assertRedirect();
 
         $this->actingAs($owner)
             ->get(route('patient.home'))
@@ -228,6 +227,140 @@ class ClinicWorkflowTest extends TestCase
                 ->where('todaySession.chair_number', 'A-01')
                 ->where('todaySession.time_range', '6:00 pagi – 10:00 pagi')
             );
+    }
+
+    public function test_arrival_requires_weight_and_keeps_blood_pressure_optional(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+        $session = $this->sessionFor($this->patientRecord());
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.arrive', $session), [])
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHasErrors('pre_weight_kg');
+
+        $this->assertSame(SessionStatus::BelumHadir, $session->refresh()->status);
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.arrive', $session), [
+                'pre_weight_kg' => 64.5,
+                'pre_bp' => 'tinggi',
+            ])
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHasErrors('pre_bp');
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.arrive', $session), ['pre_weight_kg' => 64.5])
+            ->assertRedirect();
+
+        $session->refresh();
+        $this->assertSame('64.50', $session->pre_weight_kg);
+        $this->assertNull($session->pre_bp);
+        $this->assertSame(SessionStatus::Menunggu, $session->status);
+    }
+
+    public function test_the_next_chair_goes_to_whoever_arrived_first_unless_the_nurse_bypasses_it(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+        $early = $this->sessionFor($this->patientRecord(null, 'P-1001', 'Pesakit Awal'));
+        $later = $this->sessionFor($this->patientRecord(null, 'P-1002', 'Pesakit Kemudian'), 'A-02');
+        $third = $this->sessionFor($this->patientRecord(null, 'P-1003', 'Pesakit Ketiga'), 'A-03');
+
+        $this->actingAs($nurse)->post(route('nurse.sessions.arrive', $early), ['pre_weight_kg' => 60])->assertRedirect();
+        $this->actingAs($nurse)->post(route('nurse.sessions.arrive', $later), ['pre_weight_kg' => 61])->assertRedirect();
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.call', $later))
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHasErrors('status');
+
+        $this->assertNull($later->refresh()->chair_number);
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.chairs.block'), [
+                'chair_number' => 'A-01',
+                'reason' => 'ROSAK',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.call', $early))
+            ->assertRedirect();
+
+        $early->refresh();
+        $this->assertSame('A-02', $early->chair_number);
+        $this->assertSame(SessionStatus::SudahHadir, $early->status);
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.chairs.block'), [
+                'chair_number' => 'A-02',
+                'reason' => 'TIDAK_SESUAI',
+            ])
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHasErrors('chair_number');
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.call', $later), ['chair_number' => 'A-02'])
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHasErrors('chair_number');
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.call', $later), ['chair_number' => 'A-05'])
+            ->assertRedirect();
+
+        $this->assertSame('A-05', $later->refresh()->chair_number);
+
+        $this->actingAs($nurse)->post(route('nurse.sessions.arrive', $third), ['pre_weight_kg' => 62])->assertRedirect();
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.call', $third), ['chair_number' => 'A-01'])
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHasErrors('chair_number');
+
+        $this->actingAs($nurse)->post(route('nurse.sessions.start', $early))->assertRedirect();
+        $this->actingAs($nurse)->post(route('nurse.sessions.complete', $early), [
+            'post_weight_kg' => 58.4,
+            'post_bp' => '120/80',
+        ])->assertRedirect();
+
+        $this->actingAs($nurse)->post(route('nurse.sessions.call', $third))->assertRedirect();
+        $this->assertSame('A-02', $third->refresh()->chair_number);
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.chairs.restore'), ['chair_number' => 'A-01'])
+            ->assertRedirect();
+
+        $fourth = $this->sessionFor($this->patientRecord(null, 'P-1004', 'Pesakit Keempat'), 'A-04');
+        $this->actingAs($nurse)->post(route('nurse.sessions.arrive', $fourth), ['pre_weight_kg' => 63])->assertRedirect();
+        $this->actingAs($nurse)->post(route('nurse.sessions.call', $fourth))->assertRedirect();
+        $this->assertSame('A-01', $fourth->refresh()->chair_number);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.home'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('counts.kerusi_rosak', 0)
+                ->where('chairs.0.number', 'A-01')
+                ->where('chairs.0.state', 'digunakan')
+            );
+    }
+
+    public function test_a_patient_cannot_mark_a_chair_out_of_service(): void
+    {
+        $patient = User::factory()->create(['role' => 'patient']);
+
+        $this->actingAs($patient)
+            ->post(route('nurse.chairs.block'), [
+                'chair_number' => 'A-01',
+                'reason' => 'ROSAK',
+            ])
+            ->assertForbidden();
     }
 
     public function test_admin_can_change_a_patient_shift_and_today_session_follows(): void

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Head } from '@inertiajs/react';
 import { NursePage } from '@/components/nurse-nav';
+import ChairBoard, { type ChairTile } from '@/components/chair-board';
 import SessionActions, { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
 
-const steps = ['Daftar ketibaan', 'Panggil kerusi', 'Berat dan BP', 'Mula dialisis', 'Tamat rawatan'];
+const steps = ['Daftar dan berat', 'Panggil kerusi', 'Mula dialisis', 'Tamat rawatan'];
 
 const filters = [
     { key: 'SEMUA', label: 'Semua' },
@@ -17,11 +18,13 @@ const filters = [
 export default function Sesi({
     sessions,
     counts,
+    chairs,
     focus,
     status,
 }: {
     sessions: SessionCard[];
     counts: ShiftCounts;
+    chairs: ChairTile[];
     focus: number | null;
     status?: string | null;
 }) {
@@ -43,14 +46,15 @@ export default function Sesi({
                 title="Sesi dialisis"
                 intro={`${counts.date_label}. Berat dan tekanan darah yang disimpan di sini terus muncul pada portal pesakit. Hanya jururawat dan pentadbir boleh merekodnya.`}
             >
-                <ol className="grid gap-2 sm:grid-cols-5">
+                <ol className="grid gap-2 sm:grid-cols-4">
                     {steps.map((step, index) => (
                         <li key={step} className="rounded-2xl border border-[#1F385C] bg-[#132238] px-3 py-3 text-sm font-black">
                             {index + 1}. {step}
                         </li>
                     ))}
                 </ol>
-                <p className="text-base text-slate-200">Kerusi kosong: {counts.kerusi_kosong}. Syif 1 6:00–10:00 pagi, Syif 2 10:30 pagi–2:30 petang, Syif 3 3:00–7:00 petang.</p>
+                <p className="text-base text-slate-200">Kerusi yang boleh digunakan: {counts.kerusi_kosong}. Kerusi rosak atau tidak sesuai: {counts.kerusi_rosak}. Syif 1 6:00–10:00 pagi, Syif 2 10:30 pagi–2:30 petang, Syif 3 3:00–7:00 petang. Yang sampai dahulu dipanggil dahulu.</p>
+                <ChairBoard chairs={chairs} />
                 {status ? <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{status}</p> : null}
                 <div className="flex gap-2 overflow-x-auto pb-1">
                     {filters.map((item) => (
@@ -95,7 +99,7 @@ export default function Sesi({
                                     </a>
                                 ) : null}
                                 {session.pre_weight_kg && session.status !== 'SUDAH_SELESAI' ? (
-                                    <p className="text-base">Sebelum: {session.pre_weight_kg} kg · {session.pre_bp}</p>
+                                    <p className="text-base">Sebelum: {session.pre_weight_kg} kg · {session.pre_bp ?? 'Tekanan darah belum direkod'}</p>
                                 ) : null}
                                 <SessionActions session={session} />
                             </article>

@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { NursePage } from '@/components/nurse-nav';
+import ChairBoard, { type ChairTile } from '@/components/chair-board';
 import SessionActions, { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
 
 const stages = [
-    { key: 'BELUM_HADIR', count: 'belum' as const, step: '1', title: 'Belum tiba', detail: 'Tekan daftar ketibaan bila pesakit sampai di kaunter.' },
-    { key: 'MENUNGGU', count: 'menunggu' as const, step: '2', title: 'Menunggu panggilan', detail: 'Nombor giliran sudah ada. Panggil bila kerusi kosong.' },
-    { key: 'SUDAH_HADIR', count: 'hadir' as const, step: '3', title: 'Di kerusi', detail: 'Berat dan tekanan darah sudah direkod.' },
+    { key: 'BELUM_HADIR', count: 'belum' as const, step: '1', title: 'Belum tiba', detail: 'Masukkan berat badan semasa daftar. Tekanan darah adalah pilihan.' },
+    { key: 'MENUNGGU', count: 'menunggu' as const, step: '2', title: 'Menunggu panggilan', detail: 'Yang sampai dahulu dipanggil dulu. Kerusi automatik, atau pilih kerusi lain.' },
+    { key: 'SUDAH_HADIR', count: 'hadir' as const, step: '3', title: 'Di kerusi', detail: 'Pesakit sudah duduk. Tekan mula dialisis.' },
     { key: 'SEDANG_DIALISIS', count: 'sedang' as const, step: '4', title: 'Sedang dialisis', detail: 'Rawatan aktif. Pemasa 4 jam berjalan.' },
-    { key: 'SUDAH_SELESAI', count: 'selesai' as const, step: '5', title: 'Selesai', detail: 'Kerusi ini kosong semula untuk pesakit seterusnya.' },
+    { key: 'SUDAH_SELESAI', count: 'selesai' as const, step: '5', title: 'Selesai', detail: 'Kerusi ini kosong semula untuk pesakit yang sampai dahulu.' },
 ];
 
 const filters = [
@@ -27,13 +28,17 @@ function needsCounter(session: SessionCard): boolean {
 export default function HariIni({
     sessions,
     counts,
+    chairs,
     today,
     nurseName,
+    status,
 }: {
     sessions: SessionCard[];
     counts: ShiftCounts;
+    chairs: ChairTile[];
     today: string;
     nurseName: string;
+    status?: string | null;
 }) {
     const [stage, setStage] = useState<string | null>(null);
     const [filter, setFilter] = useState('SEMUA');
@@ -75,7 +80,7 @@ export default function HariIni({
                         <div className="h-full rounded-full bg-teal-500" style={{ width: `${counts.percent}%` }} />
                     </div>
                     <p className="mt-3 text-base text-slate-200">
-                        Syif 1 ialah 6:00 pagi hingga 10:00 pagi. Syif 2 ialah 10:30 pagi hingga 2:30 petang. Syif 3 ialah 3:00 petang hingga 7:00 malam. Kerusi kosong sekarang: {counts.kerusi_kosong}.
+                        Syif 1 ialah 6:00 pagi hingga 10:00 pagi. Syif 2 ialah 10:30 pagi hingga 2:30 petang. Syif 3 ialah 3:00 petang hingga 7:00 malam. Kerusi yang boleh digunakan sekarang: {counts.kerusi_kosong}. Kerusi ditanda rosak atau tidak sesuai: {counts.kerusi_rosak}.
                     </p>
                 </section>
 
@@ -103,6 +108,10 @@ export default function HariIni({
                         );
                     })}
                 </div>
+
+                {status ? <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{status}</p> : null}
+
+                <ChairBoard chairs={chairs} />
 
                 <label className="block">
                     <span className="sr-only">Cari pesakit</span>
@@ -152,7 +161,7 @@ export default function HariIni({
                                 </div>
                                 <div className="grid gap-2 text-base sm:grid-cols-3">
                                     <p>Masa temujanji<br /><span className="font-black">{session.scheduled_time}</span></p>
-                                    <p>Berat kering<br /><span className="font-black">{session.patient.dry_weight_kg} kg</span></p>
+                                    <p>Berat semasa tiba<br /><span className="font-black">{session.pre_weight_kg ? `${session.pre_weight_kg} kg` : 'Belum direkod'}</span><span className="block text-sm text-slate-300">Kering {session.patient.dry_weight_kg} kg</span></p>
                                     <p>Tekanan darah<br /><span className="font-black">{session.pre_bp ?? 'Belum direkod'}</span></p>
                                 </div>
                                 {needsCounter(session) ? (
