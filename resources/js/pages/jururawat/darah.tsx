@@ -1,4 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import BloodAnalysis, { LabReadings, type BloodAnalysisData, type LabReading } from '@/components/blood-analysis';
 import InputError from '@/components/input-error';
 import LabCharts, { type ChartSeries } from '@/components/lab-charts';
@@ -19,6 +20,8 @@ type ChartPoint = { label: string; value: number };
 
 type RecordRow = {
     id: number;
+    examination_date: string;
+    examination_type: string;
     examination_label: string;
     examination_type_label: string;
     potassium_needs_attention: boolean;
@@ -42,6 +45,7 @@ export default function Darah({
     examinationTypes,
     status,
     canWriteDoctorNote,
+    canEditBloodRecord,
     charts,
     chartSeries,
 }: {
@@ -51,6 +55,7 @@ export default function Darah({
     examinationTypes: ExaminationType[];
     status?: string | null;
     canWriteDoctorNote: boolean;
+    canEditBloodRecord: boolean;
     charts: Record<string, ChartPoint[]>;
     chartSeries: ChartSeries[];
 }) {
@@ -71,7 +76,7 @@ export default function Darah({
                     <p className="text-sm font-bold text-teal-300">Portal jururawat</p>
                     <h1 className="text-3xl font-black">Rekod darah</h1>
                     <p className="text-base leading-relaxed text-slate-200">
-                        Muat naik PDF laporan makmal, termasuk imbasan CamScanner. Sistem membaca teks digital atau menjalankan OCR pada imbasan, kemudian menyimpan nombor yang benar-benar tercetak. Satu tarikh sampel hanya boleh ada satu rekod bagi setiap pesakit. Jika sesuatu ujian tiada dalam PDF, ruangan itu dikosongkan. Fail disimpan dalam folder pesakit dan tidak dipadam.
+                        Muat naik PDF laporan makmal, termasuk imbasan CamScanner. Sistem membaca teks digital atau menjalankan OCR pada imbasan, kemudian menyimpan nombor yang benar-benar tercetak. Satu tarikh sampel hanya boleh ada satu rekod bagi setiap pesakit. Selepas disimpan, jururawat boleh kemaskini nilai jika OCR tersilap baca. Fail PDF asal kekal dalam folder pesakit dan tidak dipadam.
                     </p>
                 </div>
 
@@ -141,7 +146,11 @@ export default function Darah({
                             <article key={record.id} className="space-y-3 rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
                                 <p className="text-lg font-black">{record.patient_name} · {record.patient_id_code}</p>
                                 <p className="text-sm text-slate-300">{record.examination_label} · {record.examination_type_label}{record.recorded_by ? ` · ${record.recorded_by}` : ''}</p>
-                                <LabReadings readings={record.readings} />
+                                {canEditBloodRecord ? (
+                                    <BloodRecordEditor record={record} examinationTypes={examinationTypes} />
+                                ) : (
+                                    <LabReadings readings={record.readings} />
+                                )}
                                 {record.potassium_needs_attention && <p className="font-bold text-amber-200">Kalium 5.5 atau lebih tinggi. Perlu perhatian.</p>}
                                 {record.clinical_notes && <p className="text-slate-200">{record.clinical_notes}</p>}
                                 <BloodAnalysis analysis={record.analysis} />
@@ -157,6 +166,87 @@ export default function Darah({
                 </section>
             </div>
         </>
+    );
+}
+
+function BloodRecordEditor({ record, examinationTypes }: { record: RecordRow; examinationTypes: ExaminationType[] }) {
+    const [open, setOpen] = useState(false);
+    const initialValues = Object.fromEntries(record.readings.map((reading) => [reading.key, reading.value ?? '']));
+    const form = useForm({
+        examination_date: record.examination_date,
+        examination_type: record.examination_type,
+        clinical_notes: record.clinical_notes ?? '',
+        ...initialValues,
+    });
+
+    if (!open) {
+        return (
+            <div className="space-y-3">
+                <LabReadings readings={record.readings} />
+                <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-12 items-center justify-center rounded-xl border border-teal-500 px-4 font-bold text-teal-200">
+                    Kemaskini bacaan dan tarikh
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <form
+            className="space-y-4 rounded-2xl border border-teal-700 bg-[#0B132B] p-4"
+            onSubmit={(event) => {
+                event.preventDefault();
+                form.patch(`/jururawat/darah/${record.id}`, {
+                    preserveScroll: true,
+                    onSuccess: () => setOpen(false),
+                });
+            }}
+        >
+            <p className="text-lg font-black text-teal-100">Kemaskini rekod darah</p>
+            <p className="text-sm leading-relaxed text-slate-300">Betulkan nilai OCR yang salah. Kosongkan ruangan untuk biarkan ujian itu tanpa nilai.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-1">
+                    <span className="text-sm font-bold">Tarikh pemeriksaan</span>
+                    <input type="date" className={fieldClass} value={form.data.examination_date} onChange={(event) => form.setData('examination_date', event.target.value)} required />
+                    <InputError message={form.errors.examination_date} />
+                </label>
+                <label className="space-y-1">
+                    <span className="text-sm font-bold">Jenis pemeriksaan</span>
+                    <select className={fieldClass} value={form.data.examination_type} onChange={(event) => form.setData('examination_type', event.target.value)}>
+                        {examinationTypes.map((type) => (
+                            <option key={type.value} value={type.value}>{type.label}</option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+            <label className="block space-y-1">
+                <span className="text-sm font-bold">Nota kakitangan</span>
+                <textarea className={`${fieldClass} min-h-20 py-3`} value={form.data.clinical_notes} onChange={(event) => form.setData('clinical_notes', event.target.value)} />
+            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {record.readings.map((reading) => (
+                    <label key={reading.key} className="space-y-1">
+                        <span className="text-sm font-bold">{reading.name} ({reading.unit})</span>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            className={fieldClass}
+                            value={String(form.data[reading.key as keyof typeof form.data] ?? '')}
+                            onChange={(event) => form.setData(reading.key as keyof typeof form.data, event.target.value)}
+                            placeholder="Kosong"
+                        />
+                        <InputError message={form.errors[reading.key as keyof typeof form.errors] as string | undefined} />
+                    </label>
+                ))}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="submit" disabled={form.processing} className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-teal-500 font-black text-slate-950 disabled:opacity-60">
+                    {form.processing ? 'Menyimpan...' : 'Simpan kemaskini'}
+                </button>
+                <button type="button" onClick={() => setOpen(false)} className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-slate-500 font-bold text-slate-200">
+                    Batal
+                </button>
+            </div>
+        </form>
     );
 }
 

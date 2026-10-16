@@ -49,6 +49,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/jururawat/tetapan', [NurseSessionController::class, 'updateIdentity'])->name('nurse.identity.update');
         Route::get('/jururawat/darah', [MedicalRecordController::class, 'index'])->name('nurse.records.index');
         Route::post('/jururawat/darah', [MedicalRecordController::class, 'store'])->name('nurse.records.store');
+        Route::patch('/jururawat/darah/{record}', [MedicalRecordController::class, 'update'])->name('nurse.records.update');
         Route::get('/jururawat/laporan/{report}', [MedicalReportController::class, 'download'])->name('nurse.reports.download');
         Route::post('/jururawat/sesi/{session}/tiba', [NurseSessionController::class, 'arrive'])->name('nurse.sessions.arrive');
         Route::post('/jururawat/sesi/{session}/panggil', [NurseSessionController::class, 'call'])->name('nurse.sessions.call');

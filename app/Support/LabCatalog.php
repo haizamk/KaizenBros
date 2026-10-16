@@ -73,6 +73,20 @@ class LabCatalog
     }
 
     /**
+     * @return array<string, array<int, string>>
+     */
+    public static function valueValidationRules(): array
+    {
+        $rules = [];
+
+        foreach (self::fields() as $key => $meta) {
+            $rules[$key] = ['nullable', 'numeric', 'min:0', 'max:99999'];
+        }
+
+        return $rules;
+    }
+
+    /**
      * @param  array<int, string>  $aliases
      * @param  array<int, string>  $units
      * @return array{name: string, unit: string, decimals: int, color: string, aliases: array<int, string>, units: array<int, string>}

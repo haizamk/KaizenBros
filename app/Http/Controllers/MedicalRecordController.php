@@ -6,6 +6,7 @@ use App\Enums\ExaminationType;
 use App\Enums\UserRole;
 use App\Http\Requests\StoreDoctorNoteRequest;
 use App\Http\Requests\StoreMedicalRecordRequest;
+use App\Http\Requests\UpdateMedicalRecordRequest;
 use App\Models\MedicalRecord;
 use App\Models\Patient;
 use App\Support\BloodReportAnalysis;
@@ -68,6 +69,7 @@ class MedicalRecordController extends Controller
                 'label' => $type->label(),
             ])->values(),
             'canWriteDoctorNote' => $request->user()->role === UserRole::Admin,
+            'canEditBloodRecord' => in_array($request->user()->role, [UserRole::Nurse, UserRole::Admin], true),
             'charts' => $charts,
             'chartSeries' => LabCatalog::chartSeries(),
         ]);
@@ -136,6 +138,39 @@ class MedicalRecordController extends Controller
         return redirect()
             ->route('nurse.records.index', ['pesakit' => $request->integer('patient_id')])
             ->with('status', "Rekod darah disimpan. {$parsed['found']} bacaan dibaca{$method} Nilai yang tiada dibiarkan kosong. {$source}");
+    }
+
+    public function update(UpdateMedicalRecordRequest $request, MedicalRecord $record): RedirectResponse
+    {
+        $date = $request->validated('examination_date');
+
+        if (MedicalRecord::query()
+            ->where('patient_id', $record->patient_id)
+            ->whereDate('examination_date', $date)
+            ->whereKeyNot($record->id)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'examination_date' => 'Rekod darah untuk tarikh ini sudah wujud bagi pesakit ini. Pilih tarikh lain.',
+            ]);
+        }
+
+        $values = [];
+
+        foreach (array_keys(LabCatalog::fields()) as $key) {
+            $raw = $request->validated($key);
+            $values[$key] = $raw === null ? null : (float) $raw;
+        }
+
+        $record->update([
+            'examination_date' => $date,
+            'examination_type' => $request->validated('examination_type'),
+            'clinical_notes' => $request->validated('clinical_notes'),
+            ...$values,
+        ]);
+
+        return redirect()
+            ->route('nurse.records.index', ['pesakit' => $record->patient_id])
+            ->with('status', 'Rekod darah dikemaskini. Portal pesakit akan memaparkan nilai terbaru.');
     }
 
     public function storeDoctorNote(StoreDoctorNoteRequest $request, MedicalRecord $record): RedirectResponse

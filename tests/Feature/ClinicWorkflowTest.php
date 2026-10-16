@@ -246,10 +246,33 @@ class ClinicWorkflowTest extends TestCase
                 ->where('records.0.potassium_needs_attention', true)
                 ->where('records.0.recorded_by', 'Sister Siti')
                 ->where('canWriteDoctorNote', false)
+                ->where('canEditBloodRecord', true)
                 ->where('records.0.readings.1.key', 'wbc')
                 ->where('records.0.readings.1.value', null)
                 ->where('records.0.analysis.items.0.key', 'potassium')
             );
+
+        $this->actingAs($nurse)
+            ->patch(route('nurse.records.update', $record), [
+                'examination_date' => '2026-09-01',
+                'examination_type' => ExaminationType::Berkala->value,
+                'clinical_notes' => 'Nilai hemoglobin dibetulkan selepas OCR.',
+                'hemoglobin' => '11.8',
+                'potassium' => '5.60',
+                'wbc' => '',
+            ])
+            ->assertRedirect(route('nurse.records.index', ['pesakit' => $patient->id]));
+
+        $record->refresh();
+        $this->assertSame('11.8', $record->hemoglobin);
+        $this->assertNull($record->wbc);
+
+        $this->actingAs($owner)
+            ->patch(route('nurse.records.update', $record), [
+                'examination_date' => '2026-09-01',
+                'examination_type' => ExaminationType::Berkala->value,
+            ])
+            ->assertForbidden();
 
         $this->actingAs($nurse)
             ->post(route('admin.records.doctor', $record), [
