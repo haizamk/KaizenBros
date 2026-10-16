@@ -1,0 +1,202 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\SchedulePattern;
+use App\Enums\SessionStatus;
+use App\Enums\ShiftSlot;
+use App\Enums\UserRole;
+use App\Models\DialysisSession;
+use App\Models\Patient;
+use App\Models\PatientMedication;
+use App\Models\Registration;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $accounts = collect(config('kaizenbros.demo_accounts'))->keyBy('role');
+
+        $nurse = $this->account($accounts->get('Jururawat'), UserRole::Nurse, '019-3889922');
+        $this->account($accounts->get('Pentadbir'), UserRole::Admin, '03-8727 8899');
+        $tanUser = $this->account($accounts->get('Pesakit'), UserRole::Patient, '012-3001001');
+
+        $tan = $this->patient($tanUser, [
+            'patient_id_code' => 'P-1001',
+            'name' => 'Tan Ah Kow',
+            'ic_number' => '580101-10-1231',
+            'gender' => 'LELAKI',
+            'age' => 68,
+            'phone' => '012-3001001',
+            'email' => $tanUser->email,
+            'address' => 'Bandar Rinching, Semenyih',
+            'dry_weight_kg' => 62.50,
+            'vascular_access' => 'AVF',
+            'access_location' => 'Lengan kiri',
+            'sponsor' => 'PERKESO / SOCSO',
+            'schedule_pattern' => SchedulePattern::IsninRabuJumaat,
+            'preferred_shift' => ShiftSlot::Syif1,
+            'allergies' => 'Tiada diketahui',
+        ]);
+
+        $siti = $this->patient(null, [
+            'patient_id_code' => 'P-1002',
+            'name' => 'Siti Aminah binti Hassan',
+            'ic_number' => '620202-08-2468',
+            'gender' => 'PEREMPUAN',
+            'age' => 64,
+            'phone' => '012-3001002',
+            'dry_weight_kg' => 54.20,
+            'vascular_access' => 'AVF',
+            'access_location' => 'Lengan kanan',
+            'sponsor' => 'Zakat Selangor',
+            'schedule_pattern' => SchedulePattern::IsninRabuJumaat,
+            'preferred_shift' => ShiftSlot::Syif1,
+            'allergies' => 'Penicillin',
+        ]);
+
+        $rajesh = $this->patient(null, [
+            'patient_id_code' => 'P-1003',
+            'name' => 'Rajesh a/l Kumar',
+            'ic_number' => '700515-14-1357',
+            'gender' => 'LELAKI',
+            'age' => 56,
+            'phone' => '012-3001003',
+            'dry_weight_kg' => 71.00,
+            'vascular_access' => 'Permcath',
+            'access_location' => 'Jugular kanan',
+            'sponsor' => 'JPA / KWAP',
+            'schedule_pattern' => SchedulePattern::IsninRabuJumaat,
+            'preferred_shift' => ShiftSlot::Syif2,
+            'allergies' => 'Tiada diketahui',
+        ]);
+
+        $lim = $this->patient(null, [
+            'patient_id_code' => 'P-1004',
+            'name' => 'Lim Mei Ling',
+            'ic_number' => '650808-10-2460',
+            'gender' => 'PEREMPUAN',
+            'age' => 61,
+            'phone' => '012-3001004',
+            'dry_weight_kg' => 49.80,
+            'vascular_access' => 'AVF',
+            'access_location' => 'Lengan kiri',
+            'sponsor' => 'NKF',
+            'schedule_pattern' => SchedulePattern::IsninRabuJumaat,
+            'preferred_shift' => ShiftSlot::Syif1,
+            'allergies' => 'Tiada diketahui',
+        ]);
+
+        DialysisSession::query()->create([
+            'patient_id' => $tan->id,
+            'chair_number' => 'A-01',
+            'scheduled_date' => today(),
+            'scheduled_time' => '06:00',
+            'shift' => ShiftSlot::Syif1,
+            'status' => SessionStatus::SedangDialisis,
+            'pre_weight_kg' => 64.20,
+            'pre_bp' => '148/86',
+            'started_at' => now()->subMinutes(40),
+            'nurse_user_id' => $nurse->id,
+        ]);
+
+        DialysisSession::query()->create([
+            'patient_id' => $siti->id,
+            'chair_number' => 'A-02',
+            'scheduled_date' => today(),
+            'scheduled_time' => '06:00',
+            'shift' => ShiftSlot::Syif1,
+            'status' => SessionStatus::SudahHadir,
+            'pre_weight_kg' => 56.10,
+            'pre_bp' => '152/90',
+            'nurse_user_id' => $nurse->id,
+        ]);
+
+        DialysisSession::query()->create([
+            'patient_id' => $rajesh->id,
+            'chair_number' => 'B-01',
+            'scheduled_date' => today(),
+            'scheduled_time' => '11:00',
+            'shift' => ShiftSlot::Syif2,
+            'status' => SessionStatus::BelumHadir,
+        ]);
+
+        DialysisSession::query()->create([
+            'patient_id' => $lim->id,
+            'chair_number' => 'A-03',
+            'scheduled_date' => today(),
+            'scheduled_time' => '06:00',
+            'shift' => ShiftSlot::Syif1,
+            'status' => SessionStatus::SudahSelesai,
+            'pre_weight_kg' => 51.40,
+            'post_weight_kg' => 49.90,
+            'pre_bp' => '138/78',
+            'post_bp' => '128/74',
+            'started_at' => now()->subHours(5),
+            'completed_at' => now()->subHour(),
+            'nurse_user_id' => $nurse->id,
+            'nurse_notes' => 'Sesi selesai tanpa komplikasi.',
+        ]);
+
+        PatientMedication::query()->create([
+            'patient_id' => $tan->id,
+            'medication_name' => 'Erythropoietin',
+            'dosage' => '4000 IU',
+            'frequency' => '3 kali seminggu',
+            'route' => 'Subkutaneus',
+            'is_active' => true,
+        ]);
+
+        PatientMedication::query()->create([
+            'patient_id' => $tan->id,
+            'medication_name' => 'Calcium carbonate',
+            'dosage' => '500 mg',
+            'frequency' => '3 kali sehari bersama makanan',
+            'route' => 'Oral',
+            'is_active' => true,
+        ]);
+
+        Registration::query()->create([
+            'reference' => 'KB-REG-240016',
+            'full_name' => 'Ahmad Zulkifli bin Osman',
+            'ic_number' => '710303-10-1123',
+            'phone_number' => '012-3001999',
+            'email' => 'ahmad.zulkifli@demo.kaizenbros.my',
+            'gender' => 'LELAKI',
+            'address' => 'Semenyih, Selangor',
+            'medical_notes' => 'Rujukan nefrologi. Menunggu slot dialisis tetap.',
+            'nok_name' => 'Farah Ahmad',
+            'nok_phone' => '012-3001888',
+            'status' => 'BARU',
+        ]);
+    }
+
+    /**
+     * @param  array{role: string, name: string, email: string, password: string}  $account
+     */
+    private function account(array $account, UserRole $role, string $phone): User
+    {
+        return User::query()->create([
+            'name' => $account['name'],
+            'email' => $account['email'],
+            'password' => $account['password'],
+            'role' => $role,
+            'phone' => $phone,
+            'email_verified_at' => now(),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function patient(?User $user, array $attributes): Patient
+    {
+        return Patient::query()->create([
+            ...$attributes,
+            'user_id' => $user?->id,
+            'is_active' => true,
+        ]);
+    }
+}

@@ -1,0 +1,52 @@
+<?php
+
+return [
+
+    /*
+    | Maklumat pusat diambil daripada profil demo KaizenBros sedia ada.
+    | Nombor telefon pesakit dalam seeder adalah nombor rekaan.
+    */
+    'centre' => [
+        'name' => 'Pusat Dialisis KaizenBros Semenyih',
+        'brand' => 'KaizenBros Dialysis',
+        'slogan' => 'Rawatan Hemodialisis Berkualiti & Mesra Pesakit',
+        'kkm_license' => 'KKM/BPFK/78219/2024',
+        'address' => 'No. 27 & 29G, Jalan 5/10, Seksyen 5, Bandar Rinching, 43500 Semenyih, Selangor, Malaysia',
+        'phone_main' => '03-8727 8899',
+        'hotline_24h' => '019-388 9922',
+        'email' => 'klinik@kaizenbros.com.my',
+        'whatsapp_number' => '60193889922',
+        'operating_hours' => [
+            ['days' => 'Isnin - Sabtu', 'time' => '5:30 AM - 8:00 PM'],
+            ['days' => 'Ahad', 'time' => 'Panggilan Kecemasan Sahaja'],
+        ],
+        'capacity_machines' => 12,
+        'machine_model' => 'Fresenius 4008S NG / 5008S HDF',
+        'water_system' => 'Double Pass Reverse Osmosis System',
+        'panels' => ['PERKESO / SOCSO', 'JPA / KWAP', 'Zakat Selangor', 'BAITULMAL', 'NKF'],
+        'medical_director' => 'Dr. Ahmad Farhan bin Mohamad (Nefrologi)',
+        'head_nurse' => 'Sister Siti Fatimah binti Rosli (SRN)',
+    ],
+
+    'demo_accounts' => [
+        [
+            'role' => 'Jururawat',
+            'name' => 'Sister Siti Fatimah binti Rosli',
+            'email' => 'nurse@kaizenbros.com.my',
+            'password' => 'Nurse@2026',
+        ],
+        [
+            'role' => 'Pentadbir',
+            'name' => 'Dr. Ahmad Farhan bin Mohamad',
+            'email' => 'admin@kaizenbros.com.my',
+            'password' => 'Admin@2026',
+        ],
+        [
+            'role' => 'Pesakit',
+            'name' => 'Tan Ah Kow',
+            'email' => 'tan.ahkow@demo.kaizenbros.my',
+            'password' => 'Pesakit@2026',
+        ],
+    ],
+
+];
