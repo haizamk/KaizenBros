@@ -2,10 +2,10 @@ import { Link, usePage } from '@inertiajs/react';
 
 const links = [
     { href: '/jururawat', label: 'Hari Ini' },
+    { href: '/jururawat/sesi', label: 'Sesi Dialisis' },
     { href: '/jururawat/ringkasan', label: 'Ringkasan Syif' },
     { href: '/jururawat/jadual', label: 'Jadual Rawatan' },
     { href: '/jururawat/pesakit', label: 'Pesakit' },
-    { href: '/jururawat/sesi', label: 'Sesi Dialisis' },
     { href: '/jururawat/darah', label: 'Rekod Darah & Analisa' },
     { href: '/jururawat/tetapan', label: 'Tetapan' },
 ];

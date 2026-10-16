@@ -30,12 +30,9 @@ class NurseSessionController extends Controller
         $counts = NurseBoard::counts($sessions);
 
         return Inertia::render('jururawat/hari-ini', [
-            'sessions' => $sessions,
             'counts' => $counts,
-            'chairs' => ChairBoard::tiles(),
             'today' => $counts['date_label'],
             'nurseName' => $request->user()->name,
-            'status' => session('status'),
         ]);
     }
 

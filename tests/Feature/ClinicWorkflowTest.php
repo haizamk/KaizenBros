@@ -342,7 +342,7 @@ class ClinicWorkflowTest extends TestCase
         $this->assertSame('A-01', $fourth->refresh()->chair_number);
 
         $this->actingAs($nurse)
-            ->get(route('nurse.home'))
+            ->get(route('nurse.sessions'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('counts.kerusi_rosak', 0)
@@ -422,10 +422,10 @@ class ClinicWorkflowTest extends TestCase
         $this->sessionFor($this->patientRecord());
 
         $this->actingAs($nurse)
-            ->get(route('nurse.home'))
+            ->get(route('nurse.sessions'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('jururawat/hari-ini')
+                ->component('jururawat/sesi')
                 ->where('sessions.0.whatsapp_url', fn (string $url): bool => str_contains($url, 'https://wa.me/60123001001?text='))
             );
     }
