@@ -15,6 +15,7 @@ type SessionCard = {
     post_bp: string | null;
     started_at: string | null;
     nurse_notes: string | null;
+    whatsapp_url?: string | null;
     patient: {
         name: string;
         patient_id_code: string;
@@ -182,6 +183,16 @@ export default function HariIni({ sessions, today }: { sessions: SessionCard[]; 
                                     {session.status_label}
                                 </span>
                             </div>
+                            {session.whatsapp_url && (
+                                <a
+                                    href={session.whatsapp_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex min-h-12 items-center rounded-xl bg-emerald-500 px-4 font-black text-slate-950"
+                                >
+                                    Buka WhatsApp untuk peringatan
+                                </a>
+                            )}
                             {session.pre_weight_kg && session.status !== 'SUDAH_SELESAI' && (
                                 <p className="text-base">Sebelum: {session.pre_weight_kg} kg · {session.pre_bp}</p>
                             )}

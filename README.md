@@ -2,7 +2,7 @@
 
 Sistem pengurusan pusat dialisis KaizenBros, fasa pembangunan baharu. Aplikasi ini menggunakan Laravel 13, React, TypeScript, Inertia.js, Tailwind CSS, dan MariaDB. Data demo disemai semula. Firebase tidak digunakan.
 
-Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, portal pesakit, dan senarai pentadbir. Rekod darah, carta, WhatsApp berjadual, dan pemasangan VPS belum dimasukkan.
+Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, rekod darah, carta berat dan tekanan darah, pautan peringatan WhatsApp, portal pesakit, dan senarai pentadbir. Pemasangan VPS belum dibuat.
 
 ## Jalankan secara tempatan
 
@@ -32,7 +32,7 @@ Akaun ini hanya untuk pembangunan.
 | Pentadbir | admin@kaizenbros.com.my | Admin@2026 |
 | Pesakit | tan.ahkow@demo.kaizenbros.my | Pesakit@2026 |
 
-Pesakit demo Tan Ah Kow mempunyai sesi hari ini dan dua ubat aktif. Jururawat boleh daftar masuk, mula, dan tamat sesi. Pesakit hanya melihat rekod sendiri.
+Pesakit demo Tan Ah Kow mempunyai sesi hari ini, sejarah berat dan tekanan darah, dua keputusan darah, dan dua ubat aktif. Jururawat boleh daftar masuk, mula, dan tamat sesi, serta menyimpan rekod darah. Butang WhatsApp hanya membuka perbualan. Ia tidak menghantar mesej sendiri. Pesakit hanya melihat rekod sendiri.
 
 ## Ujian
 

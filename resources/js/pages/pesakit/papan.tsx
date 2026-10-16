@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Head } from '@inertiajs/react';
+import TrendChart from '@/components/trend-chart';
 
 type PatientCard = {
     patient_id_code: string;
@@ -57,15 +58,43 @@ function Remaining({ startedAt }: { startedAt: string }) {
     return <p className="font-mono text-4xl font-black text-cyan-200">{formatClock(remaining)}</p>;
 }
 
+type ChartPoint = {
+    label: string;
+    value: number;
+};
+
+type BloodRecord = {
+    id: number;
+    examination_label: string;
+    examination_type_label: string;
+    hemoglobin: string | null;
+    potassium: string | null;
+    phosphate: string | null;
+    urea: string | null;
+    creatinine: string | null;
+    potassium_needs_attention: boolean;
+    clinical_notes: string | null;
+};
+
 export default function PapanPesakit({
     patient,
     sessions,
     medications,
+    records,
+    charts,
     today,
 }: {
     patient: PatientCard | null;
     sessions: SessionCard[];
     medications: Medication[];
+    records: BloodRecord[];
+    charts: {
+        weight: ChartPoint[];
+        systolic: ChartPoint[];
+        diastolic: ChartPoint[];
+        hemoglobin: ChartPoint[];
+        potassium: ChartPoint[];
+    };
     today: string;
 }) {
     const todaySession = sessions.find((session) => session.scheduled_date === today);
@@ -108,6 +137,55 @@ export default function PapanPesakit({
                                 {todaySession.pre_weight_kg && <p>Sebelum: {todaySession.pre_weight_kg} kg · {todaySession.pre_bp}</p>}
                                 {todaySession.post_weight_kg && <p>Selepas: {todaySession.post_weight_kg} kg · {todaySession.post_bp}</p>}
                             </div>
+                        )}
+                    </section>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <TrendChart
+                            title="Berat sebelum dialisis"
+                            unit="kg"
+                            empty="Belum ada bacaan berat."
+                            series={[{ name: 'Berat (kg)', color: '#22d3ee', points: charts.weight }]}
+                        />
+                        <TrendChart
+                            title="Tekanan darah sebelum dialisis"
+                            unit="mmHg"
+                            empty="Belum ada bacaan tekanan darah."
+                            series={[
+                                { name: 'Sistolik', color: '#fb7185', points: charts.systolic },
+                                { name: 'Diastolik', color: '#14b8a6', points: charts.diastolic },
+                            ]}
+                        />
+                        <TrendChart
+                            title="Hemoglobin"
+                            unit="g/dL"
+                            empty="Belum ada keputusan hemoglobin."
+                            series={[{ name: 'Hb', color: '#fbbf24', points: charts.hemoglobin }]}
+                        />
+                        <TrendChart
+                            title="Kalium"
+                            unit="mmol/L"
+                            empty="Belum ada keputusan kalium."
+                            series={[{ name: 'K', color: '#a78bfa', points: charts.potassium }]}
+                        />
+                    </div>
+
+                    <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-6">
+                        <h2 className="text-2xl font-black">Keputusan darah</h2>
+                        {records.length === 0 ? (
+                            <p className="mt-3 text-lg">Tiada keputusan darah lagi.</p>
+                        ) : (
+                            <ul className="mt-4 space-y-3">
+                                {records.map((record) => (
+                                    <li key={record.id} className="rounded-2xl border border-[#1F385C] p-4">
+                                        <p className="text-xl font-black">{record.examination_label}</p>
+                                        <p className="text-sm text-slate-300">{record.examination_type_label}</p>
+                                        <p className="mt-2 text-base">Hb {record.hemoglobin ?? '—'} g/dL · Kalium {record.potassium ?? '—'} · Fosfat {record.phosphate ?? '—'} · Urea {record.urea ?? '—'} · Kreatinin {record.creatinine ?? '—'}</p>
+                                        {record.potassium_needs_attention && <p className="mt-1 font-bold text-amber-200">Kalium tinggi. Sila bincang dengan jururawat.</p>}
+                                        {record.clinical_notes && <p className="mt-1 text-slate-200">{record.clinical_notes}</p>}
+                                    </li>
+                                ))}
+                            </ul>
                         )}
                     </section>
 

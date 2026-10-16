@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\NurseSessionController;
 use App\Http\Controllers\PatientPortalController;
 use App\Http\Controllers\RegistrationController;
@@ -22,6 +23,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role:nurse,admin')->group(function () {
         Route::get('/jururawat', [NurseSessionController::class, 'index'])->name('nurse.home');
+        Route::get('/jururawat/darah', [MedicalRecordController::class, 'index'])->name('nurse.records.index');
+        Route::post('/jururawat/darah', [MedicalRecordController::class, 'store'])->name('nurse.records.store');
         Route::post('/jururawat/sesi/{session}/daftar-masuk', [NurseSessionController::class, 'checkIn'])->name('nurse.sessions.check-in');
         Route::post('/jururawat/sesi/{session}/mula', [NurseSessionController::class, 'start'])->name('nurse.sessions.start');
         Route::post('/jururawat/sesi/{session}/selesai', [NurseSessionController::class, 'complete'])->name('nurse.sessions.complete');

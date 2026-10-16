@@ -2,11 +2,13 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ExaminationType;
 use App\Enums\SchedulePattern;
 use App\Enums\SessionStatus;
 use App\Enums\ShiftSlot;
 use App\Enums\UserRole;
 use App\Models\DialysisSession;
+use App\Models\MedicalRecord;
 use App\Models\Patient;
 use App\Models\PatientMedication;
 use App\Models\Registration;
@@ -140,6 +142,36 @@ class DatabaseSeeder extends Seeder
             'nurse_notes' => 'Sesi selesai tanpa komplikasi.',
         ]);
 
+        $this->completedSession($tan, $nurse, 14, 65.10, 63.40, '156/92', '140/84');
+        $this->completedSession($tan, $nurse, 9, 64.80, 62.90, '150/88', '136/80');
+        $this->completedSession($tan, $nurse, 5, 64.40, 62.60, '146/84', '132/78');
+
+        MedicalRecord::query()->create([
+            'patient_id' => $tan->id,
+            'recorded_by' => $nurse->id,
+            'examination_date' => today()->subMonths(3),
+            'examination_type' => ExaminationType::Berkala,
+            'hemoglobin' => 10.4,
+            'potassium' => 5.6,
+            'phosphate' => 1.90,
+            'urea' => 22.4,
+            'creatinine' => 780.0,
+            'clinical_notes' => 'Kalium tinggi. Nasihat diet rendah kalium diberikan.',
+        ]);
+
+        MedicalRecord::query()->create([
+            'patient_id' => $tan->id,
+            'recorded_by' => $nurse->id,
+            'examination_date' => today()->subDays(7),
+            'examination_type' => ExaminationType::Berkala,
+            'hemoglobin' => 11.1,
+            'potassium' => 4.70,
+            'phosphate' => 1.60,
+            'urea' => 18.2,
+            'creatinine' => 690.0,
+            'clinical_notes' => 'Keputusan berkala lebih stabil.',
+        ]);
+
         PatientMedication::query()->create([
             'patient_id' => $tan->id,
             'medication_name' => 'Erythropoietin',
@@ -197,6 +229,27 @@ class DatabaseSeeder extends Seeder
             ...$attributes,
             'user_id' => $user?->id,
             'is_active' => true,
+        ]);
+    }
+
+    private function completedSession(Patient $patient, User $nurse, int $daysAgo, float $preWeight, float $postWeight, string $preBp, string $postBp): void
+    {
+        $date = today()->subDays($daysAgo);
+
+        DialysisSession::query()->create([
+            'patient_id' => $patient->id,
+            'chair_number' => 'A-01',
+            'scheduled_date' => $date,
+            'scheduled_time' => '06:00',
+            'shift' => ShiftSlot::Syif1,
+            'status' => SessionStatus::SudahSelesai,
+            'pre_weight_kg' => $preWeight,
+            'post_weight_kg' => $postWeight,
+            'pre_bp' => $preBp,
+            'post_bp' => $postBp,
+            'started_at' => $date->copy()->setTime(6, 5),
+            'completed_at' => $date->copy()->setTime(10, 10),
+            'nurse_user_id' => $nurse->id,
         ]);
     }
 }

@@ -39,11 +39,21 @@ export default function ClinicLayout({
                                         {user.role}
                                     </span>
                                 </span>
-                                {user.role === 'admin' && (
-                                    <Link href="/jururawat" className="inline-flex min-h-12 items-center rounded-xl border border-[#1F385C] px-4 text-sm font-bold">
-                                        Papan jururawat
-                                    </Link>
-                                )}
+                        {user.role === 'nurse' || user.role === 'admin' ? (
+                            <>
+                                <Link href="/jururawat" className="inline-flex min-h-12 items-center rounded-xl border border-[#1F385C] px-4 text-sm font-bold">
+                                    Hari ini
+                                </Link>
+                                <Link href="/jururawat/darah" className="inline-flex min-h-12 items-center rounded-xl border border-[#1F385C] px-4 text-sm font-bold">
+                                    Rekod darah
+                                </Link>
+                            </>
+                        ) : null}
+                        {user.role === 'admin' && (
+                            <Link href="/admin" className="inline-flex min-h-12 items-center rounded-xl border border-[#1F385C] px-4 text-sm font-bold">
+                                Pentadbir
+                            </Link>
+                        )}
                                 <Link
                                     href={logout.url()}
                                     method="post"

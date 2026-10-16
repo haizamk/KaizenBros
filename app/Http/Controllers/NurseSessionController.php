@@ -6,6 +6,7 @@ use App\Http\Requests\CheckInSessionRequest;
 use App\Http\Requests\CompleteSessionRequest;
 use App\Models\DialysisSession;
 use App\Services\DialysisSessionWorkflow;
+use App\Support\WhatsAppLink;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,18 @@ class NurseSessionController extends Controller
             ->orderBy('scheduled_time')
             ->orderBy('chair_number')
             ->get()
-            ->map(fn (DialysisSession $session): array => $session->toPortalArray())
+            ->map(function (DialysisSession $session): array {
+                $data = $session->toPortalArray();
+                $data['whatsapp_url'] = WhatsAppLink::sessionReminder(
+                    $session->patient->phone,
+                    $session->patient->name,
+                    $session->scheduled_date->format('d/m/Y'),
+                    $session->scheduled_time,
+                    $session->chair_number,
+                );
+
+                return $data;
+            })
             ->values();
 
         return Inertia::render('jururawat/hari-ini', [
