@@ -6,6 +6,7 @@ export type BloodAnalysisItem = {
     status: 'TINGGI' | 'RENDAH' | 'BIASA' | 'PERHATIAN';
     status_label: string;
     sentence: string;
+    tip: string;
     change: string | null;
 };
 
@@ -22,6 +23,26 @@ const tone: Record<BloodAnalysisItem['status'], string> = {
     BIASA: 'border-[#1F385C] bg-[#0B132B]',
 };
 
+export type LabReading = {
+    key: string;
+    name: string;
+    unit: string;
+    value: string | null;
+};
+
+export function LabReadings({ readings }: { readings: LabReading[] }) {
+    return (
+        <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {readings.map((item) => (
+                <div key={item.key} className="rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 py-2">
+                    <dt className="text-sm text-slate-300">{item.name}</dt>
+                    <dd className="text-lg font-black">{item.value === null ? 'Kosong' : `${item.value} ${item.unit}`}</dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
+
 export default function BloodAnalysis({ analysis }: { analysis: BloodAnalysisData }) {
     return (
         <div className="mt-3 space-y-3">
@@ -34,6 +55,7 @@ export default function BloodAnalysis({ analysis }: { analysis: BloodAnalysisDat
                             <span className="ml-2 text-lg">{item.status_label}</span>
                         </p>
                         <p className="mt-1 text-lg leading-relaxed">{item.sentence}</p>
+                        <p className="mt-1 text-base leading-relaxed text-teal-100">Tip: {item.tip}</p>
                         {item.change && <p className="mt-1 text-lg font-bold">{item.change}</p>}
                     </li>
                 ))}

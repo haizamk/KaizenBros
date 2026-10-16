@@ -26,6 +26,10 @@ class BloodReportAnalysisTest extends TestCase
         $this->assertStringStartsWith('Kalium tinggi.', $analysis['summary']);
         $this->assertStringContainsString('bukan diagnosis', $analysis['summary']);
         $this->assertStringNotContainsString('Urea tinggi', $analysis['summary']);
+
+        $potassium = collect($analysis['items'])->firstWhere('key', 'potassium');
+        $this->assertStringContainsString('Kalium tinggi', $potassium['sentence']);
+        $this->assertStringContainsString('pisang', $potassium['tip']);
     }
 
     public function test_thresholds_follow_dialysis_ranges(): void

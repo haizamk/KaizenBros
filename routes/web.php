@@ -73,6 +73,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/admin/permohonan/{registration}/dokumen', [ClinicDocumentController::class, 'storeForRegistration'])->name('admin.documents.store');
         Route::post('/admin/pesakit/{patient}/dokumen', [ClinicDocumentController::class, 'storeForPatient'])->name('admin.patients.documents.store');
         Route::post('/admin/pesakit/{patient}/syif', [AdminController::class, 'updateShift'])->name('admin.patients.shift');
+        Route::post('/admin/darah/{record}/analisa', [MedicalRecordController::class, 'storeDoctorNote'])->name('admin.records.doctor');
         Route::get('/admin/dokumen/{document}', [ClinicDocumentController::class, 'download'])->name('admin.documents.download');
     });
 });

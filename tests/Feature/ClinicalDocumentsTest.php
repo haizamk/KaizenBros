@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Support\LabPdfFixture;
 use Tests\TestCase;
 
 class ClinicalDocumentsTest extends TestCase
@@ -108,14 +109,15 @@ class ClinicalDocumentsTest extends TestCase
         $this->actingAs($nurse)
             ->post(route('nurse.records.store'), [
                 'patient_id' => $ownPatient->id,
-                'examination_date' => today()->toDateString(),
                 'examination_type' => ExaminationType::Berkala->value,
-                'hemoglobin' => 10.4,
-                'potassium' => 5.60,
-                'phosphate' => 1.90,
-                'urea' => 22.4,
-                'creatinine' => 780,
-                'report' => $this->png('makmal.png'),
+                'report' => LabPdfFixture::file('makmal.pdf', implode("\n", [
+                    'Tarikh Ujian: '.today()->toDateString(),
+                    'Hemoglobin (Hb) 10.4 g/dL',
+                    'Potassium (Kalium) 5.60 mmol/L',
+                    'Phosphate (Fosfat) 1.90 mmol/L',
+                    'Urea 22.4 mmol/L',
+                    'Creatinine 780 umol/L',
+                ])),
             ])
             ->assertRedirect(route('nurse.records.index', ['pesakit' => $ownPatient->id]));
 
@@ -150,7 +152,7 @@ class ClinicalDocumentsTest extends TestCase
                 ->where('records.0.analysis.statuses.creatinine', 'PERHATIAN')
                 ->where('records.0.analysis.changes.potassium', 'Naik daripada 4.70.')
                 ->where('records.0.analysis.has_high', true)
-                ->where('records.0.report.original_name', 'makmal.png')
+                ->where('records.0.report.original_name', 'makmal.pdf')
                 ->where('charts.phosphate.0.value', 1.6)
                 ->has('charts.creatinine', 2)
                 ->where('records.0.analysis.summary', fn (string $summary): bool => str_contains($summary, 'Kalium')
@@ -164,7 +166,7 @@ class ClinicalDocumentsTest extends TestCase
         $this->actingAs($owner)
             ->get(route('patient.reports.download', $report))
             ->assertOk()
-            ->assertDownload('makmal.png');
+            ->assertDownload('makmal.pdf');
         $this->actingAs($nurse)
             ->get(route('nurse.reports.download', $report))
             ->assertOk();

@@ -6,12 +6,16 @@ use App\Enums\ExaminationType;
 use App\Enums\SchedulePattern;
 use App\Enums\SessionStatus;
 use App\Enums\ShiftSlot;
+use App\Http\Requests\StoreMedicalRecordRequest;
 use App\Models\DialysisSession;
 use App\Models\MedicalRecord;
+use App\Models\MedicalReport;
 use App\Models\Patient;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Support\LabPdfFixture;
 use Tests\TestCase;
 
 class ClinicWorkflowTest extends TestCase
@@ -150,10 +154,15 @@ class ClinicWorkflowTest extends TestCase
             ->assertDontSee('wa.me');
     }
 
-    public function test_nurse_stores_a_blood_record_and_rejects_an_empty_panel(): void
+    public function test_nurse_stores_a_blood_record_from_a_pdf_and_leaves_missing_values_empty(): void
     {
+        Storage::fake('medical_reports');
         $nurse = User::factory()->create(['role' => 'nurse', 'name' => 'Sister Siti']);
-        $patient = $this->patientRecord();
+        $admin = User::factory()->create(['role' => 'admin', 'name' => 'Dr. Ahmad Farhan']);
+        $owner = User::factory()->create(['role' => 'patient']);
+        $patient = $this->patientRecord($owner);
+
+        $this->assertContains('max:102400', (new StoreMedicalRecordRequest)->rules()['report']);
 
         $this->actingAs($nurse)
             ->from(route('nurse.records.index'))
@@ -164,27 +173,55 @@ class ClinicWorkflowTest extends TestCase
                 'clinical_notes' => 'Tiada nilai',
             ])
             ->assertRedirect(route('nurse.records.index'))
-            ->assertSessionHasErrors('hemoglobin');
+            ->assertSessionHasErrors('report');
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.records.index'))
+            ->post(route('nurse.records.store'), [
+                'patient_id' => $patient->id,
+                'examination_type' => ExaminationType::Berkala->value,
+                'report' => LabPdfFixture::file('kosong.pdf', 'Laporan makmal tanpa keputusan.'),
+            ])
+            ->assertRedirect(route('nurse.records.index'))
+            ->assertSessionHasErrors('report');
+
+        $this->actingAs($nurse)
+            ->from(route('nurse.records.index'))
+            ->post(route('nurse.records.store'), [
+                'patient_id' => $patient->id,
+                'examination_type' => ExaminationType::Berkala->value,
+                'report' => LabPdfFixture::file('depan.pdf', "Tarikh Ujian: 2099-01-01\nHemoglobin (Hb) 11.0 g/dL"),
+            ])
+            ->assertRedirect(route('nurse.records.index'))
+            ->assertSessionHasErrors('examination_date');
 
         $this->assertDatabaseCount('medical_records', 0);
+        $this->assertDatabaseCount('medical_reports', 0);
 
         $this->actingAs($nurse)
             ->post(route('nurse.records.store'), [
                 'patient_id' => $patient->id,
                 'examination_date' => today()->toDateString(),
                 'examination_type' => ExaminationType::Berkala->value,
-                'hemoglobin' => 10.4,
-                'potassium' => 5.6,
                 'clinical_notes' => 'Kalium tinggi.',
+                'report' => LabPdfFixture::file('darah.pdf', "Tarikh Ujian: 2026-09-01\nHemoglobin (Hb) 10.4 g/dL\nPotassium (Kalium) 5.6 mmol/L"),
             ])
             ->assertRedirect(route('nurse.records.index', ['pesakit' => $patient->id]));
 
-        $this->assertDatabaseHas('medical_records', [
-            'patient_id' => $patient->id,
-            'recorded_by' => $nurse->id,
-            'hemoglobin' => 10.4,
-            'potassium' => 5.60,
-        ]);
+        $record = MedicalRecord::query()->firstOrFail();
+        $this->assertSame($patient->id, $record->patient_id);
+        $this->assertSame($nurse->id, $record->recorded_by);
+        $this->assertSame('2026-09-01', $record->examination_date->toDateString());
+        $this->assertSame('10.4', $record->hemoglobin);
+        $this->assertSame('5.60', $record->potassium);
+        $this->assertNull($record->wbc);
+        $this->assertNull($record->phosphate);
+        $this->assertNull($record->urea);
+
+        $report = MedicalReport::query()->first();
+        $this->assertNotNull($report);
+        $this->assertStringStartsWith('pesakit/'.$patient->id.'/', $report->path);
+        $this->assertTrue(Storage::disk('medical_reports')->exists($report->path));
 
         $this->actingAs($nurse)
             ->get(route('nurse.records.index', ['pesakit' => $patient->id]))
@@ -194,6 +231,31 @@ class ClinicWorkflowTest extends TestCase
                 ->has('records', 1)
                 ->where('records.0.potassium_needs_attention', true)
                 ->where('records.0.recorded_by', 'Sister Siti')
+                ->where('canWriteDoctorNote', false)
+                ->where('records.0.readings.1.key', 'wbc')
+                ->where('records.0.readings.1.value', null)
+                ->where('records.0.analysis.items.0.key', 'potassium')
+            );
+
+        $this->actingAs($nurse)
+            ->post(route('admin.records.doctor', $record), [
+                'nephrologist_notes' => 'Nota ini bukan untuk jururawat.',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->post(route('admin.records.doctor', $record), [
+                'nephrologist_notes' => 'Teruskan dialisis tiga kali seminggu. Pantau kalium.',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('patient.blood'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('records.0.nephrologist_notes', 'Teruskan dialisis tiga kali seminggu. Pantau kalium.')
+                ->where('records.0.nephrologist_name', 'Dr. Ahmad Farhan')
+                ->where('records.0.readings.1.value', null)
             );
     }
 
@@ -536,6 +598,12 @@ class ClinicWorkflowTest extends TestCase
             'hemoglobin' => 8.1,
             'potassium' => 5.9,
         ]);
+        MedicalRecord::query()->create([
+            'patient_id' => $patient->id,
+            'examination_date' => today()->subMonths(30),
+            'examination_type' => ExaminationType::Berkala,
+            'hemoglobin' => 9.4,
+        ]);
 
         $this->actingAs($owner)
             ->get(route('patient.blood', ['tempoh' => 6]))
@@ -548,7 +616,20 @@ class ClinicWorkflowTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->has('records', 2)
+                ->has('charts.hemoglobin', 2)
                 ->where('records.1.analysis.statuses.potassium', 'TINGGI')
+            )
+            ->assertDontSee('9.4');
+
+        $this->actingAs($owner)
+            ->get(route('patient.blood', ['tempoh' => 'semua']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('records', 3)
+                ->where('months', 0)
+                ->where('periodLabel', 'sepanjang masa')
+                ->has('charts.hemoglobin', 3)
+                ->where('charts.hemoglobin.0.value', 9.4)
             );
     }
 

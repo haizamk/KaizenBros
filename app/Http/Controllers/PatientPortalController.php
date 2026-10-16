@@ -10,6 +10,7 @@ use App\Models\PatientDocument;
 use App\Models\PatientMedication;
 use App\Support\BloodReportAnalysis;
 use App\Support\ClinicCharts;
+use App\Support\LabCatalog;
 use App\Support\MalayDate;
 use App\Support\TreatmentCalendar;
 use Illuminate\Http\Request;
@@ -85,24 +86,26 @@ class PatientPortalController extends Controller
     public function blood(Request $request): Response
     {
         $patient = $this->patient($request);
-        $months = $this->months($request);
+        $months = $this->bloodMonths($request);
         $records = $patient === null ? collect() : $this->records($patient);
-        $from = today()->subMonths($months)->toDateString();
-        $visible = $records->filter(fn (MedicalRecord $record): bool => $record->examination_date->toDateString() >= $from);
+        $visible = $months === 0
+            ? $records
+            : $records->filter(fn (MedicalRecord $record): bool => $record->examination_date->toDateString() >= today()->subMonths($months)->toDateString());
         $presented = BloodReportAnalysis::present($visible)->values();
+        $charts = [];
+
+        foreach (array_keys(LabCatalog::fields()) as $field) {
+            $charts[$field] = ClinicCharts::lab($visible, $field, 'd/m/y');
+        }
 
         return Inertia::render('pesakit/darah', [
             'patient' => $patient?->toPortalArray(),
             'months' => $months,
+            'periodLabel' => $months === 0 ? 'sepanjang masa' : $months.' bulan',
             'records' => $presented,
             'documents' => $this->documents($patient),
-            'charts' => [
-                'hemoglobin' => ClinicCharts::lab($visible, 'hemoglobin', 'd/m/y'),
-                'potassium' => ClinicCharts::lab($visible, 'potassium', 'd/m/y'),
-                'phosphate' => ClinicCharts::lab($visible, 'phosphate', 'd/m/y'),
-                'urea' => ClinicCharts::lab($visible, 'urea', 'd/m/y'),
-                'creatinine' => ClinicCharts::lab($visible, 'creatinine', 'd/m/y'),
-            ],
+            'charts' => $charts,
+            'chartSeries' => LabCatalog::chartSeries(),
         ]);
     }
 
@@ -170,7 +173,7 @@ class PatientPortalController extends Controller
     private function records(Patient $patient): Collection
     {
         return MedicalRecord::query()
-            ->with(['patient', 'recorder', 'report'])
+            ->with(['patient', 'recorder', 'nephrologist', 'report'])
             ->where('patient_id', $patient->id)
             ->orderBy('examination_date')
             ->get();
@@ -314,6 +317,15 @@ class PatientPortalController extends Controller
         }
 
         return "{$ahead} pesakit di hadapan anda.";
+    }
+
+    private function bloodMonths(Request $request): int
+    {
+        if ($request->query('tempoh') === 'semua') {
+            return 0;
+        }
+
+        return $this->months($request);
     }
 
     private function months(Request $request): int

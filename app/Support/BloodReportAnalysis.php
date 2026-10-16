@@ -8,17 +8,6 @@ use Illuminate\Support\Collection;
 class BloodReportAnalysis
 {
     /**
-     * @var array<string, array{name: string, unit: string, decimals: int}>
-     */
-    private const ANALYTES = [
-        'hemoglobin' => ['name' => 'Hemoglobin', 'unit' => 'g/dL', 'decimals' => 1],
-        'potassium' => ['name' => 'Kalium', 'unit' => 'mmol/L', 'decimals' => 2],
-        'phosphate' => ['name' => 'Fosfat', 'unit' => 'mmol/L', 'decimals' => 2],
-        'urea' => ['name' => 'Urea', 'unit' => 'mmol/L', 'decimals' => 1],
-        'creatinine' => ['name' => 'Kreatinin', 'unit' => 'µmol/L', 'decimals' => 1],
-    ];
-
-    /**
      * @param  array<string, float|null>  $values
      * @param  array<string, float|null>  $previous
      * @return array<string, mixed>
@@ -27,7 +16,7 @@ class BloodReportAnalysis
     {
         $items = [];
 
-        foreach (self::ANALYTES as $key => $meta) {
+        foreach (LabCatalog::fields() as $key => $meta) {
             $value = $values[$key] ?? null;
 
             if ($value === null) {
@@ -44,6 +33,7 @@ class BloodReportAnalysis
                 'status' => $status,
                 'status_label' => self::statusLabel($status),
                 'sentence' => self::sentence($key, $status),
+                'tip' => self::tip($key, $status),
                 'change' => $prior === null ? null : self::change($value, $prior, $meta['decimals']),
             ];
         }
@@ -87,7 +77,7 @@ class BloodReportAnalysis
         $values = [];
         $prior = [];
 
-        foreach (array_keys(self::ANALYTES) as $field) {
+        foreach (array_keys(LabCatalog::fields()) as $field) {
             $values[$field] = $record->{$field} === null ? null : (float) $record->{$field};
             $prior[$field] = $previous?->{$field} === null ? null : (float) $previous->{$field};
         }
@@ -109,6 +99,7 @@ class BloodReportAnalysis
             ->map(function (MedicalRecord $record) use (&$previous): array {
                 $prior = $previous[$record->patient_id] ?? null;
                 $row = $record->toPortalArray();
+                $row['readings'] = LabCatalog::readings($record);
                 $row['analysis'] = self::forRecord($record, $prior);
                 $previous[$record->patient_id] = $record;
 
@@ -147,7 +138,65 @@ class BloodReportAnalysis
                 $value > 150 => 'PERHATIAN',
                 default => 'BIASA',
             },
+            'wbc' => match (true) {
+                $value < 4 => 'RENDAH',
+                $value > 11 => 'TINGGI',
+                default => 'BIASA',
+            },
+            'platelet' => match (true) {
+                $value < 150 => 'RENDAH',
+                $value > 400 => 'TINGGI',
+                default => 'BIASA',
+            },
+            'egfr' => $value < 15 ? 'PERHATIAN' : 'BIASA',
+            'calcium' => match (true) {
+                $value < 2.1 => 'RENDAH',
+                $value > 2.6 => 'TINGGI',
+                default => 'BIASA',
+            },
+            'sodium' => match (true) {
+                $value < 135 => 'RENDAH',
+                $value > 145 => 'TINGGI',
+                default => 'BIASA',
+            },
+            'glucose' => match (true) {
+                $value < 3.9 => 'RENDAH',
+                $value > 11 => 'TINGGI',
+                $value > 7 => 'PERHATIAN',
+                default => 'BIASA',
+            },
+            'hba1c' => match (true) {
+                $value >= 9 => 'TINGGI',
+                $value >= 7 => 'PERHATIAN',
+                default => 'BIASA',
+            },
+            'cholesterol' => $value > 5.2 ? 'TINGGI' : 'BIASA',
+            'ldl' => $value > 2.6 ? 'TINGGI' : 'BIASA',
+            'hdl' => $value < 1 ? 'RENDAH' : 'BIASA',
+            'triglycerides' => $value > 1.7 ? 'TINGGI' : 'BIASA',
             default => 'BIASA',
+        };
+    }
+
+    private static function tip(string $key, string $status): string
+    {
+        if ($status === 'BIASA') {
+            return 'Teruskan rutin dialisis, ubat, dan pemakanan seperti yang dinasihatkan.';
+        }
+
+        return match ($key) {
+            'potassium' => 'Hadkan pisang, oren, kentang, dan air kelapa sehingga doktor menyemak semula. Jangan ubah ubat sendiri.',
+            'phosphate' => 'Ambil ubat pengikat fosfat bersama makanan jika ia telah dipreskripsi, dan kurangkan minuman berkarbonat.',
+            'hemoglobin' => 'Rehat jika letih. Maklumkan jururawat jika sesak nafas, pening, atau berdebar.',
+            'sodium' => 'Kurangkan garam dan makanan diproses. Jangan tambah garam di meja.',
+            'calcium' => 'Jangan tambah suplemen kalsium tanpa nasihat doktor.',
+            'glucose', 'hba1c' => 'Catat makanan bergula dan bincang bacaan ini semasa rawatan seterusnya.',
+            'cholesterol', 'ldl', 'hdl', 'triglycerides' => 'Pilih makanan yang kurang bergoreng dan bincang ubat kolesterol dengan doktor.',
+            'wbc' => 'Maklumkan jika demam, batuk, atau luka di akses dialisis.',
+            'platelet' => 'Berhati-hati dengan lebam atau pendarahan yang lambat berhenti.',
+            'egfr' => 'Bacaan fungsi buah pinggang yang rendah adalah biasa bagi pesakit dialisis. Doktor yang menilainya.',
+            'urea', 'creatinine' => 'Jangan langkau sesi dialisis. Sisa ini dibersihkan semasa rawatan.',
+            default => 'Bincang bacaan ini dengan jururawat pada sesi yang seterusnya.',
         };
     }
 
@@ -170,6 +219,35 @@ class BloodReportAnalysis
             'creatinine.TINGGI' => 'Kreatinin sangat tinggi. Nilai ini perlu perhatian doktor.',
             'creatinine.PERHATIAN' => 'Kreatinin tinggi. Ini biasa bagi pesakit dialisis.',
             'creatinine.BIASA' => 'Kreatinin berada dalam julat yang dipantau.',
+            'wbc.TINGGI' => 'Sel darah putih tinggi. Ini boleh menandakan jangkitan.',
+            'wbc.RENDAH' => 'Sel darah putih rendah. Badan mungkin kurang mampu melawan jangkitan.',
+            'wbc.BIASA' => 'Sel darah putih berada dalam julat yang dipantau.',
+            'platelet.TINGGI' => 'Platelet tinggi. Pembekuan darah perlu dipantau.',
+            'platelet.RENDAH' => 'Platelet rendah. Risiko lebam atau pendarahan lebih tinggi.',
+            'platelet.BIASA' => 'Platelet berada dalam julat yang dipantau.',
+            'egfr.PERHATIAN' => 'Fungsi buah pinggang rendah. Ini dijangka bagi pesakit dialisis dan dinilai oleh doktor.',
+            'egfr.BIASA' => 'eGFR berada dalam julat yang dipantau.',
+            'calcium.TINGGI' => 'Kalsium tinggi. Jangan tambah suplemen tanpa nasihat doktor.',
+            'calcium.RENDAH' => 'Kalsium rendah. Tulang dan otot perlu dipantau.',
+            'calcium.BIASA' => 'Kalsium berada dalam julat yang dipantau.',
+            'sodium.TINGGI' => 'Natrium tinggi. Garam dan dahaga perlu dipantau.',
+            'sodium.RENDAH' => 'Natrium rendah. Minuman dan garam perlu disemak.',
+            'sodium.BIASA' => 'Natrium berada dalam julat yang dipantau.',
+            'glucose.TINGGI' => 'Gula darah tinggi. Bacaan ini perlu perhatian.',
+            'glucose.PERHATIAN' => 'Gula darah meningkat. Catat pemakanan dan bincang semasa rawatan.',
+            'glucose.RENDAH' => 'Gula darah rendah. Ambil perhatian jika berpeluh, menggigil, atau pening.',
+            'glucose.BIASA' => 'Gula darah berada dalam julat yang dipantau.',
+            'hba1c.TINGGI' => 'HbA1c tinggi. Kawalan gula dalam beberapa bulan lalu perlu disemak.',
+            'hba1c.PERHATIAN' => 'HbA1c meningkat. Kawalan gula perlu dipantau.',
+            'hba1c.BIASA' => 'HbA1c berada dalam julat yang dipantau.',
+            'cholesterol.TINGGI' => 'Kolesterol total tinggi.',
+            'cholesterol.BIASA' => 'Kolesterol total berada dalam julat yang dipantau.',
+            'ldl.TINGGI' => 'LDL tinggi. Kolesterol jahat ini perlu dipantau.',
+            'ldl.BIASA' => 'LDL berada dalam julat yang dipantau.',
+            'hdl.RENDAH' => 'HDL rendah. Kolesterol baik ini kurang daripada julat yang dipantau.',
+            'hdl.BIASA' => 'HDL berada dalam julat yang dipantau.',
+            'triglycerides.TINGGI' => 'Trigliserida tinggi.',
+            'triglycerides.BIASA' => 'Trigliserida berada dalam julat yang dipantau.',
             default => 'Bacaan ini perlu disemak oleh kakitangan.',
         };
     }
@@ -193,7 +271,7 @@ class BloodReportAnalysis
      */
     private static function summary(array $items, array $high, array $watch): string
     {
-        $disclaimer = 'Analisa ini bukan diagnosis. Ia membantu membaca nombor yang dimasukkan oleh kakitangan.';
+        $disclaimer = 'Analisa ini bukan diagnosis. Ia membaca nombor yang ada sahaja. Nilai yang tiada dalam PDF dibiarkan kosong.';
 
         if ($items === []) {
             return 'Tiada nombor untuk dianalisa. '.$disclaimer;

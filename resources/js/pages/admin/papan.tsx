@@ -129,6 +129,9 @@ export default function PapanAdmin({
                             {item.label}
                         </button>
                     ))}
+                    <Link href="/jururawat/darah" className="inline-flex min-h-12 shrink-0 items-center rounded-2xl border border-[#1F385C] bg-[#132238] px-4 font-black">
+                        Rekod darah
+                    </Link>
                     <Link href="/jururawat/tetapan" className="inline-flex min-h-12 shrink-0 items-center rounded-2xl border border-[#1F385C] bg-[#132238] px-4 font-black">
                         Tetapan
                     </Link>

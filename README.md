@@ -4,7 +4,7 @@ Sistem pengurusan pusat dialisis KaizenBros, fasa pembangunan baharu. Aplikasi i
 
 Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, rekod darah, carta berat dan tekanan darah, pautan peringatan WhatsApp, portal pesakit, dan senarai pentadbir. Halaman depan ada paparan gelap (lalai) dan cerah, empat saiz teks dengan lalai sederhana, peta Google pusat di Semenyih, dan banner promosi pesakit baru, van percuma, serta jawatan jururawat. Borang pesakit baru mengira umur dan jantina daripada nombor kad pengenalan, menerima salinan kad pengenalan, surat doktor, dan dokumen lain, kemudian menghantar permohonan kepada pentadbir untuk diluluskan atau ditolak. Pemasangan VPS belum dibuat.
 
-Dokumen pesakit (PDF dan gambar) disimpan dalam folder peribadi `storage/app/patient-documents`. Salinan imbasan laporan perubatan disimpan berasingan dalam `storage/app/medical-reports`. Kedua-dua folder tidak dibuka dari internet. Muat turun hanya melalui portal yang dibenarkan. Rekod darah disimpan dan tidak dipadam. Analisa setiap bacaan, terutamanya yang tinggi, dikira di pelayan daripada nombor yang ditaip oleh kakitangan. Fail imbasan tidak dihantar ke perkhidmatan luar. Analisa itu bukan diagnosis. Halaman pesakit memaparkan graf perbandingan hemoglobin, kalium, fosfat, urea, dan kreatinin.
+Dokumen pesakit (PDF dan gambar) disimpan dalam folder peribadi `storage/app/patient-documents`. Laporan darah PDF, paling besar 100 MB, disimpan dalam `storage/app/medical-reports/pesakit/{id}` dan tidak dipadam. Kedua-dua folder tidak dibuka dari internet. Muat turun hanya melalui portal yang dibenarkan. Sistem membaca nombor yang tercetak dalam PDF. Nilai yang tiada dikosongkan dan tiada angka diandaikan. Analisa serta tip dikira di pelayan daripada nombor yang ada sahaja. Doktor nefrologi menulis analisa khas secara berasingan. Fail tidak dihantar ke perkhidmatan luar. Analisa automatik itu bukan diagnosis. Halaman pesakit memaparkan graf setiap bacaan yang ada, untuk 6, 12, 24 bulan, dan sepanjang masa.
 
 ## Jalankan secara tempatan
 
@@ -34,7 +34,7 @@ Akaun ini hanya untuk pembangunan.
 | Pentadbir | admin@kaizenbros.com.my | Admin@2026 |
 | Pesakit | tan.ahkow@demo.kaizenbros.my | Pesakit@2026 |
 
-Pesakit demo Tan Ah Kow mempunyai sesi hari ini, sejarah berat dan tekanan darah, keputusan darah, dan dua ubat aktif. Portal pesakit dipecahkan kepada sesi, jadual, ubat, timbang, rekod dialisis, dan rekod darah. Graf darah serta berat boleh dibanding selama 6, 12, atau 24 bulan. Berat dan tekanan darah, termasuk bacaan semasa dialisis, hanya direkodkan oleh jururawat atau pentadbir. Jururawat boleh daftar masuk, mula, dan tamat sesi, serta menyimpan rekod darah. Butang WhatsApp hanya membuka perbualan. Ia tidak menghantar mesej sendiri. Pesakit hanya melihat rekod sendiri.
+Pesakit demo Tan Ah Kow mempunyai sesi hari ini, sejarah berat dan tekanan darah, keputusan darah, dan dua ubat aktif. Portal pesakit dipecahkan kepada sesi, jadual, ubat, timbang, rekod dialisis, dan rekod darah. Graf darah boleh dibanding selama 6, 12, 24 bulan, dan sepanjang masa. Graf berat serta tekanan darah boleh dibanding selama 6, 12, atau 24 bulan. Berat dan tekanan darah, termasuk bacaan semasa dialisis, hanya direkodkan oleh jururawat atau pentadbir. Jururawat boleh daftar masuk, mula, dan tamat sesi, serta menyimpan rekod darah. Butang WhatsApp hanya membuka perbualan. Ia tidak menghantar mesej sendiri. Pesakit hanya melihat rekod sendiri.
 
 ## Ujian
 

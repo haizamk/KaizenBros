@@ -42,6 +42,7 @@ export default function TrendChart({
         );
     }
 
+    const latest = usable[0]?.points[usable[0].points.length - 1];
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = max - min || 1;
@@ -54,8 +55,18 @@ export default function TrendChart({
 
     return (
         <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
-            <h3 className="text-xl font-black">{title}</h3>
-            <p className="text-sm text-slate-300">{unit}</p>
+            <div className="flex items-end justify-between gap-3">
+                <div>
+                    <h3 className="text-xl font-black">{title}</h3>
+                    <p className="text-sm text-slate-300">{unit}</p>
+                </div>
+                {latest ? (
+                    <p className="text-right text-3xl font-black" style={{ color: usable[0].color }}>
+                        {latest.value}
+                        <span className="block text-xs font-bold text-slate-300">{latest.label}</span>
+                    </p>
+                ) : null}
+            </div>
             <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-40 w-full sm:h-44" role="img" aria-label={title}>
                 {usable.map((item) => {
                     const aligned = labels.map((label) => item.points.find((point) => point.label === label)?.value ?? null);
