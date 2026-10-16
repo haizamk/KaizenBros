@@ -44,6 +44,7 @@ return [
         'language' => 'eng',
         'pdftoppm' => env('LAB_PDF_PDFTOPPM', '/usr/bin/pdftoppm'),
         'tesseract' => env('LAB_PDF_TESSERACT', '/usr/bin/tesseract'),
+        'working_directory' => storage_path('app'),
     ],
 
     'demo_accounts' => [

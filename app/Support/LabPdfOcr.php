@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Process;
 use Throwable;
 
 class LabPdfOcr
@@ -14,7 +13,8 @@ class LabPdfOcr
             return false;
         }
 
-        return is_executable((string) config('kaizenbros.lab_pdf_ocr.pdftoppm'))
+        return LabPdfProcess::allowed()
+            && is_executable((string) config('kaizenbros.lab_pdf_ocr.pdftoppm'))
             && is_executable((string) config('kaizenbros.lab_pdf_ocr.tesseract'));
     }
 
@@ -33,7 +33,7 @@ class LabPdfOcr
         $prefix = $directory.'/page';
 
         try {
-            $render = Process::timeout((int) config('kaizenbros.lab_pdf_ocr.timeout_seconds'))->run([
+            $render = LabPdfProcess::runner((int) config('kaizenbros.lab_pdf_ocr.timeout_seconds'))->run([
                 (string) config('kaizenbros.lab_pdf_ocr.pdftoppm'),
                 '-png',
                 '-r',
@@ -55,7 +55,7 @@ class LabPdfOcr
             $chunks = [];
 
             foreach ($pages as $page) {
-                $ocr = Process::timeout(60)->run([
+                $ocr = LabPdfProcess::runner(60)->run([
                     (string) config('kaizenbros.lab_pdf_ocr.tesseract'),
                     $page,
                     'stdout',

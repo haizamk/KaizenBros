@@ -79,7 +79,7 @@ class MedicalRecordController extends Controller
 
         if ($parsed['found'] === 0) {
             $message = match (true) {
-                $parsed['ocr_attempted'] && ! $parsed['ocr_available'] => 'PDF imbasan tidak dapat dibaca kerana OCR belum dipasang pada pelayan.',
+                $parsed['ocr_attempted'] && ! $parsed['ocr_available'] => 'PDF imbasan tidak dapat dibaca kerana OCR tidak tersedia pada pelayan (proc_open dilumpuhkan atau poppler/tesseract tiada). Hubungi pentadbir sistem.',
                 $parsed['ocr_attempted'] => 'Tiada keputusan darah dibaca walaupun OCR dijalankan. Semak kualiti imbasan atau isi tarikh dan semak semula.',
                 $parsed['has_text'] => 'Tiada keputusan darah dibaca daripada PDF ini. Tiada nombor diandaikan.',
                 default => 'PDF ini tidak mengandungi teks yang boleh dibaca. Ia mungkin imbasan gambar. Tiada nombor diandaikan.',

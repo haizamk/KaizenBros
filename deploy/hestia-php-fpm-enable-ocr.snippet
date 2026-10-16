@@ -1,0 +1,4 @@
+; Tambah pada akhir pool [kaizenbros.vividworks.my] jika OCR PDF gagal melalui web
+; (proc_open dilumpuhkan dalam php.ini FPM global). Selepas sunting:
+;   sudo systemctl reload php8.5-fpm
+php_admin_value[disable_functions] = pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wifcontinued,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority

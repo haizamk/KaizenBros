@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Process;
 use Smalot\PdfParser\Parser;
 use Throwable;
 
@@ -443,12 +442,12 @@ class LabPdfReader
 
     private function popplerText(string $path): string
     {
-        if ($path === '' || ! is_file($path) || ! is_executable('/usr/bin/pdftotext')) {
+        if ($path === '' || ! is_file($path) || ! LabPdfProcess::allowed() || ! is_executable('/usr/bin/pdftotext')) {
             return '';
         }
 
         try {
-            $result = Process::timeout(30)->run([
+            $result = LabPdfProcess::runner(30)->run([
                 '/usr/bin/pdftotext',
                 '-layout',
                 '-enc',
