@@ -226,8 +226,8 @@ export function NursePortal({
   onStaffLogout
 }: NursePortalProps) {
   // Navigation tabs:
-  // 🏠 Hari Ini, ⏱️ Ringkasan Syif, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Rekod Darah & Analisa, ⚙️ Tetapan
-  const [activeNav, setActiveNav] = useState<'hari_ini' | 'shift_overview' | 'jadual' | 'pesakit' | 'rekod_darah' | 'tetapan'>('hari_ini');
+  // 🏠 Hari Ini, ⏱️ Ringkasan Syif, 📅 Jadual Rawatan, 👥 Pesakit, 🩺 Sesi Dialisis, 🩺 Rekod Darah & Analisa, ⚙️ Tetapan
+  const [activeNav, setActiveNav] = useState<'hari_ini' | 'shift_overview' | 'jadual' | 'pesakit' | 'sesi' | 'rekod_darah' | 'tetapan'>('hari_ini');
 
   // Subtle loading animation key for database synchronization feedback
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
@@ -782,33 +782,7 @@ export function NursePortal({
   const [customTestStatus, setCustomTestStatus] = useState<string>('NORMAL');
   const [otherTestsList, setOtherTestsList] = useState<any[]>([]);
 
-  // Helper to find patient's last dialysis post weight before the current session
-  const findPatientLastDialysisWeight = (patientId: number, currentSessionId?: number): number => {
-    // 1. From session itself if already recorded
-    const sessionObj = sessions.find(sess => sess.id === currentSessionId);
-    if (sessionObj?.last_post_weight_kg && sessionObj.last_post_weight_kg > 0) {
-      return Number(sessionObj.last_post_weight_kg);
-    }
-    // 2. From patient object
-    const patientObj = patientsList.find(p => p.id === patientId);
-    if (patientObj?.last_post_weight_kg && patientObj.last_post_weight_kg > 0) {
-      return Number(patientObj.last_post_weight_kg);
-    }
-    // 3. From any previous session of this patient with post_weight_kg or pre_weight_kg
-    const prevSessions = sessions
-      .filter(sess => sess.patient_id === patientId && sess.id !== currentSessionId && (sess.post_weight_kg || sess.pre_weight_kg))
-      .sort((a, b) => new Date(b.scheduled_date || 0).getTime() - new Date(a.scheduled_date || 0).getTime());
-    if (prevSessions.length > 0) {
-      const prev = prevSessions[0];
-      return Number(prev.post_weight_kg || prev.pre_weight_kg);
-    }
-    // 4. Fallback based on dry weight + 0.3
-    const dry = sessionObj?.dry_weight_kg || patientObj?.dry_weight_kg || 75.0;
-    return Number((dry + 0.3).toFixed(1));
-  };
-
   // Check-In Form Fields
-  const [checkInLastDialysisWeight, setCheckInLastDialysisWeight] = useState<string>('74.2');
   const [checkInWeight, setCheckInWeight] = useState<string>('76.4');
   const [checkInSystolic, setCheckInSystolic] = useState<string>('148');
   const [checkInDiastolic, setCheckInDiastolic] = useState<string>('82');
@@ -816,7 +790,7 @@ export function NursePortal({
   const [checkInSelectedChair, setCheckInSelectedChair] = useState<string>('A-01');
   const lastCheckInSessionIdRef = useRef<number | null>(null);
 
-  // Sync selected chair & last weight ONLY once when a patient Check-In modal opens, without auto-resetting every second
+  // Sync selected chair ONLY once when a patient Check-In modal opens, without auto-resetting every second
   useEffect(() => {
     if (selectedSessionForCheckIn) {
       if (lastCheckInSessionIdRef.current !== selectedSessionForCheckIn.id) {
@@ -834,10 +808,6 @@ export function NursePortal({
                         INITIAL_CHAIRS.some(c => c.chair_number === candidate) && 
                         !activeChairs.has(candidate);
         setCheckInSelectedChair(isValid ? candidate : firstFree);
-
-        // Initialize last dialysis weight (sebelum sesi semasa)
-        const lastW = selectedSessionForCheckIn.last_post_weight_kg ? Number(selectedSessionForCheckIn.last_post_weight_kg) : findPatientLastDialysisWeight(selectedSessionForCheckIn.patient_id, selectedSessionForCheckIn.id);
-        setCheckInLastDialysisWeight(String(lastW));
       }
     } else {
       lastCheckInSessionIdRef.current = null;
@@ -853,9 +823,8 @@ export function NursePortal({
   const [finishDiastolic, setFinishDiastolic] = useState<string>('76');
   const [showFinishConfirm, setShowFinishConfirm] = useState<boolean>(false);
 
-  // Dedicated Weight Management State for Nurse (Pra, Selepas & Last Dialisis)
+  // Dedicated Weight Management State for Nurse (Pra & After Dialisis)
   const [weightModalSession, setWeightModalSession] = useState<DialysisSession | null>(null);
-  const [weightModalLastPostWeight, setWeightModalLastPostWeight] = useState<string>('74.2');
   const [weightModalPreWeight, setWeightModalPreWeight] = useState<number>(75.0);
   const [weightModalPostWeight, setWeightModalPostWeight] = useState<string>('');
   const [weightModalPreSys, setWeightModalPreSys] = useState<string>('138');
@@ -863,16 +832,12 @@ export function NursePortal({
   const [weightModalPostSys, setWeightModalPostSys] = useState<string>('124');
   const [weightModalPostDia, setWeightModalPostDia] = useState<string>('78');
   const [weightModalStatus, setWeightModalStatus] = useState<SessionStatus>('SEDANG_DIALISIS');
-  const [weightModalNurseNotes, setWeightModalNurseNotes] = useState<string>('');
   const [weightModalError, setWeightModalError] = useState<string | null>(null);
 
   const openWeightModalForSession = (s: DialysisSession) => {
     setWeightModalSession(s);
-    const lastW = s.last_post_weight_kg ? Number(s.last_post_weight_kg) : findPatientLastDialysisWeight(s.patient_id, s.id);
-    setWeightModalLastPostWeight(String(lastW));
     setWeightModalPreWeight(s.pre_weight_kg ? Number(s.pre_weight_kg) : Number((s.dry_weight_kg + 1.8).toFixed(1)));
     setWeightModalPostWeight(s.post_weight_kg ? String(s.post_weight_kg) : '');
-    setWeightModalNurseNotes(s.nurse_notes || s.notes || '');
     
     if (s.pre_bp && s.pre_bp.includes('/')) {
       const parts = s.pre_bp.split('/');
@@ -1696,15 +1661,11 @@ export function NursePortal({
 
     const finalChairNumber = checkInSelectedChair || selectedSessionForCheckIn.chair_number || 'A-01';
     const realSessionId = selectedSessionForCheckIn.id > 0 ? selectedSessionForCheckIn.id : Date.now();
-    const lastPostNum = parseFloat(checkInLastDialysisWeight);
-    const validLastPost = !isNaN(lastPostNum) && lastPostNum > 0 ? lastPostNum : selectedSessionForCheckIn.last_post_weight_kg;
-
     const updatedSess: DialysisSession = {
       ...selectedSessionForCheckIn,
       id: realSessionId,
       scheduled_date: todayDateIso,
       chair_number: finalChairNumber,
-      last_post_weight_kg: validLastPost,
       pre_weight_kg: preWeight,
       pre_bp: preBpStr,
       current_bp: preBpStr,
@@ -1741,25 +1702,6 @@ export function NursePortal({
         localStorage.setItem('kaizenbros_sessions', JSON.stringify(nextSessions));
       } catch {}
       return nextSessions;
-    });
-
-    // Sync patient's latest weight, BP, and last_post_weight_kg
-    setPatientsList(prev => {
-      const next = prev.map(p => {
-        if (p.id === selectedSessionForCheckIn.patient_id) {
-          return {
-            ...p,
-            latest_weight_kg: preWeight,
-            latest_bp: preBpStr,
-            last_post_weight_kg: validLastPost || p.last_post_weight_kg
-          };
-        }
-        return p;
-      });
-      try {
-        localStorage.setItem('kaizenbros_patients', JSON.stringify(next));
-      } catch {}
-      return next;
     });
 
     // Also sync queueList assigned_chair
@@ -1940,7 +1882,7 @@ export function NursePortal({
     setSelectedSessionForActive(null);
   };
 
-  // ACTION 5: NURSE INPUTS / EDITS PRE, POST & LAST DIALYSIS WEIGHTS
+  // ACTION 5: NURSE INPUTS / EDITS PRE & POST DIALYSIS WEIGHTS
   const handleSaveNurseWeights = () => {
     if (!weightModalSession) return;
 
@@ -1955,18 +1897,12 @@ export function NursePortal({
       return;
     }
 
-    const lastPostNum = parseFloat(weightModalLastPostWeight);
-    const validLastPost = !isNaN(lastPostNum) && lastPostNum > 0 ? lastPostNum : weightModalSession.last_post_weight_kg;
-
     const preBpStr = `${weightModalPreSys.trim() || '138'}/${weightModalPreDia.trim() || '82'}`;
     const postBpStr = postNum !== undefined ? `${weightModalPostSys.trim() || '124'}/${weightModalPostDia.trim() || '78'}` : undefined;
     const actualUf = postNum !== undefined ? Number((weightModalPreWeight - postNum).toFixed(2)) : weightModalSession.actual_uf_litres;
-    const targetUf = Number((weightModalPreWeight - weightModalSession.dry_weight_kg).toFixed(2));
 
     // Final status: if post-weight entered and currently not completed, can change to completed if chosen
     const finalStatus: SessionStatus = weightModalStatus;
-    const isNowFinished = finalStatus === 'SUDAH_SELESAI' || finalStatus === 'SELESAI';
-    const currentTimeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true });
 
     let updatedSessionObj: DialysisSession | null = null;
 
@@ -1975,19 +1911,14 @@ export function NursePortal({
         if (s.id === weightModalSession.id) {
           updatedSessionObj = {
             ...s,
-            last_post_weight_kg: validLastPost,
             pre_weight_kg: weightModalPreWeight,
             post_weight_kg: postNum,
             pre_bp: preBpStr,
             post_bp: postBpStr || s.post_bp,
             current_bp: postBpStr || preBpStr,
-            target_uf_litres: targetUf,
             actual_uf_litres: actualUf,
             status: finalStatus,
-            actual_end_time: isNowFinished ? (s.actual_end_time || currentTimeStr) : s.actual_end_time,
             nurse_in_charge: currentNurseName,
-            nurse_notes: weightModalNurseNotes.trim() || s.nurse_notes,
-            notes: weightModalNurseNotes.trim() ? (s.notes ? `${s.notes}\n${weightModalNurseNotes}` : weightModalNurseNotes) : s.notes,
             updated_at: new Date().toISOString()
           };
           return updatedSessionObj;
@@ -2014,7 +1945,6 @@ export function NursePortal({
           if (p.id === updatedSessionObj!.patient_id) {
             return {
               ...p,
-              last_post_weight_kg: validLastPost || p.last_post_weight_kg,
               latest_weight_kg: postNum ?? weightModalPreWeight,
               latest_bp: postBpStr || preBpStr
             };
@@ -2027,42 +1957,16 @@ export function NursePortal({
         return next;
       });
 
-      // Clear from arrival queue if finished
-      if (isNowFinished) {
-        setQueueList(prev => {
-          const next = prev.filter(q => q.patient_id !== updatedSessionObj!.patient_id);
-          try {
-            localStorage.setItem('kaizenbros_queue', JSON.stringify(next));
-          } catch {}
-          return next;
-        });
-        // Clear related alerts
-        setAlerts(prev => prev.filter(a => a.session_id !== updatedSessionObj!.id && a.patient_name !== updatedSessionObj!.patient_name));
-      }
-
       if (onAuditLog) {
         onAuditLog(
           'KEMASKINI_BERAT_JURURAWAT',
-          `Jururawat ${currentNurseName} merekodkan: ${updatedSessionObj.patient_name} - Berat Sesi Lepas: ${validLastPost || '-'}kg, Berat Pra: ${weightModalPreWeight}kg, Berat Selepas: ${postNum !== undefined ? `${postNum}kg` : 'Belum diisi'}, Cecair Ditapis: ${actualUf !== undefined ? `${actualUf}L` : '-'}. Status: ${finalStatus}`
+          `Jururawat ${currentNurseName} merekodkan: ${updatedSessionObj.patient_name} - Berat Pra: ${weightModalPreWeight}kg, Berat Selepas: ${postNum !== undefined ? `${postNum}kg` : 'Belum diisi'}, Cecair Ditapis: ${actualUf !== undefined ? `${actualUf}L` : '-'}.`
         );
       }
 
-      showToast(`✓ Data berat & BP ${updatedSessionObj.patient_name} (Pra: ${weightModalPreWeight}kg, Selepas: ${postNum !== undefined ? `${postNum}kg` : '-'}) berjaya diselaraskan.`);
+      showToast(`✓ Data berat ${updatedSessionObj.patient_name} (Pra: ${weightModalPreWeight}kg, Selepas: ${postNum !== undefined ? `${postNum}kg` : '-'}) berjaya disimpan.`);
       setWeightModalSession(null);
     }
-  };
-
-  const handleFinishSessionFromWeightModal = () => {
-    if (!weightModalSession) return;
-    const postNum = parseFloat(weightModalPostWeight);
-    if (isNaN(postNum) || postNum <= 0) {
-      setWeightModalError('⚠️ Sila masukkan nilai Berat Selepas Dialisis yang sah untuk menamatkan sesi rawatan.');
-      return;
-    }
-    setWeightModalStatus('SUDAH_SELESAI');
-    setTimeout(() => {
-      handleSaveNurseWeights();
-    }, 60);
   };
 
   return (
@@ -2200,6 +2104,18 @@ export function NursePortal({
           >
             <Users className="w-4 h-4" />
             <span>👥 Pesakit</span>
+          </button>
+
+          <button
+            onClick={() => setActiveNav('sesi')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center space-x-2 whitespace-nowrap cursor-pointer ${
+              activeNav === 'sesi'
+                ? 'bg-cyan-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-850'
+            }`}
+          >
+            <Stethoscope className="w-4 h-4" />
+            <span>🩺 Sesi Dialisis</span>
           </button>
 
           <button
@@ -2521,12 +2437,12 @@ export function NursePortal({
                           <button
                             onClick={() => {
                               const target = todaySessions.find(s => s.patient_id === item.patient_id) || sessions.find(s => s.patient_id === item.patient_id);
-                              if (target) openWeightModalForSession(target);
+                              if (target) setSelectedSessionForActive(target);
                             }}
                             className="w-full py-2 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
                           >
                             <Activity className="w-3.5 h-3.5" />
-                            <span>Buka Data Berat & Sesi ({item.assigned_chair})</span>
+                            <span>Buka Pemantauan Sesi ({item.assigned_chair})</span>
                           </button>
                         ) : null}
                       </div>
@@ -2558,7 +2474,7 @@ export function NursePortal({
                         <button
                           onClick={() => {
                             const targetSession = todaySessions.find(s => s.id === a.session_id) || sessions.find(s => s.id === a.session_id);
-                            if (targetSession) openWeightModalForSession(targetSession);
+                            if (targetSession) setSelectedSessionForActive(targetSession);
                           }}
                           className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-2.5 py-1 rounded-lg ml-2 flex-shrink-0 cursor-pointer"
                         >
@@ -2922,72 +2838,38 @@ export function NursePortal({
                             </div>
                           </div>
 
-                          {/* Middle info - Comprehensive Clinical Weight, BP & Fluid Balance */}
-                          {(() => {
-                            const lastW = s.last_post_weight_kg || findPatientLastDialysisWeight(s.patient_id, s.id);
-                            const preW = s.pre_weight_kg;
-                            const postW = s.post_weight_kg;
-                            const dryW = s.dry_weight_kg;
-                            const hasBothWeights = Boolean(preW && postW);
-                            const ufRemoved = hasBothWeights ? (preW! - postW!).toFixed(2) : preW ? (preW - dryW).toFixed(2) : null;
-                            const diffAfterDry = postW ? (postW - dryW).toFixed(2) : null;
+                          {/* Middle info */}
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-slate-900 p-2 rounded-lg">
+                              <span className="text-slate-400 block">Masa Temujanji</span>
+                              <span className="font-bold text-white text-sm">{s.scheduled_time}</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-lg">
+                              <span className="text-slate-400 block">Berat Kering</span>
+                              <span className="font-bold text-emerald-400 text-sm">{s.dry_weight_kg} kg</span>
+                            </div>
 
-                            return (
-                              <div className="mt-3 space-y-2">
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                  <div className="bg-slate-900 p-2 rounded-lg border border-slate-800/80">
-                                    <span className="text-slate-400 block text-[10px] font-semibold">Masa Temujanji</span>
-                                    <span className="font-bold text-white text-sm">{s.scheduled_time}</span>
-                                  </div>
-                                  <div className="bg-slate-900 p-2 rounded-lg border border-slate-800/80">
-                                    <span className="text-slate-400 block text-[10px] font-semibold">Berat Kering Sasaran</span>
-                                    <span className="font-bold text-emerald-400 text-sm font-mono">{dryW} kg</span>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-1.5 text-center bg-slate-900/90 p-2 rounded-xl border border-slate-800 text-[11px]">
-                                  <div>
-                                    <span className="text-slate-400 block text-[9.5px]">Sesi Lepas</span>
-                                    <strong className="text-slate-200 font-mono font-bold">{lastW ? `${lastW}kg` : '--'}</strong>
-                                  </div>
-                                  <div>
-                                    <span className="text-amber-400 block text-[9.5px]">Pra-Dialisis</span>
-                                    <strong className="text-amber-300 font-mono font-black">{preW ? `${preW}kg` : '--'}</strong>
-                                  </div>
-                                  <div>
-                                    <span className="text-cyan-400 block text-[9.5px]">After (Selepas)</span>
-                                    <strong className="text-cyan-300 font-mono font-black">{postW ? `${postW}kg` : '[ -- ]'}</strong>
-                                  </div>
-                                </div>
-
-                                {/* UF Calculations & BP Summary */}
-                                <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-900/60 p-2 rounded-xl border border-slate-800/60">
-                                  <div>
-                                    <span className="text-slate-400 block text-[9.5px]">
-                                      {hasBothWeights ? 'UF Ditarik (Pre-After)' : 'Sasaran UF (Pre-Kering)'}
-                                    </span>
-                                    <strong className="text-emerald-400 font-mono font-black">
-                                      {ufRemoved ? `${ufRemoved} kg/L` : '--'}
-                                    </strong>
-                                    {diffAfterDry && (
-                                      <span className="text-[9.5px] block font-mono text-cyan-300">
-                                        Beza Kering: {Number(diffAfterDry) >= 0 ? `+${diffAfterDry}` : diffAfterDry}kg
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <span className="text-slate-400 block text-[9.5px]">Tekanan Darah (BP)</span>
-                                    <strong className="text-cyan-400 font-mono font-bold block truncate">
-                                      {s.pre_bp || '--'} {s.post_bp ? `➔ ${s.post_bp}` : ''}
-                                    </strong>
-                                    <span className="text-[9.5px] text-slate-400 block">
-                                      {s.post_bp ? 'Pra ➔ Selepas' : 'Pra-Dialisis'}
-                                    </span>
-                                  </div>
-                                </div>
+                            {s.pre_weight_kg && (
+                              <div className="bg-slate-900 p-2 rounded-lg">
+                                <span className="text-slate-400 block">Berat Sebelum</span>
+                                <span className="font-bold text-white text-sm">{s.pre_weight_kg} kg</span>
                               </div>
-                            );
-                          })()}
+                            )}
+
+                            {s.post_weight_kg && (
+                              <div className="bg-slate-900 p-2 rounded-lg">
+                                <span className="text-slate-400 block">Berat Selepas</span>
+                                <span className="font-bold text-cyan-300 text-sm">{s.post_weight_kg} kg</span>
+                              </div>
+                            )}
+
+                            {s.pre_bp && (
+                              <div className="bg-slate-900 p-2 rounded-lg">
+                                <span className="text-slate-400 block">Tekanan Darah</span>
+                                <span className="font-bold text-cyan-400 text-sm">{s.current_bp || s.pre_bp}</span>
+                              </div>
+                            )}
+                          </div>
 
                           {/* Status Badge & 4-Hour Countdown */}
                           <div className="mt-3 space-y-1.5">
@@ -3011,9 +2893,7 @@ export function NursePortal({
                                 const validChair = s.chair_number && s.chair_number !== '-' && s.chair_number !== 'Belum' && INITIAL_CHAIRS.some(c => c.chair_number === s.chair_number) && !activeChairs.has(s.chair_number);
                                 setCheckInSelectedChair(validChair ? s.chair_number : firstFree);
                                 setSelectedSessionForCheckIn(s);
-                                setCheckInWeight(s.pre_weight_kg ? String(s.pre_weight_kg) : s.dry_weight_kg ? (s.dry_weight_kg + 1.4).toFixed(1) : '76.4');
-                                const lastW = s.last_post_weight_kg || findPatientLastDialysisWeight(s.patient_id, s.id);
-                                setCheckInLastDialysisWeight(String(lastW));
+                                setCheckInWeight(s.dry_weight_kg ? (s.dry_weight_kg + 1.4).toFixed(1) : '76.4');
                                 setCheckInSystolic('148');
                                 setCheckInDiastolic('82');
                               } else if (isHadir) {
@@ -3028,7 +2908,7 @@ export function NursePortal({
                                   if (foundPatient) setSelectedPatientForDetail(foundPatient);
                                 }
                               } else {
-                                openWeightModalForSession(s);
+                                setSelectedSessionForActive(s);
                               }
                             }}
                             className={`w-full min-h-[50px] rounded-xl transition-all flex flex-col items-center justify-center p-2.5 shadow-lg border cursor-pointer hover:scale-[1.01] active:scale-99 font-black text-xs sm:text-sm ${
@@ -3044,15 +2924,15 @@ export function NursePortal({
                             <div className="flex items-center space-x-1.5 tracking-wider uppercase">
                               {isBelum && <UserCheck className="w-4 h-4" />}
                               {isHadir && <Stethoscope className="w-4 h-4" />}
-                              {isSedang && <Scale className="w-4 h-4" />}
+                              {isSedang && <Activity className="w-4 h-4" />}
                               {isSelesai && <FileText className="w-4 h-4" />}
                               <span className="font-extrabold text-sm">[ BUKA ]</span>
                             </div>
                             <span className="text-[10px] font-bold opacity-90 mt-0.5 font-mono">
                               {isBelum && 'Daftar Masuk / Check-In'}
                               {isHadir && 'Tugas Stesen & Sesi'}
-                              {isSedang && 'Urus Berat, BP & Sesi'}
-                              {isSelesai && 'Urus Data Berat & Profil'}
+                              {isSedang && 'Urus Sesi & Vitals'}
+                              {isSelesai && 'Urus Profil & Rekod Sesi'}
                             </span>
                           </button>
 
@@ -3637,11 +3517,11 @@ export function NursePortal({
                             <div className="flex items-center justify-end gap-2 pt-1">
                               {matchingSession ? (
                                 <button
-                                  onClick={() => openWeightModalForSession(matchingSession)}
+                                  onClick={() => setSelectedSessionForActive(matchingSession)}
                                   className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5"
                                 >
-                                  <Scale className="w-4 h-4" />
-                                  <span>Buka Data Berat & Sesi (Kerusi {matchingSession.chair_number})</span>
+                                  <Stethoscope className="w-4 h-4" />
+                                  <span>Buka Pemantauan Sesi (Kerusi {matchingSession.chair_number})</span>
                                 </button>
                               ) : (
                                 <button
@@ -3699,7 +3579,7 @@ export function NursePortal({
                         key={chair.id}
                         onClick={() => {
                           if (activeSession) {
-                            openWeightModalForSession(activeSession);
+                            setSelectedSessionForActive(activeSession);
                           }
                         }}
                         className={`p-3 rounded-2xl border-2 transition-all flex flex-col justify-between min-h-[110px] cursor-pointer ${
@@ -3961,6 +3841,79 @@ export function NursePortal({
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 3: SESI DIALISIS LIVE MONITOR */}
+        {activeNav === 'sesi' && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black text-white flex items-center">
+              <Stethoscope className="w-6 h-6 mr-2 text-cyan-400" />
+              Pemantauan Stesen Dialisis (12 Kerusi Fresenius)
+            </h2>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {todaySessions.slice(0, 12).map((s) => {
+                const isActive = s.status === 'SEDANG_DIALISIS';
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      if (isActive) setSelectedSessionForActive(s);
+                      else if (s.status === 'BELUM_HADIR') {
+                        const activeChairs = new Set(todaySessions.filter(se => se.status === 'SEDANG_DIALISIS' && se.patient_id !== s.patient_id).map(se => se.chair_number));
+                        const firstFree = INITIAL_CHAIRS.find(c => !activeChairs.has(c.chair_number))?.chair_number || 'A-01';
+                        const validChair = s.chair_number && s.chair_number !== '-' && s.chair_number !== 'Belum' && INITIAL_CHAIRS.some(c => c.chair_number === s.chair_number) && !activeChairs.has(s.chair_number);
+                        setCheckInSelectedChair(validChair ? s.chair_number : firstFree);
+                        setSelectedSessionForCheckIn(s);
+                      }
+                    }}
+                    className={`bg-slate-900 border-2 rounded-2xl p-4 transition-all cursor-pointer ${
+                      isActive 
+                        ? 'border-emerald-500 hover:scale-[1.02] shadow-lg shadow-emerald-950/40' 
+                        : 'border-slate-800 hover:border-slate-700 opacity-80'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-lg font-black text-cyan-400">
+                        {isActive && s.chair_number ? s.chair_number : '-'}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                        isActive ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {isActive ? 'Aktif' : s.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-white text-sm truncate">{s.patient_name}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Mula: {s.actual_start_time || s.scheduled_time}</p>
+                    
+                    <div className="mt-2 pt-2 border-t border-slate-800 text-[11px] space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Pra:</span>
+                        <strong className="text-amber-300 font-bold font-mono">{s.pre_weight_kg ? `${s.pre_weight_kg}kg` : '--'}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Selepas:</span>
+                        <strong className="text-cyan-300 font-bold font-mono">{s.post_weight_kg ? `${s.post_weight_kg}kg` : '--'}</strong>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openWeightModalForSession(s);
+                      }}
+                      className="w-full mt-2 py-1.5 bg-slate-800 hover:bg-cyan-900/60 text-slate-200 hover:text-cyan-200 text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center space-x-1 cursor-pointer transition-all"
+                    >
+                      <Scale className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Input / Edit Berat</span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -5030,155 +4983,28 @@ export function NursePortal({
             </div>
 
             <form onSubmit={handlePerformCheckIn} className="space-y-5">
-              {/* Seksyen Berat: Sesi Lepas & Pra-Dialisis Semasa */}
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Berat Sesi Lepas */}
-                  <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-300">
-                        Berat Sesi Lepas (kg):
-                      </label>
-                      <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono font-semibold">
-                        Sesi Terdahulu
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cur = parseFloat(checkInLastDialysisWeight) || selectedSessionForCheckIn.dry_weight_kg;
-                          setCheckInLastDialysisWeight((Math.max(30, cur - 0.1)).toFixed(1));
-                        }}
-                        className="w-9 h-9 bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-white font-black text-lg rounded-xl border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        step="0.1"
-                        required
-                        value={checkInLastDialysisWeight}
-                        onChange={(e) => setCheckInLastDialysisWeight(e.target.value)}
-                        className="w-full min-h-[46px] bg-slate-900 border border-slate-700 focus:border-cyan-500 rounded-xl px-2 text-xl font-black text-cyan-300 text-center font-mono outline-none"
-                        placeholder="74.2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cur = parseFloat(checkInLastDialysisWeight) || selectedSessionForCheckIn.dry_weight_kg;
-                          setCheckInLastDialysisWeight((cur + 0.1).toFixed(1));
-                        }}
-                        className="w-9 h-9 bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-white font-black text-lg rounded-xl border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <span className="text-[10px] text-slate-400 block text-center">
-                      Berat pesakit pada tamat sesi rawatan sebelumnya
-                    </span>
-                  </div>
-
-                  {/* Berat Pra-Dialisis (Sebelum) */}
-                  <div className="bg-slate-950 p-3.5 rounded-2xl border-2 border-emerald-500/70 space-y-1.5 shadow-md shadow-emerald-950/20">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-white flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span>Berat Pra (Sebelum):</span>
-                      </label>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded font-mono font-bold">
-                        Pra Hari Ini
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cur = parseFloat(checkInWeight) || (selectedSessionForCheckIn.dry_weight_kg + 1.5);
-                          setCheckInWeight((Math.max(30, cur - 0.1)).toFixed(1));
-                        }}
-                        className="w-9 h-9 bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-white font-black text-lg rounded-xl border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        step="0.1"
-                        required
-                        value={checkInWeight}
-                        onChange={(e) => setCheckInWeight(e.target.value)}
-                        className="w-full min-h-[46px] bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl px-2 text-xl font-black text-emerald-300 text-center font-mono outline-none"
-                        placeholder="76.4"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cur = parseFloat(checkInWeight) || (selectedSessionForCheckIn.dry_weight_kg + 1.5);
-                          setCheckInWeight((cur + 0.1).toFixed(1));
-                        }}
-                        className="w-9 h-9 bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-white font-black text-lg rounded-xl border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <span className="text-[10px] text-slate-400 block text-center">
-                      Berat Kering: <strong className="text-emerald-400">{selectedSessionForCheckIn.dry_weight_kg} kg</strong>
-                    </span>
-                  </div>
+              {/* Berat Sebelum */}
+              <div>
+                <label className="text-sm font-bold text-slate-300 block mb-1.5">
+                  Berat Sebelum:
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    value={checkInWeight}
+                    onChange={(e) => setCheckInWeight(e.target.value)}
+                    className="w-full min-h-[56px] bg-slate-950 border-2 border-slate-700 focus:border-emerald-500 rounded-2xl px-5 text-2xl font-black text-white tracking-wide"
+                    placeholder="76.4"
+                  />
+                  <span className="absolute right-5 top-4 text-slate-400 text-lg font-bold">
+                    kg
+                  </span>
                 </div>
-
-                {/* Live Calculations Banner (Synced Formula) */}
-                {(() => {
-                  const pre = parseFloat(checkInWeight) || 0;
-                  const last = parseFloat(checkInLastDialysisWeight) || 0;
-                  const dry = selectedSessionForCheckIn.dry_weight_kg || 0;
-                  const idwg = (pre > 0 && last > 0) ? (pre - last).toFixed(2) : null;
-                  const targetUf = (pre > 0 && dry > 0) ? (pre - dry).toFixed(2) : null;
-
-                  return (
-                    <div className="bg-slate-950/95 rounded-2xl border border-slate-800 p-3 space-y-2 text-xs">
-                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
-                        <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                          <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>Pengiraan Klinikal Berat & Sasaran UF (Sync)</span>
-                        </span>
-                        <span className="text-[9.5px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
-                          Pre: {pre}kg • Kering: {dry}kg
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {/* Sasaran UF */}
-                        <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Sasaran UF Yang Perlu Ditarik:</span>
-                          <strong className="text-sm font-mono font-black text-cyan-300 block">
-                            {targetUf ? `${targetUf} kg (Liter)` : '--'}
-                          </strong>
-                          <span className="text-[9px] text-slate-500 font-mono">Formula: Pre - Kering</span>
-                        </div>
-
-                        {/* IDWG */}
-                        <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Kenaikan Sesi Lepas (IDWG):</span>
-                          <strong className={`text-sm font-mono font-black block ${idwg && Number(idwg) > 2.5 ? 'text-rose-400' : 'text-emerald-300'}`}>
-                            {idwg ? `${Number(idwg) >= 0 ? `+${idwg}` : idwg} kg` : '--'}
-                          </strong>
-                          <span className="text-[9px] text-slate-500 font-mono">Formula: Pre - Sesi Lepas</span>
-                        </div>
-
-                        {/* Jangkaan Selepas Dialisis */}
-                        <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 col-span-2 sm:col-span-1">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Jangkaan After (Selepas):</span>
-                          <strong className="text-sm font-mono font-black text-emerald-400 block">
-                            {dry} kg (Sasaran)
-                          </strong>
-                          <span className="text-[9px] text-slate-400 font-mono">Beza vs Kering: 0.00 kg</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Berat Kering: <strong className="text-emerald-400">{selectedSessionForCheckIn.dry_weight_kg} kg</strong>
+                </p>
 
                 {/* Patient Weight History Trend Chart (Last 9 Sessions) */}
                 <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 mt-3 space-y-2">
@@ -5315,6 +5141,7 @@ export function NursePortal({
                     💡 <strong className="text-slate-300">Tip Klinikal:</strong> Bandingkan corak di atas untuk menentukan sama ada peningkatan berat &gt;2.0kg berlaku secara mengejut (*sudden*) atau sememangnya kronik (*chronic*).
                   </p>
                 </div>
+              </div>
 
               {/* Tekanan Darah */}
               <div>
@@ -5431,6 +5258,305 @@ export function NursePortal({
                 )}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: ACTIVE DIALYSIS SCREEN (AS EXPLICITLY SPECIFIED IN PROMPT)        */}
+      {/* Display: Patient Name, ID, 🟢 SEDANG DIALISIS, Chair, START time           */}
+      {/* BERAT: Sebelum, Selepas, Berat Kering                                     */}
+      {/* TEKANAN DARAH: Sebelum, Semasa, Selepas                                   */}
+      {/* CATATAN: [ TAMBAH CATATAN ]                                               */}
+      {/* Buttons: [ SIMPAN ], [ TAMATKAN SESI ]                                    */}
+      {/* ========================================================================= */}
+      {selectedSessionForActive && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-cyan-500 rounded-3xl max-w-2xl w-full p-6 sm:p-8 text-white space-y-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-2xl sm:text-3xl font-black text-white">
+                  {(selectedSessionForActive?.patient_name || 'PESAKIT').toUpperCase()}
+                </h3>
+                <div className="flex items-center space-x-3 mt-1">
+                  <span className="text-xs font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                    {selectedSessionForActive.patient_id_code}
+                  </span>
+                  <span className="inline-flex items-center text-xs font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-full border border-emerald-800">
+                    🟢 SEDANG DIALISIS
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-4">
+                <div className="text-right">
+                  <span className="text-xs text-slate-400 block font-semibold">Stesen Kerusi</span>
+                  <span className="text-3xl font-black text-cyan-400">
+                    {selectedSessionForActive.chair_number}
+                  </span>
+                  <span className="text-xs text-slate-400 block mt-0.5">
+                    START: {selectedSessionForActive.actual_start_time || '2:05 PM'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSessionForActive(null)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-400 hover:text-white transition-all cursor-pointer border border-slate-700 shrink-0 shadow-sm"
+                  title="Tutup / Kembali"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 1: BERAT */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                  <Scale className="w-4 h-4 text-cyan-400" />
+                  <span>BERAT (PRA & AFTER DIALISIS)</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => openWeightModalForSession(selectedSessionForActive)}
+                  className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition-all flex items-center space-x-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Masukkan / Edit Berat</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block font-semibold">Sebelum (Pra)</span>
+                  <strong className="text-xl font-bold text-amber-300 block mt-0.5 font-mono">
+                    {selectedSessionForActive.pre_weight_kg || '--'} kg
+                  </strong>
+                </div>
+
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block font-semibold">Selepas (After)</span>
+                  <strong className="text-xl font-bold text-cyan-400 block mt-0.5 font-mono">
+                    {selectedSessionForActive.post_weight_kg ? `${selectedSessionForActive.post_weight_kg} kg` : '[ -- ]'}
+                  </strong>
+                </div>
+
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block font-semibold">Berat Kering</span>
+                  <strong className="text-xl font-bold text-emerald-400 block mt-0.5 font-mono">
+                    {selectedSessionForActive.dry_weight_kg} kg
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: TEKANAN DARAH */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                TEKANAN DARAH
+              </h4>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">Sebelum</span>
+                  <strong className="text-xl font-bold text-white block mt-0.5">
+                    {selectedSessionForActive.pre_bp || '--'}
+                  </strong>
+                </div>
+
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">Semasa</span>
+                  <strong className="text-xl font-bold text-emerald-400 block mt-0.5">
+                    {selectedSessionForActive.current_bp || '[ -- ]'}
+                  </strong>
+                </div>
+
+                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block">Selepas</span>
+                  <strong className="text-xl font-bold text-slate-400 block mt-0.5">
+                    {selectedSessionForActive.post_bp || '[ -- ]'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Log Hourly BP Row */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 mt-2">
+                <span className="text-xs font-bold text-slate-300">Kemaskini BP Jam Ini:</span>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="number"
+                    placeholder="Sys"
+                    value={hourlySystolic}
+                    onChange={(e) => setHourlySystolic(e.target.value)}
+                    className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-bold text-sm"
+                  />
+                  <span>/</span>
+                  <input
+                    type="number"
+                    placeholder="Dia"
+                    value={hourlyDiastolic}
+                    onChange={(e) => setHourlyDiastolic(e.target.value)}
+                    className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-bold text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddHourlyVital}
+                    className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                  >
+                    Rekod BP
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: CATATAN */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                CATATAN KLINIKAL
+              </h4>
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 min-h-[70px] max-h-32 overflow-y-auto text-sm text-slate-200 whitespace-pre-line">
+                {selectedSessionForActive.notes || 'Tiada catatan tambahan setakat ini.'}
+              </div>
+
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  placeholder="Taip nota pemerhatian jururawat..."
+                  value={newNoteText}
+                  onChange={(e) => setNewNoteText(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddClinicalNote}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 cursor-pointer"
+                >
+                  [ TAMBAH CATATAN ]
+                </button>
+              </div>
+            </div>
+
+            {/* FINISH CONFIRMATION SUB-FORM */}
+            {showFinishConfirm && (
+              <div className="p-5 bg-rose-950/40 border-2 border-rose-500 rounded-2xl space-y-4 animate-fadeIn">
+                <h4 className="font-black text-rose-400 text-base">
+                  Lengkapkan Maklumat Penamat Sesi:
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-300 font-bold block mb-1">Berat Selepas (kg):</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      required
+                      placeholder="contoh: 75.0"
+                      value={finishWeight}
+                      onChange={(e) => setFinishWeight(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-lg font-bold text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-bold block mb-1">BP Akhir (Systolic / Diastolic):</label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        placeholder="128"
+                        value={finishSystolic}
+                        onChange={(e) => setFinishSystolic(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-lg font-bold text-white text-center"
+                      />
+                      <span>/</span>
+                      <input
+                        type="number"
+                        placeholder="76"
+                        value={finishDiastolic}
+                        onChange={(e) => setFinishDiastolic(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-lg font-bold text-white text-center"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleFinishSession}
+                    className="flex-1 min-h-[48px] bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl text-base cursor-pointer shadow-lg"
+                  >
+                    Sahkan & Tamatkan Sesi Sekarang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowFinishConfirm(false)}
+                    className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold text-sm cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 4: ACTIONS [ SIMPAN ] & [ TAMATKAN SESI ] + [ BATAL ] & [ KEMBALI ] */}
+            {!showFinishConfirm && (
+              <div className="pt-2 border-t border-slate-800 space-y-3">
+                {/* Baris 1: Simpan & Tamatkan Sesi */}
+                <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showToast('✓ Rekod berjaya disimpan.');
+                      setSelectedSessionForActive(null);
+                    }}
+                    className="w-full sm:flex-1 min-h-[50px] bg-slate-800 hover:bg-slate-750 active:scale-98 text-white font-bold rounded-xl text-base cursor-pointer border border-slate-700 flex items-center justify-center space-x-2 transition-all shadow-sm"
+                  >
+                    <Save className="w-5 h-5 text-cyan-400" />
+                    <span>[ SIMPAN ]</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFinishWeight(selectedSessionForActive.dry_weight_kg ? selectedSessionForActive.dry_weight_kg.toString() : '75.0');
+                      setShowFinishConfirm(true);
+                    }}
+                    className="w-full sm:flex-1 min-h-[50px] bg-rose-600 hover:bg-rose-500 active:bg-rose-700 active:scale-98 text-white font-black rounded-xl text-base cursor-pointer shadow-lg shadow-rose-950/40 flex items-center justify-center space-x-2 transition-all"
+                  >
+                    <Square className="w-5 h-5 fill-white" />
+                    <span>[ TAMATKAN SESI ]</span>
+                  </button>
+                </div>
+
+                {/* Baris 2: Butang Batal & Kembali (Portal Jururawat / Nurse Portal) */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSessionForActive(null);
+                      showToast('Tindakan dibatalkan.');
+                    }}
+                    className="w-full min-h-[46px] bg-[#132238] hover:bg-rose-950/70 active:bg-rose-900 active:scale-98 text-slate-200 hover:text-rose-200 border border-[#23436B] hover:border-rose-500 font-bold rounded-xl text-sm cursor-pointer flex items-center justify-center space-x-2 transition-all shadow-sm"
+                    title="Batal dan tutup paparan"
+                  >
+                    <X className="w-4 h-4 text-rose-400" />
+                    <span>Batal</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSessionForActive(null);
+                    }}
+                    className="w-full min-h-[46px] bg-[#132238] hover:bg-cyan-950/70 active:bg-cyan-900 active:scale-98 text-slate-200 hover:text-cyan-200 border border-[#23436B] hover:border-cyan-500 font-bold rounded-xl text-sm cursor-pointer flex items-center justify-center space-x-2 transition-all shadow-sm"
+                    title="Kembali ke senarai Portal Jururawat"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-cyan-400" />
+                    <span>Kembali</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -5934,203 +6060,6 @@ export function NursePortal({
             )}
 
             {/* TAB CONTENT: REKOD DARAH & PERUBATAN (NURSE WORKFLOW) */}
-            {patientDetailTab === 'rekod' && (
-              <div className="space-y-4">
-                <h4 className="text-sm font-black text-cyan-400">Rekod Rawatan Dialisis Pesakit</h4>
-                {(() => {
-                  const ptSessions = sessions.filter(s => s.patient_id === selectedPatientForDetail.id);
-                  if (ptSessions.length === 0) {
-                    return <p className="text-xs text-slate-400 italic">Tiada rekod sesi rawatan ditemui.</p>;
-                  }
-                  return (
-                    <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden font-sans">
-                      <div className="overflow-x-auto max-h-[40vh]">
-                        <table className="w-full text-left text-xs text-slate-300">
-                          <thead className="bg-slate-900 text-slate-400 text-[10px] uppercase font-bold border-b border-slate-800">
-                            <tr>
-                              <th className="p-3">Tarikh / Sesi</th>
-                              <th className="p-3">Stesen</th>
-                              <th className="p-3">Berat Lepas</th>
-                              <th className="p-3">Berat Pra</th>
-                              <th className="p-3">Berat After</th>
-                              <th className="p-3">UF Ditarik (Pre-After)</th>
-                              <th className="p-3">After-Kering</th>
-                              <th className="p-3">BP (Pra➔Selepas)</th>
-                              <th className="p-3">Jururawat</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-800">
-                            {ptSessions.map((s) => {
-                              const pre = s.pre_weight_kg ? Number(s.pre_weight_kg) : null;
-                              const post = s.post_weight_kg ? Number(s.post_weight_kg) : null;
-                              const dry = s.dry_weight_kg || selectedPatientForDetail.dry_weight_kg || 0;
-                              const last = s.last_post_weight_kg ? Number(s.last_post_weight_kg) : null;
-                              const uf = (pre && post) ? (pre - post).toFixed(2) : pre ? (pre - dry).toFixed(2) : null;
-                              const diffDry = post ? (post - dry).toFixed(2) : null;
-
-                              return (
-                                <tr key={s.id} className="hover:bg-slate-900/40">
-                                  <td className="p-3 font-semibold text-white">
-                                    {s.scheduled_date} <span className="text-[10px] text-slate-500 font-mono">({s.scheduled_time})</span>
-                                  </td>
-                                  <td className="p-3 font-mono font-black text-cyan-400">{s.chair_number || '-'}</td>
-                                  <td className="p-3 font-mono">{last ? `${last} kg` : '--'}</td>
-                                  <td className="p-3 font-mono text-amber-300">{pre ? `${pre} kg` : '--'}</td>
-                                  <td className="p-3 font-mono text-cyan-300">{post ? `${post} kg` : '--'}</td>
-                                  <td className="p-3 font-mono text-emerald-400 font-bold">{uf ? `${uf} kg (L)` : '--'}</td>
-                                  <td className="p-3 font-mono">
-                                    {diffDry ? (
-                                      <span className={Number(diffDry) === 0 ? "text-emerald-400 font-bold" : Number(diffDry) > 0 ? "text-amber-400" : "text-cyan-400"}>
-                                        {Number(diffDry) >= 0 ? `+${diffDry}` : diffDry} kg
-                                      </span>
-                                    ) : '--'}
-                                  </td>
-                                  <td className="p-3 font-mono text-slate-300">
-                                    {s.pre_bp || '--'} {s.post_bp ? `➔ ${s.post_bp}` : ''}
-                                  </td>
-                                  <td className="p-3 text-[11px] truncate" title={s.nurse_in_charge}>{s.nurse_in_charge || '-'}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {patientDetailTab === 'vitals' && (
-              <div className="space-y-4">
-                <h4 className="text-sm font-black text-emerald-400">Rekod Keseimbangan Cecair & Vital Signs</h4>
-                {(() => {
-                  const ptSessions = sessions.filter(s => s.patient_id === selectedPatientForDetail.id && (s.pre_weight_kg || s.pre_bp));
-                  if (ptSessions.length === 0) {
-                    return <p className="text-xs text-slate-400 italic">Tiada rekod berat & BP ditemui.</p>;
-                  }
-                  return (
-                    <div className="space-y-3 max-h-[40vh] overflow-y-auto">
-                      {ptSessions.map((s) => {
-                        const pre = s.pre_weight_kg ? Number(s.pre_weight_kg) : 0;
-                        const post = s.post_weight_kg ? Number(s.post_weight_kg) : null;
-                        const last = s.last_post_weight_kg ? Number(s.last_post_weight_kg) : null;
-                        const dry = s.dry_weight_kg || selectedPatientForDetail.dry_weight_kg || 0;
-                        const idwg = (pre > 0 && last !== null) ? (pre - last).toFixed(2) : null;
-                        const ufRemoved = (pre > 0 && post !== null) ? (pre - post).toFixed(2) : null;
-                        const diffDry = post !== null ? (post - dry).toFixed(2) : null;
-
-                        return (
-                          <div key={s.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5 font-sans">
-                            <div className="flex justify-between items-center border-b border-slate-900 pb-1.5 text-[11px]">
-                              <span className="font-bold text-slate-300">{s.scheduled_date} Sesi</span>
-                              <span className="bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded font-mono font-bold">
-                                Kerusi {s.chair_number}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                              <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
-                                <span className="text-[10px] text-slate-400 block">Sesi Lepas</span>
-                                <strong className="text-white font-mono">{last ? `${last} kg` : '--'}</strong>
-                              </div>
-                              <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
-                                <span className="text-[10px] text-amber-400 block font-semibold">Pra-Dialisis</span>
-                                <strong className="text-amber-300 font-mono font-black">{pre ? `${pre} kg` : '--'}</strong>
-                              </div>
-                              <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
-                                <span className="text-[10px] text-cyan-400 block font-semibold">After Selepas</span>
-                                <strong className="text-cyan-300 font-mono font-black">{post ? `${post} kg` : '--'}</strong>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-900/60 p-2.5 rounded-xl border border-slate-850">
-                              <div className="space-y-1">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">UF Ditarik (Pre-After):</span>
-                                  <strong className="text-emerald-400 font-mono font-bold">
-                                    {ufRemoved ? `${ufRemoved} kg/L` : '--'}
-                                  </strong>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">After - Kering:</span>
-                                  <strong className="text-cyan-300 font-mono font-bold">
-                                    {diffDry ? `${Number(diffDry) >= 0 ? `+${diffDry}` : diffDry} kg` : '--'}
-                                  </strong>
-                                </div>
-                              </div>
-                              <div className="space-y-1 border-l border-slate-800/80 pl-2">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Kenaikan (IDWG):</span>
-                                  <strong className="text-indigo-400 font-mono font-bold">
-                                    {idwg ? `+${idwg} kg` : '--'}
-                                  </strong>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">BP Pra➔Post:</span>
-                                  <strong className="text-white font-mono">
-                                    {s.pre_bp || '--'}➔{s.post_bp || '--'}
-                                  </strong>
-                                </div>
-                              </div>
-                            </div>
-                            {s.nurse_notes && (
-                              <p className="text-[10.5px] text-slate-400 bg-slate-900/30 p-1.5 rounded italic">
-                                "{s.nurse_notes}"
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {patientDetailTab === 'ubat' && (
-              <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-sans">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                  <span className="font-bold text-white text-sm">Senarai Ubatan Rutin</span>
-                  <span className="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded">Aktif</span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between p-2 bg-slate-900 rounded">
-                    <span>Epoetin Alfa (Recormon)</span>
-                    <strong className="text-white">4000 IU (Subkutaneus - Setiap Sesi)</strong>
-                  </div>
-                  <div className="flex justify-between p-2 bg-slate-900 rounded">
-                    <span>Heparin Sodium</span>
-                    <strong className="text-white">1000 IU (Bolus) + 500 IU/jam (Infusi)</strong>
-                  </div>
-                  <div className="flex justify-between p-2 bg-slate-900 rounded">
-                    <span>Vitamin B-Complex</span>
-                    <strong className="text-white">1 biji (Setiap Hari)</strong>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {patientDetailTab === 'catatan' && (
-              <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-sans">
-                <span className="font-bold text-white text-sm block">Catatan Klinikal Khas</span>
-                <p className="text-slate-300 leading-relaxed bg-slate-900 p-3 rounded italic">
-                  "Pesakit melaporkan kekejangan ringan pada 30 minit terakhir sesi. UF ditarik secara berperingkat. Monitor tekanan darah setiap 1 jam semasa rawatan dialisis."
-                </p>
-                <div className="text-right text-[10px] text-slate-400 font-semibold">- Dikemaskini oleh Jururawat {currentNurseName}</div>
-              </div>
-            )}
-
-            {patientDetailTab === 'jadual' && (
-              <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-sans">
-                <span className="font-bold text-white text-sm block">Jadual Sesi Mingguan</span>
-                <div className="grid grid-cols-3 gap-2 text-center font-bold">
-                  <div className="bg-slate-900 p-2 rounded text-emerald-400 border border-slate-800">Isnin<span className="block text-[10px] text-slate-400 font-normal">Syif Pagi</span></div>
-                  <div className="bg-slate-900 p-2 rounded text-emerald-400 border border-slate-800">Rabu<span className="block text-[10px] text-slate-400 font-normal">Syif Pagi</span></div>
-                  <div className="bg-slate-900 p-2 rounded text-emerald-400 border border-slate-800">Jumaat<span className="block text-[10px] text-slate-400 font-normal">Syif Pagi</span></div>
-                </div>
-              </div>
-            )}
-            
             {patientDetailTab === 'darah' && (
               <div className="space-y-4">
                 {showAddMedicalRecordForm ? (
@@ -6751,80 +6680,21 @@ export function NursePortal({
             )}
 
             <div className="space-y-5">
-              {/* SEKSYEN 1: BERAT SESI DIALISIS LEPAS (SEBELUM SESI SEMASA) */}
-              <div className="bg-slate-950 border-2 border-indigo-500/60 rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h4 className="text-sm font-black text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
-                    <span>1. Berat Sesi Dialisis Lepas (Sebelum Sesi Semasa)</span>
-                  </h4>
-                  <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-2.5 py-0.5 rounded-full font-bold">
-                    Sesi Lepas
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-slate-300 font-bold block">
-                      Berat Selesai Sesi Lepas (kg):
-                    </label>
-                    <span className="text-[11px] text-slate-400">
-                      Direkod pada akhir sesi sebelum ini
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 bg-slate-900 border border-slate-700 p-2 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = parseFloat(weightModalLastPostWeight) || weightModalSession.dry_weight_kg;
-                        setWeightModalLastPostWeight((Math.max(30, cur - 0.1)).toFixed(1));
-                      }}
-                      className="w-10 h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-black text-xl rounded-lg cursor-pointer flex items-center justify-center shrink-0"
-                    >
-                      -
-                    </button>
-                    <div className="text-center">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={weightModalLastPostWeight}
-                        onChange={(e) => setWeightModalLastPostWeight(e.target.value)}
-                        className="w-28 text-center font-mono font-black text-2xl text-indigo-300 bg-transparent border-b border-slate-700 focus:border-indigo-400 outline-none"
-                      />
-                      <span className="text-xs text-slate-400 font-bold ml-1">kg</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = parseFloat(weightModalLastPostWeight) || weightModalSession.dry_weight_kg;
-                        setWeightModalLastPostWeight((cur + 0.1).toFixed(1));
-                      }}
-                      className="w-10 h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-black text-xl rounded-lg cursor-pointer flex items-center justify-center shrink-0"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    💡 Digunakan untuk mengira kenaikan berat cecair antara sesi (IDWG) pesakit.
-                  </p>
-                </div>
-              </div>
-
-              {/* SEKSYEN 2: BERAT BADAN PRA-DIALISIS (SEBELUM RAWATAN) */}
+              {/* SECTION 1: BERAT PRA-DIALISIS */}
               <div className="bg-slate-950 border-2 border-amber-500/60 rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <h4 className="text-sm font-black text-white flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                    <span>2. Berat Badan Pra-Dialisis (Sebelum Rawatan Sesi Semasa)</span>
+                    <span>1. Berat Badan Pra-Dialisis (Sebelum Rawatan)</span>
                   </h4>
-                  <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-0.5 rounded-full font-bold">
-                    Pra Semasa
+                  <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full font-bold">
+                    Pra
                   </span>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs text-slate-300 font-bold block">
-                    Berat Pra-Dialisis (kg):
+                    Berat Pra (kg):
                   </label>
                   <div className="flex items-center justify-between gap-3 bg-slate-900 border border-slate-700 p-2 rounded-xl">
                     <button
@@ -6854,9 +6724,9 @@ export function NursePortal({
                   </div>
 
                   <div className="flex justify-between items-center text-xs text-slate-400 pt-1">
-                    <span>Kelebihan Cecair vs Berat Kering:</span>
+                    <span>Anggaran Kelebihan Cecair:</span>
                     <strong className={`font-mono font-bold ${weightModalPreWeight - weightModalSession.dry_weight_kg > 2.0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      +{Number((weightModalPreWeight - weightModalSession.dry_weight_kg).toFixed(2))} kg (Sasaran UF Perlu Ditarik)
+                      +{Number((weightModalPreWeight - weightModalSession.dry_weight_kg).toFixed(1))} kg vs kering
                     </strong>
                   </div>
                 </div>
@@ -6864,54 +6734,44 @@ export function NursePortal({
                 {/* Pre BP */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
-                    <label className="text-[11px] text-slate-400 block font-semibold">Systolic Pra (mmHg):</label>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Systolic Pra:</label>
                     <input
                       type="number"
                       value={weightModalPreSys}
                       onChange={(e) => setWeightModalPreSys(e.target.value)}
                       placeholder="138"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm font-mono"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-400 block font-semibold">Diastolic Pra (mmHg):</label>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Diastolic Pra:</label>
                     <input
                       type="number"
                       value={weightModalPreDia}
                       onChange={(e) => setWeightModalPreDia(e.target.value)}
                       placeholder="82"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm font-mono"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* SEKSYEN 3: BERAT BADAN SELEPAS DIALISIS (AFTER DIALISIS) */}
+              {/* SECTION 2: BERAT SELEPAS DIALISIS */}
               <div className="bg-slate-950 border-2 border-cyan-500/60 rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <h4 className="text-sm font-black text-white flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-                    <span>3. Berat Badan Selepas Dialisis (After Dialisis)</span>
+                    <span>2. Berat Badan Selepas Dialisis (After Dialisis)</span>
                   </h4>
-                  <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2.5 py-0.5 rounded-full font-bold">
+                  <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-bold">
                     After
                   </span>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-slate-300 font-bold block">
-                      Berat Selepas / After (kg):
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setWeightModalPostWeight(String(weightModalSession.dry_weight_kg))}
-                      className="text-[11px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/60 border border-cyan-800/80 px-2 py-0.5 rounded cursor-pointer font-bold"
-                    >
-                      🎯 Set Tepat Sasaran Kering ({weightModalSession.dry_weight_kg}kg)
-                    </button>
-                  </div>
-
+                  <label className="text-xs text-slate-300 font-bold block">
+                    Berat Selepas / After (kg):
+                  </label>
                   <div className="flex items-center justify-between gap-3 bg-slate-900 border border-slate-700 p-2 rounded-xl">
                     <button
                       type="button"
@@ -6945,243 +6805,66 @@ export function NursePortal({
                       +
                     </button>
                   </div>
+
+                  {weightModalPostWeight && !isNaN(parseFloat(weightModalPostWeight)) && (
+                    <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-1 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Cecair Ditapis (UF = Pra - Selepas):</span>
+                        <strong className="text-emerald-400 font-mono font-bold text-sm">
+                          {Number((weightModalPreWeight - parseFloat(weightModalPostWeight)).toFixed(2))} kg (Liter)
+                        </strong>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Beza vs Sasaran Kering:</span>
+                        <strong className="text-cyan-300 font-mono font-bold">
+                          {parseFloat(weightModalPostWeight) >= weightModalSession.dry_weight_kg ? `+${(parseFloat(weightModalPostWeight) - weightModalSession.dry_weight_kg).toFixed(1)}` : `${(parseFloat(weightModalPostWeight) - weightModalSession.dry_weight_kg).toFixed(1)}`} kg
+                        </strong>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Post BP */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
-                    <label className="text-[11px] text-slate-400 block font-semibold">Systolic Selepas (mmHg):</label>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Systolic Selepas:</label>
                     <input
                       type="number"
                       value={weightModalPostSys}
                       onChange={(e) => setWeightModalPostSys(e.target.value)}
                       placeholder="124"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm font-mono"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-400 block font-semibold">Diastolic Selepas (mmHg):</label>
+                    <label className="text-[11px] text-slate-400 block font-semibold">Diastolic Selepas:</label>
                     <input
                       type="number"
                       value={weightModalPostDia}
                       onChange={(e) => setWeightModalPostDia(e.target.value)}
                       placeholder="78"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm font-mono"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-bold text-center text-sm"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* SEKSYEN 4: KOTAK PENGIRAAN KLINIKAL & SINKRONISASI BERAT & BP */}
-              {(() => {
-                const preW = Number(weightModalPreWeight) || 0;
-                const postW = weightModalPostWeight.trim() !== '' ? parseFloat(weightModalPostWeight) : null;
-                const dryW = weightModalSession.dry_weight_kg || 0;
-                const lastW = parseFloat(weightModalLastPostWeight) || null;
-
-                // 1. Pengiraan After Dialisis (tolak) Pre Dialisis
-                const diffAfterPre = postW !== null ? Number((postW - preW).toFixed(2)) : null;
-                const ufDitarik = postW !== null ? Number((preW - postW).toFixed(2)) : null;
-                const targetUfNeed = (preW > 0 && dryW > 0) ? Number((preW - dryW).toFixed(2)) : null;
-
-                // 2. Pengiraan After Dialisis (tolak) Berat Kering
-                const diffAfterDry = postW !== null ? Number((postW - dryW).toFixed(2)) : null;
-
-                // 3. IDWG: Pre - Sesi Lepas
-                const idwg = (preW > 0 && lastW !== null) ? Number((preW - lastW).toFixed(2)) : null;
-
-                return (
-                  <div className="bg-slate-950 border-2 border-emerald-500/70 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                      <h4 className="text-sm font-black text-emerald-400 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-emerald-400" />
-                        <span>Pengiraan Klinikal, UF & Tekanan Darah (Sync)</span>
-                      </h4>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded font-mono font-bold">
-                        Formula Automatik
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      {/* Formula 1: Pengiraan After (tolak) Pre */}
-                      <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-slate-300 font-bold">
-                            1. After (tolak) Pre Dialisis:
-                          </span>
-                          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded">
-                            After - Pre
-                          </span>
-                        </div>
-
-                        {postW !== null ? (
-                          <div className="space-y-1">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Beza Berat (After - Pre):</span>
-                              <strong className="text-cyan-300 font-mono font-black text-sm">
-                                {diffAfterPre !== null ? `${diffAfterPre >= 0 ? `+${diffAfterPre}` : diffAfterPre} kg` : '--'}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between items-center pt-1 border-t border-slate-800/80">
-                              <span className="text-slate-300 font-semibold">Jumlah UF Ditarik:</span>
-                              <strong className="text-emerald-400 font-mono font-black text-base">
-                                {ufDitarik !== null ? `${ufDitarik} kg (Liter)` : '--'}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between items-center text-[10.5px]">
-                              <span className="text-slate-400">Sasaran UF (Pre - Kering):</span>
-                              <strong className="text-slate-300 font-mono font-bold">
-                                {targetUfNeed !== null ? `${targetUfNeed} kg (L)` : '--'}
-                              </strong>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-1 py-1">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Sasaran UF Yang Perlu Ditarik:</span>
-                              <strong className="text-amber-400 font-mono font-black text-sm">
-                                {targetUfNeed !== null ? `${targetUfNeed} kg (Liter)` : '--'}
-                              </strong>
-                            </div>
-                            <p className="text-[10px] text-slate-500 italic">
-                              * Sila masukkan Berat Selepas untuk mengira jumlah berat UF ditarik sebenar.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Formula 2: Pengiraan After (tolak) Berat Kering */}
-                      <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-slate-300 font-bold">
-                            2. After (tolak) Berat Kering:
-                          </span>
-                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded">
-                            After - Kering
-                          </span>
-                        </div>
-
-                        {postW !== null && diffAfterDry !== null ? (
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Beza vs Sasaran Kering:</span>
-                              <strong className="text-emerald-300 font-mono font-black text-base">
-                                {diffAfterDry >= 0 ? `+${diffAfterDry}` : diffAfterDry} kg
-                              </strong>
-                            </div>
-                            <div className="text-[11px] font-semibold">
-                              {diffAfterDry === 0 ? (
-                                <span className="text-emerald-400 flex items-center gap-1">
-                                  🎯 Tepat pada sasaran berat kering (Euvolemic).
-                                </span>
-                              ) : diffAfterDry > 0 ? (
-                                <span className="text-amber-400 flex items-center gap-1">
-                                  ⚠️ Melebihi berat kering sebanyak +{diffAfterDry} kg (cecair tertinggal).
-                                </span>
-                              ) : (
-                                <span className="text-cyan-400 flex items-center gap-1">
-                                  🟡 Di bawah berat kering ({diffAfterDry} kg - pantau kekejangan/BP).
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-1 py-1">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Berat Kering Sasaran:</span>
-                              <strong className="text-emerald-400 font-mono font-black text-sm">
-                                {dryW} kg
-                              </strong>
-                            </div>
-                            <p className="text-[10px] text-slate-500 italic">
-                              * Beza akan dipapar sebaik sahaja Berat Selepas dimasukkan.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Secondary Metrics: IDWG & Tekanan Darah Sync */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
-                      {/* IDWG */}
-                      <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-slate-400 block font-semibold">
-                            Kenaikan Antara Sesi (IDWG):
-                          </span>
-                          <span className="text-[9.5px] text-slate-500 font-mono">
-                            Pre ({preW}kg) - Lepas ({lastW || '--'}kg)
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <strong className={`text-sm font-mono font-black ${idwg && idwg > 2.5 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                            {idwg !== null ? `${idwg >= 0 ? `+${idwg}` : idwg} kg` : '--'}
-                          </strong>
-                          {dryW > 0 && idwg !== null && (
-                            <span className="text-[9.5px] text-slate-400 block font-mono">
-                              ({((idwg / dryW) * 100).toFixed(1)}% dari kering)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* BP Sync */}
-                      <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-slate-400 block font-semibold">
-                            Sinkronisasi Tekanan Darah (BP):
-                          </span>
-                          <span className="text-[9.5px] text-slate-500">
-                            Pra ➔ Selepas Dialisis
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <strong className="text-sm font-mono font-black text-cyan-300">
-                            {weightModalPreSys}/{weightModalPreDia} {postW !== null ? `➔ ${weightModalPostSys}/${weightModalPostDia}` : ''}
-                          </strong>
-                          {postW !== null && (
-                            <span className="text-[9.5px] text-slate-400 block font-mono">
-                              Δ Sys: {Number(weightModalPostSys) - Number(weightModalPreSys)} mmHg
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Status Session Option & Nurse Notes */}
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-white block">Status Sesi Rawatan:</span>
-                    <span className="text-[11px] text-slate-400">Tentukan status terkini sesi pesakit</span>
-                  </div>
-                  <select
-                    value={weightModalStatus}
-                    onChange={(e) => setWeightModalStatus(e.target.value as SessionStatus)}
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none cursor-pointer font-mono"
-                  >
-                    <option value="SUDAH_HADIR">SUDAH HADIR</option>
-                    <option value="SEDANG_DIALISIS">SEDANG DIALISIS</option>
-                    <option value="SUDAH_SELESAI">SUDAH SELESAI</option>
-                    <option value="BELUM_HADIR">BELUM HADIR</option>
-                  </select>
-                </div>
-
+              {/* Status Session Option */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
                 <div>
-                  <label className="text-[11px] text-slate-400 block font-semibold mb-1">
-                    Catatan Klinikal Jururawat (Pilihan):
-                  </label>
-                  <input
-                    type="text"
-                    value={weightModalNurseNotes}
-                    onChange={(e) => setWeightModalNurseNotes(e.target.value)}
-                    placeholder="Contoh: Pesakit stabil, tiada kekejangan, UF 2.5L tercapai dengan lancar"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-500 outline-none"
-                  />
+                  <span className="text-xs font-bold text-white block">Status Sesi Rawatan:</span>
+                  <span className="text-[11px] text-slate-400">Tentukan status terkini pesakit</span>
                 </div>
+                <select
+                  value={weightModalStatus}
+                  onChange={(e) => setWeightModalStatus(e.target.value as SessionStatus)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none cursor-pointer"
+                >
+                  <option value="SUDAH_HADIR">SUDAH HADIR</option>
+                  <option value="SEDANG_DIALISIS">SEDANG DIALISIS</option>
+                  <option value="SUDAH_SELESAI">SUDAH SELESAI</option>
+                  <option value="BELUM_HADIR">BELUM HADIR</option>
+                </select>
               </div>
             </div>
 
