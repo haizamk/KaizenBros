@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\ExaminationType;
+use App\Support\ClinicFiles;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -12,6 +13,11 @@ class StoreMedicalRecordRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        ClinicFiles::dropEmptyUploads($this, ['report']);
     }
 
     /**
@@ -29,6 +35,7 @@ class StoreMedicalRecordRequest extends FormRequest
             'urea' => ['nullable', 'numeric', 'between:1,80'],
             'creatinine' => ['nullable', 'numeric', 'between:20,2500'],
             'clinical_notes' => ['nullable', 'string', 'max:1000'],
+            'report' => ClinicFiles::rules(),
         ];
     }
 
@@ -54,6 +61,8 @@ class StoreMedicalRecordRequest extends FormRequest
             'examination_date.required' => 'Tarikh pemeriksaan diperlukan.',
             'examination_date.before_or_equal' => 'Tarikh pemeriksaan tidak boleh pada masa hadapan.',
             'examination_type.required' => 'Jenis pemeriksaan diperlukan.',
+            'report.mimes' => 'Laporan perubatan mestilah PDF atau gambar.',
+            'report.max' => 'Laporan perubatan melebihi 8 MB.',
         ];
     }
 }

@@ -6,6 +6,7 @@ use App\Support\RegistrationOptions;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -72,6 +73,14 @@ class Registration extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    /**
+     * @return HasMany<PatientDocument, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(PatientDocument::class);
+    }
+
     public function statusLabel(): string
     {
         return match ($this->status) {
@@ -106,6 +115,9 @@ class Registration extends Model
             'status_label' => $this->statusLabel(),
             'can_review' => $this->status === 'BARU',
             'created_at' => $this->created_at?->timezone('Asia/Kuala_Lumpur')->format('d/m/Y H:i'),
+            'documents' => $this->documents
+                ->map(fn (PatientDocument $document): array => $document->toPortalArray())
+                ->values(),
         ];
     }
 

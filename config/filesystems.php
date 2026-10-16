@@ -47,6 +47,22 @@ return [
             'report' => false,
         ],
 
+        'patient_documents' => [
+            'driver' => 'local',
+            'root' => storage_path('app/patient-documents'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
+        'medical_reports' => [
+            'driver' => 'local',
+            'root' => storage_path('app/medical-reports'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\DocumentCategory;
 use App\Models\NurseApplication;
 use App\Models\Patient;
+use App\Models\PatientDocument;
 use App\Models\Registration;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
@@ -22,10 +24,23 @@ class AdminController extends Controller
             ->values();
 
         $registrations = Registration::query()
+            ->with('documents')
             ->latest()
             ->limit(20)
             ->get()
             ->map(fn (Registration $registration): array => $registration->toPortalArray())
+            ->values();
+
+        $patientDocuments = PatientDocument::query()
+            ->with('patient')
+            ->whereNotNull('patient_id')
+            ->latest()
+            ->limit(12)
+            ->get()
+            ->map(fn (PatientDocument $document): array => [
+                ...$document->toPortalArray(),
+                'patient_name' => $document->patient?->name,
+            ])
             ->values();
 
         $nurseApplications = NurseApplication::query()
@@ -39,6 +54,11 @@ class AdminController extends Controller
             'patients' => $patients,
             'registrations' => $registrations,
             'nurseApplications' => $nurseApplications,
+            'patientDocuments' => $patientDocuments,
+            'documentCategories' => collect(DocumentCategory::cases())->map(fn (DocumentCategory $category): array => [
+                'value' => $category->value,
+                'label' => $category->label(),
+            ])->values(),
             'notice' => session('status'),
         ]);
     }

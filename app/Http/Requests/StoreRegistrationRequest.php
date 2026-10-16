@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ClinicFiles;
 use App\Support\MalaysianIdentityCard;
 use App\Support\RegistrationOptions;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,6 +22,8 @@ class StoreRegistrationRequest extends FormRequest
             'phone_number' => $this->normalizePhone($this->input('phone_number')),
             'nok_phone' => $this->normalizePhone($this->input('nok_phone')),
         ]);
+
+        ClinicFiles::dropEmptyUploads($this, ['kad_pengenalan', 'surat_doktor', 'lain']);
     }
 
     /**
@@ -40,6 +43,9 @@ class StoreRegistrationRequest extends FormRequest
             'nok_relationship' => ['required', Rule::in(array_keys(RegistrationOptions::relationships()))],
             'nok_phone' => ['required', 'regex:/^01\d{8,9}$/'],
             'nok_email' => ['nullable', 'email', 'max:120'],
+            'kad_pengenalan' => ClinicFiles::rules(),
+            'surat_doktor' => ClinicFiles::rules(),
+            'lain' => ClinicFiles::rules(),
         ];
     }
 
@@ -79,6 +85,12 @@ class StoreRegistrationRequest extends FormRequest
             'nok_phone.required' => 'Nombor telefon waris diperlukan.',
             'nok_phone.regex' => 'Nombor telefon waris mestilah nombor mudah alih Malaysia.',
             'nok_email.email' => 'Alamat emel waris tidak sah.',
+            'kad_pengenalan.mimes' => 'Salinan kad pengenalan mestilah PDF atau gambar.',
+            'kad_pengenalan.max' => 'Salinan kad pengenalan melebihi 8 MB.',
+            'surat_doktor.mimes' => 'Surat doktor mestilah PDF atau gambar.',
+            'surat_doktor.max' => 'Surat doktor melebihi 8 MB.',
+            'lain.mimes' => 'Dokumen lain mestilah PDF atau gambar.',
+            'lain.max' => 'Dokumen lain melebihi 8 MB.',
         ];
     }
 

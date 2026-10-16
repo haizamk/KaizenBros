@@ -6,8 +6,11 @@ use App\Enums\ExaminationType;
 use App\Http\Requests\StoreMedicalRecordRequest;
 use App\Models\MedicalRecord;
 use App\Models\Patient;
+use App\Support\BloodReportAnalysis;
+use App\Support\ClinicFiles;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,14 +26,15 @@ class MedicalRecordController extends Controller
         $selectedId = $request->integer('pesakit');
         $selected = $patients->firstWhere('id', $selectedId);
 
-        $records = MedicalRecord::query()
-            ->with(['patient', 'recorder'])
-            ->when($selected, fn ($query) => $query->where('patient_id', $selected->id))
-            ->orderByDesc('examination_date')
-            ->limit(20)
-            ->get()
-            ->map(fn (MedicalRecord $record): array => $record->toPortalArray())
-            ->values();
+        $recordQuery = MedicalRecord::query()->with(['patient', 'recorder', 'report']);
+
+        if ($selected) {
+            $recordQuery->where('patient_id', $selected->id);
+        } else {
+            $recordQuery->orderByDesc('examination_date')->limit(20);
+        }
+
+        $records = BloodReportAnalysis::present($recordQuery->get());
 
         return Inertia::render('jururawat/darah', [
             'patients' => $patients->map(fn (Patient $patient): array => [
@@ -50,20 +54,26 @@ class MedicalRecordController extends Controller
 
     public function store(StoreMedicalRecordRequest $request): RedirectResponse
     {
-        MedicalRecord::query()->create([
-            ...$request->safe()->only([
-                'patient_id',
-                'examination_date',
-                'examination_type',
-                'hemoglobin',
-                'potassium',
-                'phosphate',
-                'urea',
-                'creatinine',
-                'clinical_notes',
-            ]),
-            'recorded_by' => $request->user()->id,
-        ]);
+        DB::transaction(function () use ($request): void {
+            $record = MedicalRecord::query()->create([
+                ...$request->safe()->only([
+                    'patient_id',
+                    'examination_date',
+                    'examination_type',
+                    'hemoglobin',
+                    'potassium',
+                    'phosphate',
+                    'urea',
+                    'creatinine',
+                    'clinical_notes',
+                ]),
+                'recorded_by' => $request->user()->id,
+            ]);
+
+            if ($request->hasFile('report')) {
+                ClinicFiles::storeMedicalReport($request->file('report'), $record, $request->user()->id);
+            }
+        });
 
         return redirect()
             ->route('nurse.records.index', ['pesakit' => $request->integer('patient_id')])

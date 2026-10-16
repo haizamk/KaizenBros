@@ -2,7 +2,9 @@
 
 Sistem pengurusan pusat dialisis KaizenBros, fasa pembangunan baharu. Aplikasi ini menggunakan Laravel 13, React, TypeScript, Inertia.js, Tailwind CSS, dan MariaDB. Data demo disemai semula. Firebase tidak digunakan.
 
-Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, rekod darah, carta berat dan tekanan darah, pautan peringatan WhatsApp, portal pesakit, dan senarai pentadbir. Halaman depan ada paparan gelap (lalai) dan cerah, empat saiz teks dengan lalai sederhana, peta Google pusat di Semenyih, dan banner promosi pesakit baru, van percuma, serta jawatan jururawat. Borang pesakit baru mengira umur dan jantina daripada nombor kad pengenalan, kemudian menghantar permohonan kepada pentadbir untuk diluluskan atau ditolak. Pemasangan VPS belum dibuat.
+Fasa ini merangkumi laman awam, permohonan pesakit baru, log masuk berperanan, papan sesi jururawat, rekod darah, carta berat dan tekanan darah, pautan peringatan WhatsApp, portal pesakit, dan senarai pentadbir. Halaman depan ada paparan gelap (lalai) dan cerah, empat saiz teks dengan lalai sederhana, peta Google pusat di Semenyih, dan banner promosi pesakit baru, van percuma, serta jawatan jururawat. Borang pesakit baru mengira umur dan jantina daripada nombor kad pengenalan, menerima salinan kad pengenalan, surat doktor, dan dokumen lain, kemudian menghantar permohonan kepada pentadbir untuk diluluskan atau ditolak. Pemasangan VPS belum dibuat.
+
+Dokumen pesakit (PDF dan gambar) disimpan dalam folder peribadi `storage/app/patient-documents`. Salinan imbasan laporan perubatan disimpan berasingan dalam `storage/app/medical-reports`. Kedua-dua folder tidak dibuka dari internet. Muat turun hanya melalui portal yang dibenarkan. Rekod darah disimpan dan tidak dipadam. Analisa setiap bacaan, terutamanya yang tinggi, dikira di pelayan daripada nombor yang ditaip oleh kakitangan. Fail imbasan tidak dihantar ke perkhidmatan luar. Analisa itu bukan diagnosis. Halaman pesakit memaparkan graf perbandingan hemoglobin, kalium, fosfat, urea, dan kreatinin.
 
 ## Jalankan secara tempatan
 

@@ -1,4 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
+import InputError from '@/components/input-error';
 
 type PatientRow = {
     id: number;
@@ -30,6 +31,20 @@ type RegistrationRow = {
     status_label: string;
     can_review: boolean;
     created_at: string;
+    documents: DocumentRow[];
+};
+
+type DocumentRow = {
+    id: number;
+    category_label: string;
+    original_name: string;
+    size_label: string;
+    created_at: string;
+};
+
+type Option = {
+    value: string;
+    label: string;
 };
 
 type NurseApplicationRow = {
@@ -47,11 +62,15 @@ export default function PapanAdmin({
     patients,
     registrations,
     nurseApplications,
+    patientDocuments,
+    documentCategories,
     notice,
 }: {
     patients: PatientRow[];
     registrations: RegistrationRow[];
     nurseApplications: NurseApplicationRow[];
+    patientDocuments: Array<DocumentRow & { patient_name: string | null }>;
+    documentCategories: Option[];
     notice?: string | null;
 }) {
     return (
@@ -94,6 +113,27 @@ export default function PapanAdmin({
                 </section>
 
                 <section className="space-y-3">
+                    <h2 className="text-2xl font-black">Dokumen pesakit sedia ada</h2>
+                    <p className="text-base text-slate-200">PDF dan gambar pesakit disimpan dalam folder dokumen pesakit. Fail ini tidak dipaparkan kepada umum.</p>
+                    <PatientDocumentForm patients={patients} categories={documentCategories} />
+                    {patientDocuments.length === 0 ? (
+                        <p className="rounded-2xl border border-[#1F385C] bg-[#132238] p-5">Tiada dokumen pesakit lagi.</p>
+                    ) : (
+                        <ul className="grid gap-3">
+                            {patientDocuments.map((document) => (
+                                <li key={document.id} className="rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
+                                    <p className="text-lg font-black">{document.patient_name} · {document.category_label}</p>
+                                    <a className="inline-flex min-h-12 items-center font-bold text-teal-200 underline" href={`/admin/dokumen/${document.id}`} download>
+                                        {document.original_name}
+                                    </a>
+                                    <p className="text-sm text-slate-300">{document.size_label} · {document.created_at}</p>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
+
+                <section className="space-y-3">
                     <h2 className="text-2xl font-black">Permohonan pesakit baru</h2>
                     <p className="text-base text-slate-200">Permohonan menunggu pengesahan pentadbir. Kelulusan tidak membuka akaun portal.</p>
                     {registrations.length === 0 ? (
@@ -101,7 +141,7 @@ export default function PapanAdmin({
                     ) : (
                         <ul className="grid gap-3">
                             {registrations.map((registration) => (
-                                <RegistrationCard key={registration.id} registration={registration} />
+                                <RegistrationCard key={registration.id} registration={registration} categories={documentCategories} />
                             ))}
                         </ul>
                     )}
@@ -130,9 +170,13 @@ export default function PapanAdmin({
     );
 }
 
-function RegistrationCard({ registration }: { registration: RegistrationRow }) {
+function RegistrationCard({ registration, categories }: { registration: RegistrationRow; categories: Option[] }) {
     const approve = useForm({});
     const reject = useForm({});
+    const upload = useForm<{ category: string; document: File | null }>({
+        category: 'KAD_PENGENALAN',
+        document: null,
+    });
 
     return (
         <li className="space-y-3 rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
@@ -154,6 +198,41 @@ function RegistrationCard({ registration }: { registration: RegistrationRow }) {
                 {registration.nok_phone ? ` · ${registration.nok_phone}` : ''}
             </p>
             {registration.medical_notes && <p className="text-lg">Catatan: {registration.medical_notes}</p>}
+            <div className="space-y-2 rounded-2xl border border-[#1F385C] p-3">
+                <p className="text-lg font-black">Dokumen sokongan</p>
+                {registration.documents.length === 0 ? (
+                    <p className="text-base text-slate-200">Tiada dokumen dimuat naik lagi.</p>
+                ) : (
+                    <ul className="space-y-1">
+                        {registration.documents.map((document) => (
+                            <li key={document.id}>
+                                <a className="inline-flex min-h-12 items-center font-bold text-teal-200 underline" href={`/admin/dokumen/${document.id}`} download>
+                                    {document.category_label}: {document.original_name}
+                                </a>
+                                <p className="text-sm text-slate-300">{document.size_label} · {document.created_at}</p>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+                <form
+                    className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        upload.post(`/admin/permohonan/${registration.id}/dokumen`, { forceFormData: true });
+                    }}
+                >
+                    <select className="min-h-12 rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={upload.data.category} onChange={(event) => upload.setData('category', event.target.value)}>
+                        {categories.map((category) => (
+                            <option key={category.value} value={category.value}>{category.label}</option>
+                        ))}
+                    </select>
+                    <input className="min-h-12 rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 py-2" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => upload.setData('document', event.target.files?.[0] ?? null)} />
+                    <button type="submit" disabled={upload.processing} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-500 px-4 font-black text-slate-950">
+                        Muat naik
+                    </button>
+                    <InputError className="sm:col-span-3" message={upload.errors.document || upload.errors.category} />
+                </form>
+            </div>
             {registration.can_review && (
                 <div className="grid gap-3 sm:grid-cols-2">
                     <button
@@ -176,6 +255,53 @@ function RegistrationCard({ registration }: { registration: RegistrationRow }) {
                 </div>
             )}
         </li>
+    );
+}
+
+function PatientDocumentForm({ patients, categories }: { patients: PatientRow[]; categories: Option[] }) {
+    const form = useForm<{ patient_id: string; category: string; document: File | null }>({
+        patient_id: '',
+        category: 'LAIN',
+        document: null,
+    });
+
+    return (
+        <form
+            className="grid gap-3 rounded-2xl border border-[#1F385C] bg-[#132238] p-4 sm:grid-cols-2"
+            onSubmit={(event) => {
+                event.preventDefault();
+                if (!form.data.patient_id) {
+                    return;
+                }
+                form.post(`/admin/pesakit/${form.data.patient_id}/dokumen`, { forceFormData: true });
+            }}
+        >
+            <label className="space-y-1">
+                <span className="text-sm font-bold">Pesakit</span>
+                <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={form.data.patient_id} onChange={(event) => form.setData('patient_id', event.target.value)} required>
+                    <option value="">Pilih pesakit</option>
+                    {patients.map((patient) => (
+                        <option key={patient.id} value={patient.id}>{patient.name}</option>
+                    ))}
+                </select>
+            </label>
+            <label className="space-y-1">
+                <span className="text-sm font-bold">Jenis dokumen</span>
+                <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={form.data.category} onChange={(event) => form.setData('category', event.target.value)}>
+                    {categories.map((category) => (
+                        <option key={category.value} value={category.value}>{category.label}</option>
+                    ))}
+                </select>
+            </label>
+            <label className="space-y-1 sm:col-span-2">
+                <span className="text-sm font-bold">Fail PDF atau gambar</span>
+                <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 py-2" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => form.setData('document', event.target.files?.[0] ?? null)} required />
+            </label>
+            <button type="submit" disabled={form.processing} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-500 px-4 font-black text-slate-950 sm:col-span-2">
+                Simpan dokumen pesakit
+            </button>
+            <InputError className="sm:col-span-2" message={form.errors.document || form.errors.category} />
+        </form>
     );
 }
 

@@ -1,4 +1,8 @@
 *
 !private/
 !public/
+!patient-documents/
+!patient-documents/.gitignore
+!medical-reports/
+!medical-reports/.gitignore
 !.gitignore

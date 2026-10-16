@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ClinicDocumentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MedicalRecordController;
+use App\Http\Controllers\MedicalReportController;
 use App\Http\Controllers\NurseSessionController;
 use App\Http\Controllers\PatientPortalController;
 use App\Http\Controllers\PromotionController;
@@ -31,6 +33,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/jururawat', [NurseSessionController::class, 'index'])->name('nurse.home');
         Route::get('/jururawat/darah', [MedicalRecordController::class, 'index'])->name('nurse.records.index');
         Route::post('/jururawat/darah', [MedicalRecordController::class, 'store'])->name('nurse.records.store');
+        Route::get('/jururawat/laporan/{report}', [MedicalReportController::class, 'download'])->name('nurse.reports.download');
         Route::post('/jururawat/sesi/{session}/daftar-masuk', [NurseSessionController::class, 'checkIn'])->name('nurse.sessions.check-in');
         Route::post('/jururawat/sesi/{session}/mula', [NurseSessionController::class, 'start'])->name('nurse.sessions.start');
         Route::post('/jururawat/sesi/{session}/selesai', [NurseSessionController::class, 'complete'])->name('nurse.sessions.complete');
@@ -38,12 +41,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role:patient')->group(function () {
         Route::get('/pesakit', [PatientPortalController::class, 'index'])->name('patient.home');
+        Route::get('/pesakit/dokumen/{document}', [ClinicDocumentController::class, 'downloadOwn'])->name('patient.documents.download');
+        Route::get('/pesakit/laporan/{report}', [MedicalReportController::class, 'downloadOwn'])->name('patient.reports.download');
     });
 
     Route::middleware('role:admin')->group(function () {
         Route::get('/admin', [AdminController::class, 'index'])->name('admin.home');
         Route::post('/admin/permohonan/{registration}/lulus', [AdminController::class, 'approveRegistration'])->name('admin.registrations.approve');
         Route::post('/admin/permohonan/{registration}/tolak', [AdminController::class, 'rejectRegistration'])->name('admin.registrations.reject');
+        Route::post('/admin/permohonan/{registration}/dokumen', [ClinicDocumentController::class, 'storeForRegistration'])->name('admin.documents.store');
+        Route::post('/admin/pesakit/{patient}/dokumen', [ClinicDocumentController::class, 'storeForPatient'])->name('admin.patients.documents.store');
+        Route::get('/admin/dokumen/{document}', [ClinicDocumentController::class, 'download'])->name('admin.documents.download');
     });
 });
 

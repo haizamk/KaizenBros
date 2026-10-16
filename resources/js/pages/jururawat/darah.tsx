@@ -1,4 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
+import BloodAnalysis, { type BloodAnalysisData } from '@/components/blood-analysis';
 import InputError from '@/components/input-error';
 
 type PatientOption = {
@@ -26,6 +27,8 @@ type RecordRow = {
     patient_name: string;
     patient_id_code: string;
     recorded_by: string | null;
+    analysis: BloodAnalysisData;
+    report: { id: number; original_name: string } | null;
 };
 
 const fieldClass = 'min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 text-base text-white';
@@ -53,6 +56,7 @@ export default function Darah({
         urea: '',
         creatinine: '',
         clinical_notes: '',
+        report: null as File | null,
     });
 
     return (
@@ -62,7 +66,7 @@ export default function Darah({
                 <div>
                     <p className="text-sm font-bold text-teal-300">Portal jururawat</p>
                     <h1 className="text-3xl font-black">Rekod darah</h1>
-                    <p className="text-base text-slate-200">Keputusan makmal disimpan di pelayan dan hanya pesakit berkenaan yang boleh melihatnya.</p>
+                    <p className="text-base text-slate-200">Nombor ditaip oleh kakitangan supaya graf dan analisa tepat. Salinan imbasan disimpan berasingan dan tidak dihantar keluar. Rekod darah disimpan dan tidak dipadam.</p>
                 </div>
 
                 {status && <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-base font-bold text-teal-100" role="status">{status}</p>}
@@ -71,7 +75,7 @@ export default function Darah({
                     className="space-y-4 rounded-3xl border border-[#1F385C] bg-[#132238] p-5"
                     onSubmit={(event) => {
                         event.preventDefault();
-                        form.post('/jururawat/darah');
+                        form.post('/jururawat/darah', { forceFormData: true });
                     }}
                 >
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -110,6 +114,17 @@ export default function Darah({
                         <span className="text-sm font-bold">Nota klinikal</span>
                         <textarea className={`${fieldClass} min-h-24 py-3`} value={form.data.clinical_notes} onChange={(event) => form.setData('clinical_notes', event.target.value)} />
                     </label>
+                    <label className="block space-y-1">
+                        <span className="text-sm font-bold">Salinan imbasan laporan perubatan</span>
+                        <input
+                            className={`${fieldClass} py-2`}
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
+                            onChange={(event) => form.setData('report', event.target.files?.[0] ?? null)}
+                        />
+                        <p className="text-sm leading-relaxed text-slate-300">PDF atau gambar, paling besar 8 MB. Nombor di atas tetap perlu ditaip. Sistem tidak membaca nombor daripada fail.</p>
+                        <InputError message={form.errors.report} />
+                    </label>
                     <button type="submit" disabled={form.processing} className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-teal-500 text-lg font-black text-slate-950 disabled:opacity-60">
                         {form.processing ? 'Menyimpan...' : 'Simpan rekod darah'}
                     </button>
@@ -129,6 +144,12 @@ export default function Darah({
                                 </p>
                                 {record.potassium_needs_attention && <p className="mt-1 font-bold text-amber-200">Kalium 5.5 atau lebih tinggi. Perlu perhatian.</p>}
                                 {record.clinical_notes && <p className="mt-1 text-slate-200">{record.clinical_notes}</p>}
+                                <BloodAnalysis analysis={record.analysis} />
+                                {record.report && (
+                                    <a className="mt-3 inline-flex min-h-12 items-center font-bold text-teal-200 underline" href={`/jururawat/laporan/${record.report.id}`} download>
+                                        Muat turun imbasan: {record.report.original_name}
+                                    </a>
+                                )}
                             </article>
                         ))
                     )}

@@ -6,6 +6,7 @@ use App\Enums\ExaminationType;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -35,6 +36,11 @@ use Illuminate\Support\Carbon;
 ])]
 class MedicalRecord extends Model
 {
+    protected static function booted(): void
+    {
+        static::deleting(fn (): bool => false);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -68,6 +74,14 @@ class MedicalRecord extends Model
     }
 
     /**
+     * @return HasOne<MedicalReport, $this>
+     */
+    public function report(): HasOne
+    {
+        return $this->hasOne(MedicalReport::class);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toPortalArray(): array
@@ -88,6 +102,7 @@ class MedicalRecord extends Model
             'recorded_by' => $this->recorder?->name,
             'patient_name' => $this->patient->name,
             'patient_id_code' => $this->patient->patient_id_code,
+            'report' => $this->report?->toPortalArray(),
         ];
     }
 }

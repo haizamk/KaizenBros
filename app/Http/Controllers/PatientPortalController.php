@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\DialysisSession;
 use App\Models\MedicalRecord;
+use App\Models\PatientDocument;
 use App\Models\PatientMedication;
+use App\Support\BloodReportAnalysis;
 use App\Support\ClinicCharts;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,10 +31,19 @@ class PatientPortalController extends Controller
         $recordModels = $patient === null
             ? collect()
             : MedicalRecord::query()
-                ->with(['patient', 'recorder'])
+                ->with(['patient', 'recorder', 'report'])
                 ->where('patient_id', $patient->id)
                 ->orderBy('examination_date')
                 ->get();
+
+        $documents = $patient === null
+            ? collect()
+            : PatientDocument::query()
+                ->where('patient_id', $patient->id)
+                ->latest()
+                ->get()
+                ->map(fn (PatientDocument $document): array => $document->toPortalArray())
+                ->values();
 
         $medications = $patient === null
             ? collect()
@@ -50,16 +61,17 @@ class PatientPortalController extends Controller
                 ->map(fn (DialysisSession $session): array => $session->toPortalArray())
                 ->values(),
             'medications' => $medications,
-            'records' => $recordModels
-                ->sortByDesc(fn (MedicalRecord $record) => $record->examination_date->toDateString())
-                ->map(fn (MedicalRecord $record): array => $record->toPortalArray())
-                ->values(),
+            'records' => BloodReportAnalysis::present($recordModels),
+            'documents' => $documents,
             'charts' => [
                 'weight' => ClinicCharts::weight($sessionModels),
                 'systolic' => ClinicCharts::systolic($sessionModels),
                 'diastolic' => ClinicCharts::diastolic($sessionModels),
                 'hemoglobin' => ClinicCharts::lab($recordModels, 'hemoglobin'),
                 'potassium' => ClinicCharts::lab($recordModels, 'potassium'),
+                'phosphate' => ClinicCharts::lab($recordModels, 'phosphate'),
+                'urea' => ClinicCharts::lab($recordModels, 'urea'),
+                'creatinine' => ClinicCharts::lab($recordModels, 'creatinine'),
             ],
             'today' => today()->toDateString(),
         ]);

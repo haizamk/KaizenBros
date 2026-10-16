@@ -89,6 +89,22 @@ class Patient extends Model
     }
 
     /**
+     * @return HasMany<PatientDocument, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(PatientDocument::class);
+    }
+
+    /**
+     * @return HasMany<MedicalRecord, $this>
+     */
+    public function medicalRecords(): HasMany
+    {
+        return $this->hasMany(MedicalRecord::class);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toPortalArray(): array
