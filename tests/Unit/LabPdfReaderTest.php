@@ -65,4 +65,48 @@ class LabPdfReaderTest extends TestCase
         $this->assertNull($parsed['date']);
         $this->assertSame(11.0, $parsed['values']['hemoglobin']);
     }
+
+    public function test_it_reads_a_column_style_lab_report_and_ignores_the_reference_range(): void
+    {
+        $parsed = (new LabPdfReader)->parseText(<<<'TEXT'
+            Collection Date: 16 Oct 2026
+            Haemoglobin                 10.8 g/dL      13.0 - 17.0
+            Total White Cell Count      6.8 x10^9/L    4.0 - 11.0
+            Platelet Count              198 x10^9/L    150 - 410
+            Urea                        21.5 mmol/L    2.5 - 6.7
+            Creatinine                  712 umol/L     60 - 110
+            eGFR                        7 mL/min/1.73m2
+            Potassium                   5.70 mmol/L    3.5 - 5.1
+            Inorganic Phosphate         1.95 mmol/L
+            Calcium                     2.15 mmol/L
+            Sodium                      136 mmol/L
+            Random Glucose              6.8 mmol/L
+            Total Cholesterol           5.40 mmol/L    < 5.2
+            HDL Cholesterol             0.90 mmol/L
+            LDL Cholesterol             3.10 mmol/L
+            Triglyceride                1.40 mmol/L
+            TEXT);
+
+        $this->assertSame('2026-10-16', $parsed['date']);
+        $this->assertSame(15, $parsed['found']);
+        $this->assertSame(10.8, $parsed['values']['hemoglobin']);
+        $this->assertSame(6.8, $parsed['values']['wbc']);
+        $this->assertSame(198.0, $parsed['values']['platelet']);
+        $this->assertSame(712.0, $parsed['values']['creatinine']);
+        $this->assertSame(7.0, $parsed['values']['egfr']);
+        $this->assertSame(5.7, $parsed['values']['potassium']);
+        $this->assertSame(1.95, $parsed['values']['phosphate']);
+        $this->assertSame(0.9, $parsed['values']['hdl']);
+        $this->assertSame(3.1, $parsed['values']['ldl']);
+        $this->assertNull($parsed['values']['hba1c']);
+    }
+
+    public function test_a_reference_limit_without_a_result_stays_empty(): void
+    {
+        $parsed = (new LabPdfReader)->parseText('Total Cholesterol < 5.2 mmol/L');
+
+        $this->assertSame(0, $parsed['found']);
+        $this->assertNull($parsed['values']['cholesterol']);
+        $this->assertTrue($parsed['has_text']);
+    }
 }

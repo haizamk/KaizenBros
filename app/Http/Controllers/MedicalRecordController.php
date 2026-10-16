@@ -77,8 +77,12 @@ class MedicalRecordController extends Controller
         $parsed = $reader->read($request->file('report'));
 
         if ($parsed['found'] === 0) {
+            $message = $parsed['has_text']
+                ? 'Tiada keputusan darah dibaca daripada PDF ini. Tiada nombor diandaikan.'
+                : 'PDF ini tidak mengandungi teks yang boleh dibaca. Ia mungkin imbasan gambar. Tiada nombor diandaikan.';
+
             throw ValidationException::withMessages([
-                'report' => 'Tiada keputusan darah dibaca daripada PDF ini. Tiada nombor diandaikan.',
+                'report' => $message,
             ]);
         }
 
