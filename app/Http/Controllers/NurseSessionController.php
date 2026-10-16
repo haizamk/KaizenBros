@@ -31,8 +31,22 @@ class NurseSessionController extends Controller
 
         return Inertia::render('jururawat/hari-ini', [
             'counts' => $counts,
+            'arrivals' => $sessions
+                ->map(fn (array $session): array => [
+                    'id' => $session['id'],
+                    'name' => $session['patient']['name'],
+                    'patient_id_code' => $session['patient']['patient_id_code'],
+                    'dry_weight_kg' => $session['patient']['dry_weight_kg'],
+                    'scheduled_time' => substr((string) $session['scheduled_time'], 0, 5),
+                    'shift_label' => $session['shift_label'],
+                    'status_label' => $session['status_label'],
+                    'queue_label' => $session['queue_label'],
+                    'can_register' => $session['status'] === 'BELUM_HADIR',
+                ])
+                ->values(),
             'today' => $counts['date_label'],
             'nurseName' => $request->user()->name,
+            'status' => session('status'),
         ]);
     }
 
@@ -97,7 +111,10 @@ class NurseSessionController extends Controller
             );
         });
 
-        return back()->with('status', 'Pesakit didaftarkan di kaunter. Berat badan disimpan.');
+        $session->refresh()->load('patient');
+        $label = str_pad((string) $session->queue_number, 3, '0', STR_PAD_LEFT);
+
+        return back()->with('status', "{$session->patient->name} didaftarkan. Nombor giliran {$label}. Ini giliran ke-{$session->queue_number}.");
     }
 
     public function call(CallSessionRequest $request, DialysisSession $session): RedirectResponse

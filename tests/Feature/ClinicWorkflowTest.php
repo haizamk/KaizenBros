@@ -212,6 +212,9 @@ class ClinicWorkflowTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('todaySession.queue_label', '001')
+                ->where('todaySession.queue_turn', 1)
+                ->where('todaySession.queue_position', 1)
+                ->where('todaySession.ahead_count', 0)
                 ->where('todaySession.chair_visible', false)
                 ->where('todaySession.chair_number', null)
             );
@@ -223,9 +226,64 @@ class ClinicWorkflowTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('todaySession.queue_label', '001')
+                ->where('todaySession.queue_turn', 1)
+                ->where('todaySession.queue_position', null)
                 ->where('todaySession.chair_visible', true)
                 ->where('todaySession.chair_number', 'A-01')
                 ->where('todaySession.time_range', '6:00 pagi – 10:00 pagi')
+            );
+    }
+
+    public function test_today_page_registers_the_named_patient_and_shows_their_place(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $firstOwner = User::factory()->create(['role' => 'patient']);
+        $secondOwner = User::factory()->create(['role' => 'patient']);
+        $first = $this->sessionFor($this->patientRecord($firstOwner, 'P-1001', 'Pesakit Awal'));
+        $second = $this->sessionFor($this->patientRecord($secondOwner, 'P-1002', 'Pesakit Kemudian'), 'A-02');
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.home'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('jururawat/hari-ini')
+                ->has('arrivals', 2)
+                ->where('arrivals.0.can_register', true)
+            );
+
+        $this->actingAs($admin)
+            ->from(route('nurse.home'))
+            ->post(route('nurse.sessions.arrive', $first), [
+                'pre_weight_kg' => 70.5,
+                'pre_bp' => '130/80',
+            ])
+            ->assertRedirect(route('nurse.home'))
+            ->assertSessionHas('status', fn (string $status): bool => str_contains($status, '001') && str_contains($status, 'ke-1'));
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.arrive', $second), ['pre_weight_kg' => 61])
+            ->assertRedirect();
+
+        $this->actingAs($secondOwner)
+            ->get(route('patient.home'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('todaySession.queue_label', '002')
+                ->where('todaySession.queue_turn', 2)
+                ->where('todaySession.queue_position', 2)
+                ->where('todaySession.ahead_count', 1)
+                ->where('todaySession.pre_weight_kg', '61.00')
+                ->where('todaySession.pre_bp', null)
+            );
+
+        $this->actingAs($firstOwner)
+            ->get(route('patient.session'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('todaySession.queue_label', '001')
+                ->where('todaySession.queue_position', 1)
+                ->where('todaySession.pre_bp', '130/80')
             );
     }
 

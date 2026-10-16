@@ -217,6 +217,7 @@ class PatientPortalController extends Controller
     private function sessionCard(DialysisSession $session): array
     {
         $chairVisible = $session->chair_number !== null && $session->called_at !== null;
+        $place = $this->queuePlace($session);
 
         return [
             'id' => $session->id,
@@ -224,10 +225,13 @@ class PatientPortalController extends Controller
             'date_label' => MalayDate::long($session->scheduled_date),
             'scheduled_time' => substr((string) $session->scheduled_time, 0, 5),
             'queue_label' => $session->queue_number === null ? null : str_pad((string) $session->queue_number, 3, '0', STR_PAD_LEFT),
+            'queue_turn' => $place['queue_turn'],
+            'queue_position' => $place['queue_position'],
+            'ahead_count' => $place['ahead_count'],
             'chair_number' => $chairVisible ? $session->chair_number : null,
             'chair_visible' => $chairVisible,
             'status' => $session->status->value,
-            'status_label' => $this->statusHeadline($session),
+            'status_label' => $this->statusHeadline($session, $place),
             'shift_label' => $session->shift->label(),
             'time_range' => $session->shift->timeRange(),
             'pre_weight_kg' => $session->pre_weight_kg,
@@ -240,7 +244,10 @@ class PatientPortalController extends Controller
         ];
     }
 
-    private function statusHeadline(DialysisSession $session): string
+    /**
+     * @param  array{queue_turn: int|null, queue_position: int|null, ahead_count: int|null}  $place
+     */
+    private function statusHeadline(DialysisSession $session, array $place): string
     {
         if (! $session->scheduled_date->isToday() && $session->status === SessionStatus::SudahSelesai) {
             return 'Selesai';
@@ -250,13 +257,63 @@ class PatientPortalController extends Controller
 
         return match ($session->status) {
             SessionStatus::BelumHadir => 'Belum tiba di klinik. Sila ke kaunter untuk daftar ketibaan.',
-            SessionStatus::Menunggu => $session->called_at === null
-                ? "Nombor giliran {$number} sudah didaftarkan. Sila tunggu panggilan jururawat."
-                : "Nombor giliran {$number} dipanggil. Sila ke kerusi {$session->chair_number}.",
-            SessionStatus::SudahHadir => 'Sudah berada di kerusi. Menunggu dialisis dimulakan.',
-            SessionStatus::SedangDialisis => 'Sedang menjalani dialisis.',
-            SessionStatus::SudahSelesai => 'Rawatan hari ini telah selesai.',
+            SessionStatus::Menunggu => $session->chair_number === null
+                ? "Nombor giliran {$number} sudah didaftarkan. Anda giliran ke-{$place['queue_turn']} hari ini, dan kini ke-{$place['queue_position']} dalam barisan menunggu. {$this->aheadSentence($place['ahead_count'])}"
+                : "Nombor giliran {$number} dipanggil. Anda giliran ke-{$place['queue_turn']} hari ini. Sila ke kerusi {$session->chair_number}.",
+            SessionStatus::SudahHadir => "Sudah berada di kerusi. Nombor giliran {$number}, giliran ke-{$place['queue_turn']} hari ini.",
+            SessionStatus::SedangDialisis => "Sedang menjalani dialisis. Nombor giliran {$number}, giliran ke-{$place['queue_turn']} hari ini.",
+            SessionStatus::SudahSelesai => $number === null
+                ? 'Rawatan hari ini telah selesai.'
+                : "Rawatan hari ini telah selesai. Nombor giliran {$number}, giliran ke-{$place['queue_turn']} hari ini.",
         };
+    }
+
+    /**
+     * @return array{queue_turn: int|null, queue_position: int|null, ahead_count: int|null}
+     */
+    private function queuePlace(DialysisSession $session): array
+    {
+        if ($session->queue_number === null) {
+            return [
+                'queue_turn' => null,
+                'queue_position' => null,
+                'ahead_count' => null,
+            ];
+        }
+
+        if ($session->status !== SessionStatus::Menunggu || $session->chair_number !== null) {
+            return [
+                'queue_turn' => $session->queue_number,
+                'queue_position' => null,
+                'ahead_count' => null,
+            ];
+        }
+
+        $ahead = DialysisSession::query()
+            ->whereDate('scheduled_date', $session->scheduled_date)
+            ->where('status', SessionStatus::Menunggu)
+            ->whereNull('chair_number')
+            ->where('queue_number', '<', $session->queue_number)
+            ->count();
+
+        return [
+            'queue_turn' => $session->queue_number,
+            'queue_position' => $ahead + 1,
+            'ahead_count' => $ahead,
+        ];
+    }
+
+    private function aheadSentence(?int $ahead): string
+    {
+        if ($ahead === null || $ahead === 0) {
+            return 'Tiada pesakit di hadapan anda.';
+        }
+
+        if ($ahead === 1) {
+            return 'Seorang pesakit di hadapan anda.';
+        }
+
+        return "{$ahead} pesakit di hadapan anda.";
     }
 
     private function months(Request $request): int

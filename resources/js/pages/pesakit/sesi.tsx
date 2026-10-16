@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
 import DialysisTimer from '@/components/dialysis-timer';
 import PatientNav, { MissingPatient } from '@/components/patient-nav';
+import QueueTicket from '@/components/queue-ticket';
 
 type PatientCard = {
     name: string;
@@ -13,6 +14,9 @@ type PatientCard = {
 type SessionCard = {
     date_label: string;
     queue_label: string | null;
+    queue_turn: number | null;
+    queue_position: number | null;
+    ahead_count: number | null;
     chair_number: string | null;
     chair_visible: boolean;
     status: string;
@@ -54,11 +58,13 @@ export default function SesiPesakit({
                     ) : (
                         <section className="space-y-4 rounded-3xl border border-[#1F385C] bg-[#132238] p-4 sm:p-6">
                             <p className="text-2xl font-black leading-snug">{todaySession.status_label}</p>
-                            {todaySession.queue_label ? <p className="text-4xl font-black text-amber-200">Giliran {todaySession.queue_label}</p> : null}
+                            <QueueTicket ticket={todaySession} />
                             <p className="text-lg">{todaySession.date_label}</p>
                             <p className="text-lg">{todaySession.shift_label} · {todaySession.time_range}</p>
                             {todaySession.chair_visible && todaySession.chair_number ? (
                                 <p className="text-2xl font-black text-teal-200">Kerusi {todaySession.chair_number}</p>
+                            ) : todaySession.queue_label ? (
+                                <p className="text-lg leading-relaxed">Kerusi akan dipaparkan selepas jururawat memanggil nombor giliran anda.</p>
                             ) : (
                                 <p className="text-lg leading-relaxed">Kerusi dan mesin akan dipapar selepas jururawat mendaftar kedatangan anda di kaunter.</p>
                             )}

@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import DialysisTimer from '@/components/dialysis-timer';
 import PatientNav, { MissingPatient } from '@/components/patient-nav';
+import QueueTicket from '@/components/queue-ticket';
 
 type PatientCard = {
     patient_id_code: string;
@@ -15,6 +16,9 @@ type SessionCard = {
     date_label: string;
     scheduled_time: string;
     queue_label: string | null;
+    queue_turn: number | null;
+    queue_position: number | null;
+    ahead_count: number | null;
     chair_number: string | null;
     chair_visible: boolean;
     status: string;
@@ -123,7 +127,7 @@ function TodayCard({ session }: { session: SessionCard }) {
                 <span className="rounded-full border border-amber-600 px-3 py-1 text-sm font-black text-amber-100">{session.shift_label}</span>
             </div>
             <p className="text-2xl font-black leading-snug">{session.status_label}</p>
-            {session.queue_label ? <p className="text-4xl font-black text-amber-200">Giliran {session.queue_label}</p> : null}
+            <QueueTicket ticket={session} />
             <p className="text-lg">{session.date_label} · {session.time_range}</p>
             {session.status === 'SEDANG_DIALISIS' && session.started_at && <DialysisTimer startedAt={session.started_at} />}
             <Chair session={session} />
@@ -171,10 +175,7 @@ function Chair({ session }: { session: SessionCard | null }) {
 
     if (session?.queue_label) {
         return (
-            <div className="rounded-2xl border-2 border-amber-600 p-4">
-                <p className="text-lg font-black text-amber-200">Nombor giliran {session.queue_label}</p>
-                <p className="mt-2 text-base leading-relaxed">Kerusi akan dipaparkan di sini selepas jururawat memanggil nombor anda.</p>
-            </div>
+            <p className="text-base leading-relaxed">Kerusi akan dipaparkan di sini selepas jururawat memanggil nombor anda.</p>
         );
     }
 
