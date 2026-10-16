@@ -3,10 +3,13 @@ import { Head } from '@inertiajs/react';
 import { NursePage } from '@/components/nurse-nav';
 import SessionActions, { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
 
+const steps = ['Daftar ketibaan', 'Panggil kerusi', 'Berat dan BP', 'Mula dialisis', 'Tamat rawatan'];
+
 const filters = [
     { key: 'SEMUA', label: 'Semua' },
-    { key: 'BELUM_HADIR', label: 'Belum hadir' },
-    { key: 'SUDAH_HADIR', label: 'Sudah hadir' },
+    { key: 'BELUM_HADIR', label: 'Belum tiba' },
+    { key: 'MENUNGGU', label: 'Menunggu' },
+    { key: 'SUDAH_HADIR', label: 'Di kerusi' },
     { key: 'SEDANG_DIALISIS', label: 'Sedang dialisis' },
     { key: 'SUDAH_SELESAI', label: 'Selesai' },
 ];
@@ -40,6 +43,14 @@ export default function Sesi({
                 title="Sesi dialisis"
                 intro={`${counts.date_label}. Berat dan tekanan darah yang disimpan di sini terus muncul pada portal pesakit. Hanya jururawat dan pentadbir boleh merekodnya.`}
             >
+                <ol className="grid gap-2 sm:grid-cols-5">
+                    {steps.map((step, index) => (
+                        <li key={step} className="rounded-2xl border border-[#1F385C] bg-[#132238] px-3 py-3 text-sm font-black">
+                            {index + 1}. {step}
+                        </li>
+                    ))}
+                </ol>
+                <p className="text-base text-slate-200">Kerusi kosong: {counts.kerusi_kosong}. Syif 1 6:00–10:00 pagi, Syif 2 10:30 pagi–2:30 petang, Syif 3 3:00–7:00 petang.</p>
                 {status ? <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{status}</p> : null}
                 <div className="flex gap-2 overflow-x-auto pb-1">
                     {filters.map((item) => (
@@ -66,7 +77,10 @@ export default function Sesi({
                                     <div>
                                         <h2 className="text-2xl font-black">{session.patient.name}</h2>
                                         <p className="text-base text-slate-200">
-                                            {session.patient.patient_id_code} · Stesen {session.chair_number} · {session.scheduled_time} · {session.shift_label}
+                                            {session.patient.patient_id_code}
+                                            {session.queue_label ? ` · Giliran ${session.queue_label}` : ''}
+                                            {session.chair_number ? ` · Kerusi ${session.chair_number}` : ''}
+                                            {' · '}{session.scheduled_time} · {session.shift_label}
                                         </p>
                                         <p className="text-sm text-slate-300">
                                             Berat kering {session.patient.dry_weight_kg} kg · {session.patient.sponsor}

@@ -216,17 +216,18 @@ class PatientPortalController extends Controller
      */
     private function sessionCard(DialysisSession $session): array
     {
-        $visible = $session->status !== SessionStatus::BelumHadir;
+        $chairVisible = $session->chair_number !== null && $session->called_at !== null;
 
         return [
             'id' => $session->id,
             'scheduled_date' => $session->scheduled_date->toDateString(),
             'date_label' => MalayDate::long($session->scheduled_date),
             'scheduled_time' => substr((string) $session->scheduled_time, 0, 5),
-            'chair_number' => $visible ? $session->chair_number : null,
-            'chair_visible' => $visible,
+            'queue_label' => $session->queue_number === null ? null : str_pad((string) $session->queue_number, 3, '0', STR_PAD_LEFT),
+            'chair_number' => $chairVisible ? $session->chair_number : null,
+            'chair_visible' => $chairVisible,
             'status' => $session->status->value,
-            'status_label' => $this->statusHeadline($session->status, $session->scheduled_date->isToday()),
+            'status_label' => $this->statusHeadline($session),
             'shift_label' => $session->shift->label(),
             'time_range' => $session->shift->timeRange(),
             'pre_weight_kg' => $session->pre_weight_kg,
@@ -239,15 +240,20 @@ class PatientPortalController extends Controller
         ];
     }
 
-    private function statusHeadline(SessionStatus $status, bool $today): string
+    private function statusHeadline(DialysisSession $session): string
     {
-        if (! $today && $status === SessionStatus::SudahSelesai) {
+        if (! $session->scheduled_date->isToday() && $session->status === SessionStatus::SudahSelesai) {
             return 'Selesai';
         }
 
-        return match ($status) {
-            SessionStatus::BelumHadir => 'Belum tiba di klinik. Menunggu pendaftaran kaunter.',
-            SessionStatus::SudahHadir => 'Sudah daftar di kaunter. Menunggu dialisis dimulakan.',
+        $number = $session->queue_number === null ? null : str_pad((string) $session->queue_number, 3, '0', STR_PAD_LEFT);
+
+        return match ($session->status) {
+            SessionStatus::BelumHadir => 'Belum tiba di klinik. Sila ke kaunter untuk daftar ketibaan.',
+            SessionStatus::Menunggu => $session->called_at === null
+                ? "Nombor giliran {$number} sudah didaftarkan. Sila tunggu panggilan jururawat."
+                : "Nombor giliran {$number} dipanggil. Sila ke kerusi {$session->chair_number}.",
+            SessionStatus::SudahHadir => 'Sudah berada di kerusi. Menunggu dialisis dimulakan.',
             SessionStatus::SedangDialisis => 'Sedang menjalani dialisis.',
             SessionStatus::SudahSelesai => 'Rawatan hari ini telah selesai.',
         };

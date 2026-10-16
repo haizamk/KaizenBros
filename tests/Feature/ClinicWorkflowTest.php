@@ -31,12 +31,28 @@ class ClinicWorkflowTest extends TestCase
         $this->actingAs($patient)->get(route('nurse.records.index'))->assertForbidden();
         $this->actingAs($patient)->post(route('nurse.records.store'), [])->assertForbidden();
         $this->actingAs($patient)->get(route('admin.home'))->assertForbidden();
+        $this->actingAs($patient)->post(route('nurse.sessions.arrive', $this->sessionFor($this->patientRecord())))->assertForbidden();
     }
 
     public function test_nurse_moves_a_session_from_arrival_to_completion(): void
     {
         $nurse = User::factory()->create(['role' => 'nurse']);
         $session = $this->sessionFor($this->patientRecord());
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.arrive', $session))
+            ->assertRedirect();
+
+        $session->refresh();
+        $this->assertSame(SessionStatus::Menunggu, $session->status);
+        $this->assertSame(1, $session->queue_number);
+        $this->assertNull($session->chair_number);
+
+        $this->actingAs($nurse)
+            ->post(route('nurse.sessions.call', $session))
+            ->assertRedirect();
+
+        $this->assertSame('A-01', $session->refresh()->chair_number);
 
         $this->actingAs($nurse)
             ->post(route('nurse.sessions.check-in', $session), [
@@ -98,7 +114,6 @@ class ClinicWorkflowTest extends TestCase
                 ->missing('records')
             )
             ->assertDontSee('Siti Aminah binti Hassan')
-            ->assertDontSee('A-09')
             ->assertDontSee('wa.me');
     }
 
@@ -183,6 +198,51 @@ class ClinicWorkflowTest extends TestCase
                 ->where('records.0.potassium_needs_attention', true)
                 ->where('records.0.recorded_by', 'Sister Siti')
             );
+    }
+
+    public function test_patient_sees_the_queue_number_before_the_chair(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+        $owner = User::factory()->create(['role' => 'patient']);
+        $session = $this->sessionFor($this->patientRecord($owner));
+
+        $this->actingAs($nurse)->post(route('nurse.sessions.arrive', $session))->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('patient.home'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('todaySession.queue_label', '001')
+                ->where('todaySession.chair_visible', false)
+                ->where('todaySession.chair_number', null)
+            );
+
+        $this->actingAs($nurse)->post(route('nurse.sessions.call', $session))->assertRedirect();
+
+        $this->actingAs($owner)
+            ->get(route('patient.session'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('todaySession.queue_label', '001')
+                ->where('todaySession.chair_visible', true)
+                ->where('todaySession.chair_number', 'A-01')
+                ->where('todaySession.time_range', '6:00 pagi – 10:00 pagi')
+            );
+    }
+
+    public function test_admin_can_change_a_patient_shift_and_today_session_follows(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $patient = $this->patientRecord();
+        $session = $this->sessionFor($patient);
+
+        $this->actingAs($admin)
+            ->post(route('admin.patients.shift', $patient), ['preferred_shift' => ShiftSlot::Syif2->value])
+            ->assertRedirect();
+
+        $this->assertSame(ShiftSlot::Syif2, $patient->refresh()->preferred_shift);
+        $this->assertSame(ShiftSlot::Syif2, $session->refresh()->shift);
+        $this->assertSame('10:30', substr((string) $session->scheduled_time, 0, 5));
     }
 
     public function test_nurse_pages_stay_separate_and_share_today_counts_with_admin(): void

@@ -9,6 +9,7 @@ type PatientRow = {
     phone: string;
     sponsor: string;
     schedule_label: string;
+    preferred_shift: string;
     shift_label: string;
     dry_weight_kg: string;
 };
@@ -52,10 +53,18 @@ type TodayCounts = {
     date_label: string;
     total: number;
     belum: number;
+    menunggu: number;
     hadir: number;
     sedang: number;
     selesai: number;
+    kerusi_kosong: number;
     percent: number;
+};
+
+type ShiftOption = {
+    value: string;
+    label: string;
+    time_range: string;
 };
 
 type NurseApplicationRow = {
@@ -84,9 +93,11 @@ export default function PapanAdmin({
     nurseApplications,
     patientDocuments,
     documentCategories,
+    shifts,
     notice,
 }: {
     today: TodayCounts;
+    shifts: ShiftOption[];
     patients: PatientRow[];
     registrations: RegistrationRow[];
     nurseApplications: NurseApplicationRow[];
@@ -130,7 +141,8 @@ export default function PapanAdmin({
                         <p className="text-lg text-slate-200">{today.date_label}. Angka ini sama dengan portal jururawat.</p>
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                             <p className="text-lg">Jumlah <span className="block text-3xl font-black">{today.total}</span></p>
-                            <p className="text-lg">Belum hadir <span className="block text-3xl font-black">{today.belum}</span></p>
+                            <p className="text-lg">Belum tiba <span className="block text-3xl font-black">{today.belum}</span></p>
+                            <p className="text-lg">Menunggu <span className="block text-3xl font-black">{today.menunggu}</span></p>
                             <p className="text-lg">Sudah hadir <span className="block text-3xl font-black">{today.hadir}</span></p>
                             <p className="text-lg">Sedang dialisis <span className="block text-3xl font-black">{today.sedang}</span></p>
                             <p className="text-lg">Selesai <span className="block text-3xl font-black">{today.selesai}</span></p>
@@ -143,6 +155,14 @@ export default function PapanAdmin({
 
                 {section === 'pesakit' && <section className="space-y-3">
                     <h2 className="text-2xl font-black">Pesakit aktif ({patients.length})</h2>
+                    <ul className="grid gap-2 sm:grid-cols-3">
+                        {shifts.map((shift) => (
+                            <li key={shift.value} className="rounded-2xl border border-[#1F385C] bg-[#132238] p-3">
+                                <p className="font-black">{shift.label}</p>
+                                <p className="text-base text-slate-200">{shift.time_range}</p>
+                            </li>
+                        ))}
+                    </ul>
                     <p className="text-base text-slate-300 md:hidden">Leret jadual ke tepi jika lajur tidak muat pada skrin.</p>
                     <div className="overflow-x-auto rounded-3xl border border-[#1F385C]">
                         <table className="min-w-full text-left text-base">
@@ -161,7 +181,11 @@ export default function PapanAdmin({
                                             <p className="font-black">{patient.name}</p>
                                             <p className="text-sm text-slate-300">{patient.patient_id_code} · {patient.phone}</p>
                                         </td>
-                                        <td className="px-4 py-4">{patient.schedule_label}<br />{patient.shift_label}</td>
+                                        <td className="px-4 py-4">
+                                            <p>{patient.schedule_label}</p>
+                                            <p>{patient.shift_label}</p>
+                                            <ShiftForm patientId={patient.id} value={patient.preferred_shift} shifts={shifts} />
+                                        </td>
                                         <td className="px-4 py-4">{patient.sponsor}</td>
                                         <td className="px-4 py-4">{patient.dry_weight_kg} kg</td>
                                     </tr>
@@ -360,6 +384,30 @@ function PatientDocumentForm({ patients, categories }: { patients: PatientRow[];
                 Simpan dokumen pesakit
             </button>
             <InputError className="sm:col-span-2" message={form.errors.document || form.errors.category} />
+        </form>
+    );
+}
+
+function ShiftForm({ patientId, value, shifts }: { patientId: number; value: string; shifts: ShiftOption[] }) {
+    const form = useForm({ preferred_shift: value });
+
+    return (
+        <form
+            className="mt-2 grid gap-2"
+            onSubmit={(event) => {
+                event.preventDefault();
+                form.post(`/admin/pesakit/${patientId}/syif`);
+            }}
+        >
+            <select className="min-h-12 rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={form.data.preferred_shift} onChange={(event) => form.setData('preferred_shift', event.target.value)}>
+                {shifts.map((shift) => (
+                    <option key={shift.value} value={shift.value}>{shift.time_range}</option>
+                ))}
+            </select>
+            <button type="submit" disabled={form.processing} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-500 px-3 font-black text-slate-950">
+                Simpan syif
+            </button>
+            <InputError message={form.errors.preferred_shift} />
         </form>
     );
 }

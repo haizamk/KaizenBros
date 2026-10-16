@@ -80,6 +80,26 @@ class NurseSessionController extends Controller
         ]);
     }
 
+    public function arrive(Request $request, DialysisSession $session): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $session): void {
+            $locked = $this->lock($session);
+            $this->workflow->arrive($locked, $request->user());
+        });
+
+        return back()->with('status', 'Pesakit didaftarkan di kaunter.');
+    }
+
+    public function call(Request $request, DialysisSession $session): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $session): void {
+            $locked = $this->lock($session);
+            $this->workflow->call($locked, $request->user());
+        });
+
+        return back()->with('status', 'Nombor giliran dipanggil ke kerusi kosong.');
+    }
+
     public function recordDuring(RecordIntraBpRequest $request, DialysisSession $session): RedirectResponse
     {
         DB::transaction(function () use ($request, $session): void {

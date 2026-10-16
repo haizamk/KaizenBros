@@ -14,6 +14,7 @@ type PatientCard = {
 type SessionCard = {
     date_label: string;
     scheduled_time: string;
+    queue_label: string | null;
     chair_number: string | null;
     chair_visible: boolean;
     status: string;
@@ -122,6 +123,7 @@ function TodayCard({ session }: { session: SessionCard }) {
                 <span className="rounded-full border border-amber-600 px-3 py-1 text-sm font-black text-amber-100">{session.shift_label}</span>
             </div>
             <p className="text-2xl font-black leading-snug">{session.status_label}</p>
+            {session.queue_label ? <p className="text-4xl font-black text-amber-200">Giliran {session.queue_label}</p> : null}
             <p className="text-lg">{session.date_label} · {session.time_range}</p>
             {session.status === 'SEDANG_DIALISIS' && session.started_at && <DialysisTimer startedAt={session.started_at} />}
             <Chair session={session} />
@@ -162,7 +164,16 @@ function Chair({ session }: { session: SessionCard | null }) {
         return (
             <div className="rounded-2xl border-2 border-teal-700 p-4">
                 <p className="text-lg font-black text-teal-200">Kerusi {session.chair_number}</p>
-                <p className="text-base leading-relaxed">Kerusi ini dipilih oleh jururawat selepas anda daftar di kaunter.</p>
+                <p className="text-base leading-relaxed">Jururawat telah memanggil nombor anda kerana ada kerusi kosong.</p>
+            </div>
+        );
+    }
+
+    if (session?.queue_label) {
+        return (
+            <div className="rounded-2xl border-2 border-amber-600 p-4">
+                <p className="text-lg font-black text-amber-200">Nombor giliran {session.queue_label}</p>
+                <p className="mt-2 text-base leading-relaxed">Kerusi akan dipaparkan di sini selepas jururawat memanggil nombor anda.</p>
             </div>
         );
     }

@@ -95,11 +95,14 @@ class DatabaseSeeder extends Seeder
 
         DialysisSession::query()->create([
             'patient_id' => $tan->id,
+            'queue_number' => 2,
             'chair_number' => 'A-01',
             'scheduled_date' => today(),
             'scheduled_time' => '06:00',
             'shift' => ShiftSlot::Syif1,
             'status' => SessionStatus::SedangDialisis,
+            'arrived_at' => now()->subMinutes(50),
+            'called_at' => now()->subMinutes(45),
             'pre_weight_kg' => 64.20,
             'pre_bp' => '148/86',
             'started_at' => now()->subMinutes(40),
@@ -108,11 +111,14 @@ class DatabaseSeeder extends Seeder
 
         DialysisSession::query()->create([
             'patient_id' => $siti->id,
+            'queue_number' => 3,
             'chair_number' => 'A-02',
             'scheduled_date' => today(),
             'scheduled_time' => '06:00',
             'shift' => ShiftSlot::Syif1,
             'status' => SessionStatus::SudahHadir,
+            'arrived_at' => now()->subMinutes(30),
+            'called_at' => now()->subMinutes(20),
             'pre_weight_kg' => 56.10,
             'pre_bp' => '152/90',
             'nurse_user_id' => $nurse->id,
@@ -120,20 +126,23 @@ class DatabaseSeeder extends Seeder
 
         DialysisSession::query()->create([
             'patient_id' => $rajesh->id,
-            'chair_number' => 'B-01',
+            'chair_number' => null,
             'scheduled_date' => today(),
-            'scheduled_time' => '11:00',
+            'scheduled_time' => '10:30',
             'shift' => ShiftSlot::Syif2,
             'status' => SessionStatus::BelumHadir,
         ]);
 
         DialysisSession::query()->create([
             'patient_id' => $lim->id,
+            'queue_number' => 1,
             'chair_number' => 'A-03',
             'scheduled_date' => today(),
             'scheduled_time' => '06:00',
             'shift' => ShiftSlot::Syif1,
             'status' => SessionStatus::SudahSelesai,
+            'arrived_at' => now()->subHours(6),
+            'called_at' => now()->subHours(6),
             'pre_weight_kg' => 51.40,
             'post_weight_kg' => 49.90,
             'pre_bp' => '138/78',

@@ -12,8 +12,8 @@ enum ShiftSlot: string
     {
         return match ($this) {
             self::Syif1 => 'Syif 1 · 6:00 pagi',
-            self::Syif2 => 'Syif 2 · 11:00 pagi',
-            self::Syif3 => 'Syif 3 · 4:00 petang',
+            self::Syif2 => 'Syif 2 · 10:30 pagi',
+            self::Syif3 => 'Syif 3 · 3:00 petang',
         };
     }
 
@@ -21,8 +21,17 @@ enum ShiftSlot: string
     {
         return match ($this) {
             self::Syif1 => '6:00 pagi – 10:00 pagi',
-            self::Syif2 => '11:00 pagi – 3:00 petang',
-            self::Syif3 => '4:00 petang – 8:00 malam',
+            self::Syif2 => '10:30 pagi – 2:30 petang',
+            self::Syif3 => '3:00 petang – 7:00 malam',
+        };
+    }
+
+    public function startTime(): string
+    {
+        return match ($this) {
+            self::Syif1 => '06:00',
+            self::Syif2 => '10:30',
+            self::Syif3 => '15:00',
         };
     }
 }

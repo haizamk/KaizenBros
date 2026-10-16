@@ -9,9 +9,61 @@ use Illuminate\Validation\ValidationException;
 
 class DialysisSessionWorkflow
 {
+    public function arrive(DialysisSession $session, User $nurse): void
+    {
+        $this->assertStatus($session, SessionStatus::BelumHadir, 'Pesakit ini sudah didaftarkan di kaunter.');
+        $this->lockDay($session);
+
+        $next = (int) DialysisSession::query()
+            ->whereDate('scheduled_date', $session->scheduled_date)
+            ->lockForUpdate()
+            ->max('queue_number');
+
+        $session->forceFill([
+            'status' => SessionStatus::Menunggu,
+            'queue_number' => $next + 1,
+            'arrived_at' => now(),
+            'chair_number' => null,
+            'called_at' => null,
+            'nurse_user_id' => $nurse->id,
+        ])->save();
+    }
+
+    public function call(DialysisSession $session, User $nurse): void
+    {
+        $this->assertStatus($session, SessionStatus::Menunggu, 'Hanya pesakit yang sudah daftar kaunter boleh dipanggil.');
+
+        if ($session->chair_number !== null) {
+            throw ValidationException::withMessages([
+                'status' => 'Pesakit ini sudah mempunyai kerusi.',
+            ]);
+        }
+
+        $this->lockDay($session);
+        $chair = $this->nextFreeChair($session);
+
+        if ($chair === null) {
+            throw ValidationException::withMessages([
+                'status' => 'Tiada kerusi kosong. Sila tunggu satu sesi selesai.',
+            ]);
+        }
+
+        $session->forceFill([
+            'chair_number' => $chair,
+            'called_at' => now(),
+            'nurse_user_id' => $nurse->id,
+        ])->save();
+    }
+
     public function checkIn(DialysisSession $session, User $nurse, float $preWeight, string $preBp): void
     {
-        $this->assertStatus($session, SessionStatus::BelumHadir, 'Sesi ini tidak boleh didaftar masuk dari status semasa.');
+        $this->assertStatus($session, SessionStatus::Menunggu, 'Rekod berat hanya boleh dibuat selepas pesakit dipanggil ke kerusi.');
+
+        if ($session->chair_number === null) {
+            throw ValidationException::withMessages([
+                'status' => 'Pesakit belum dipanggil ke kerusi kosong.',
+            ]);
+        }
 
         $session->forceFill([
             'status' => SessionStatus::SudahHadir,
@@ -54,6 +106,35 @@ class DialysisSessionWorkflow
             'completed_at' => now(),
             'nurse_user_id' => $nurse->id,
         ])->save();
+    }
+
+    private function lockDay(DialysisSession $session): void
+    {
+        DialysisSession::query()
+            ->whereDate('scheduled_date', $session->scheduled_date)
+            ->lockForUpdate()
+            ->get(['id']);
+    }
+
+    public function nextFreeChair(DialysisSession $session): ?string
+    {
+        $occupied = DialysisSession::query()
+            ->whereDate('scheduled_date', $session->scheduled_date)
+            ->whereNotNull('chair_number')
+            ->where('status', '!=', SessionStatus::SudahSelesai)
+            ->whereKeyNot($session->id)
+            ->pluck('chair_number');
+
+        /** @var array<int, string> $chairs */
+        $chairs = config('kaizenbros.centre.chairs', []);
+
+        foreach ($chairs as $chair) {
+            if (! $occupied->contains($chair)) {
+                return $chair;
+            }
+        }
+
+        return null;
     }
 
     private function assertStatus(DialysisSession $session, SessionStatus $expected, string $message): void

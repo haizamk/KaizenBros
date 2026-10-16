@@ -21,6 +21,7 @@ return [
             ['days' => 'Ahad', 'time' => 'Panggilan Kecemasan Sahaja'],
         ],
         'capacity_machines' => 12,
+        'chairs' => ['A-01', 'A-02', 'A-03', 'A-04', 'A-05', 'A-06', 'A-07', 'A-08', 'A-09', 'A-10', 'A-11', 'A-12'],
         'machine_model' => 'Fresenius 4008S NG / 5008S HDF',
         'water_system' => 'Double Pass Reverse Osmosis System',
         'panels' => ['PERKESO / SOCSO', 'JPA / KWAP', 'Zakat Selangor', 'BAITULMAL', 'NKF'],

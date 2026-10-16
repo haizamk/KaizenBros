@@ -5,6 +5,7 @@ namespace App\Enums;
 enum SessionStatus: string
 {
     case BelumHadir = 'BELUM_HADIR';
+    case Menunggu = 'MENUNGGU';
     case SudahHadir = 'SUDAH_HADIR';
     case SedangDialisis = 'SEDANG_DIALISIS';
     case SudahSelesai = 'SUDAH_SELESAI';
@@ -12,7 +13,8 @@ enum SessionStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::BelumHadir => 'Belum hadir',
+            self::BelumHadir => 'Belum tiba',
+            self::Menunggu => 'Menunggu panggilan',
             self::SudahHadir => 'Sudah hadir',
             self::SedangDialisis => 'Sedang dialisis',
             self::SudahSelesai => 'Selesai',

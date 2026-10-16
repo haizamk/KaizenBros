@@ -4,7 +4,9 @@ import { statusClass, type SessionCard, type ShiftCounts } from '@/components/se
 
 const cards = [
     { key: 'total' as const, label: 'Jumlah pesakit', detail: 'Jadual hari ini' },
-    { key: 'hadir' as const, label: 'Sudah hadir', detail: 'Check-in selesai' },
+    { key: 'menunggu' as const, label: 'Menunggu panggilan', detail: 'Sudah daftar kaunter' },
+    { key: 'kerusi_kosong' as const, label: 'Kerusi kosong', detail: 'Boleh dipanggil sekarang' },
+    { key: 'hadir' as const, label: 'Sudah hadir', detail: 'Sudah di kerusi' },
     { key: 'sedang' as const, label: 'Sedang dialisis', detail: 'Aktif di mesin' },
     { key: 'selesai' as const, label: 'Sudah selesai', detail: 'Sesi tamat dan discaj' },
     { key: 'belum' as const, label: 'Belum hadir', detail: 'Menunggu kedatangan' },

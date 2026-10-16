@@ -17,8 +17,9 @@ class NurseBoard
         return DialysisSession::query()
             ->with(['patient', 'nurse'])
             ->whereDate('scheduled_date', today())
+            ->orderByRaw('queue_number is null')
+            ->orderBy('queue_number')
             ->orderBy('scheduled_time')
-            ->orderBy('chair_number')
             ->get()
             ->map(function (DialysisSession $session): array {
                 $data = $session->toPortalArray();
@@ -28,7 +29,7 @@ class NurseBoard
                     $session->patient->name,
                     $session->scheduled_date->format('d/m/Y'),
                     $session->scheduled_time,
-                    $session->chair_number,
+                    $session->chair_number ?? 'akan ditentukan',
                 );
 
                 return $data;
@@ -48,9 +49,19 @@ class NurseBoard
         return [
             'total' => $total,
             'belum' => $sessions->where('status', SessionStatus::BelumHadir->value)->count(),
+            'menunggu' => $sessions->where('status', SessionStatus::Menunggu->value)->count(),
             'hadir' => $sessions->where('status', SessionStatus::SudahHadir->value)->count(),
             'sedang' => $sessions->where('status', SessionStatus::SedangDialisis->value)->count(),
             'selesai' => $selesai,
+            'kerusi_kosong' => collect(config('kaizenbros.centre.chairs', []))
+                ->diff(
+                    DialysisSession::query()
+                        ->whereDate('scheduled_date', today())
+                        ->whereNotNull('chair_number')
+                        ->where('status', '!=', SessionStatus::SudahSelesai)
+                        ->pluck('chair_number')
+                )
+                ->count(),
             'percent' => $total === 0 ? 0 : (int) round(($selesai / $total) * 100),
             'clinic_closed' => now()->format('H:i') >= '19:00',
             'date_label' => MalayDate::long(today()),

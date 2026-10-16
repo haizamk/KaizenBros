@@ -30,7 +30,13 @@ function digits(phone: string): string {
     return phone.replace(/\s+/g, '');
 }
 
-export default function Welcome({ centre }: { centre: Centre }) {
+export default function Welcome({
+    centre,
+    shifts = [],
+}: {
+    centre: Centre;
+    shifts?: Array<{ label: string; time_range: string }>;
+}) {
     const whatsappHref = `https://wa.me/${centre.whatsapp_number}?text=${encodeURIComponent(whatsappMessage)}`;
 
     return (
@@ -76,6 +82,9 @@ export default function Welcome({ centre }: { centre: Centre }) {
 
                         <aside className="space-y-4 rounded-3xl border-2 border-border bg-background p-6">
                             <h2 className="text-2xl font-black">Waktu operasi</h2>
+                            {shifts.map((shift) => (
+                                <p key={shift.label} className="text-lg leading-relaxed">{shift.label}: {shift.time_range}</p>
+                            ))}
                             {centre.operating_hours.map((row) => (
                                 <p key={row.days} className="flex flex-col gap-1 text-xl sm:flex-row sm:items-baseline sm:justify-between">
                                     <span>{row.days}</span>

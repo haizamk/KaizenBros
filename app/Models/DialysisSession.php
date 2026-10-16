@@ -12,7 +12,8 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $patient_id
- * @property string $chair_number
+ * @property int|null $queue_number
+ * @property string|null $chair_number
  * @property Carbon $scheduled_date
  * @property string $scheduled_time
  * @property ShiftSlot $shift
@@ -22,6 +23,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $pre_bp
  * @property string|null $intra_bp
  * @property string|null $post_bp
+ * @property Carbon|null $arrived_at
+ * @property Carbon|null $called_at
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
  * @property int|null $nurse_user_id
@@ -29,11 +32,14 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'patient_id',
+    'queue_number',
     'chair_number',
     'scheduled_date',
     'scheduled_time',
     'shift',
     'status',
+    'arrived_at',
+    'called_at',
     'pre_weight_kg',
     'post_weight_kg',
     'pre_bp',
@@ -55,6 +61,9 @@ class DialysisSession extends Model
             'scheduled_date' => 'date',
             'shift' => ShiftSlot::class,
             'status' => SessionStatus::class,
+            'queue_number' => 'integer',
+            'arrived_at' => 'datetime',
+            'called_at' => 'datetime',
             'pre_weight_kg' => 'decimal:2',
             'post_weight_kg' => 'decimal:2',
             'started_at' => 'datetime',
@@ -85,7 +94,11 @@ class DialysisSession extends Model
     {
         return [
             'id' => $this->id,
+            'queue_number' => $this->queue_number,
+            'queue_label' => $this->queue_number === null ? null : str_pad((string) $this->queue_number, 3, '0', STR_PAD_LEFT),
             'chair_number' => $this->chair_number,
+            'arrived_at' => $this->arrived_at?->toIso8601String(),
+            'called_at' => $this->called_at?->toIso8601String(),
             'scheduled_date' => $this->scheduled_date->toDateString(),
             'scheduled_time' => $this->scheduled_time,
             'shift' => $this->shift->value,

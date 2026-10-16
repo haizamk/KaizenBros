@@ -3,12 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Enums\DocumentCategory;
+use App\Enums\SessionStatus;
+use App\Enums\ShiftSlot;
+use App\Models\DialysisSession;
 use App\Models\NurseApplication;
 use App\Models\Patient;
 use App\Models\PatientDocument;
 use App\Models\Registration;
 use App\Support\NurseBoard;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -59,12 +64,38 @@ class AdminController extends Controller
             'registrations' => $registrations,
             'nurseApplications' => $nurseApplications,
             'patientDocuments' => $patientDocuments,
+            'shifts' => collect(ShiftSlot::cases())->map(fn (ShiftSlot $shift): array => [
+                'value' => $shift->value,
+                'label' => $shift->label(),
+                'time_range' => $shift->timeRange(),
+            ])->values(),
             'documentCategories' => collect(DocumentCategory::cases())->map(fn (DocumentCategory $category): array => [
                 'value' => $category->value,
                 'label' => $category->label(),
             ])->values(),
             'notice' => session('status'),
         ]);
+    }
+
+    public function updateShift(Request $request, Patient $patient): RedirectResponse
+    {
+        $data = $request->validate([
+            'preferred_shift' => ['required', Rule::enum(ShiftSlot::class)],
+        ]);
+
+        $shift = ShiftSlot::from($data['preferred_shift']);
+        $patient->forceFill(['preferred_shift' => $shift])->save();
+
+        DialysisSession::query()
+            ->where('patient_id', $patient->id)
+            ->whereDate('scheduled_date', today())
+            ->where('status', SessionStatus::BelumHadir)
+            ->update([
+                'shift' => $shift->value,
+                'scheduled_time' => $shift->startTime(),
+            ]);
+
+        return back()->with('status', 'Syif pesakit dikemas kini.');
     }
 
     public function approveRegistration(Registration $registration): RedirectResponse

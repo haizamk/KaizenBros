@@ -4,7 +4,8 @@ import InputError from '@/components/input-error';
 
 export type SessionCard = {
     id: number;
-    chair_number: string;
+    queue_label: string | null;
+    chair_number: string | null;
     scheduled_time: string;
     shift_label: string;
     status: string;
@@ -30,7 +31,9 @@ export type SessionCard = {
 export type ShiftCounts = {
     total: number;
     belum: number;
+    menunggu: number;
     hadir: number;
+    kerusi_kosong: number;
     sedang: number;
     selesai: number;
     percent: number;
@@ -75,6 +78,7 @@ function DialysisTimer({ startedAt }: { startedAt: string }) {
 }
 
 export function statusClass(status: string): string {
+    if (status === 'MENUNGGU') return 'bg-cyan-950 text-cyan-200 border-cyan-700';
     if (status === 'SEDANG_DIALISIS') return 'bg-emerald-950 text-emerald-200 border-emerald-700';
     if (status === 'SUDAH_HADIR') return 'bg-cyan-950 text-cyan-200 border-cyan-700';
     if (status === 'SUDAH_SELESAI') return 'bg-slate-800 text-slate-200 border-slate-600';
@@ -82,6 +86,8 @@ export function statusClass(status: string): string {
 }
 
 export default function SessionActions({ session }: { session: SessionCard }) {
+    const arrive = useForm({});
+    const call = useForm({});
     const checkIn = useForm({ pre_weight_kg: '', pre_bp: '' });
     const during = useForm({ intra_bp: session.intra_bp ?? '' });
     const complete = useForm({ post_weight_kg: '', post_bp: '', nurse_notes: '' });
@@ -90,12 +96,47 @@ export default function SessionActions({ session }: { session: SessionCard }) {
     if (session.status === 'BELUM_HADIR') {
         return (
             <form
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    arrive.post(`/jururawat/sesi/${session.id}/tiba`);
+                }}
+            >
+                <button type="submit" disabled={arrive.processing} className="inline-flex min-h-16 w-full items-center justify-center rounded-2xl bg-amber-400 px-4 text-xl font-black text-slate-950">
+                    Daftar ketibaan
+                </button>
+                <InputError message={formStatus(arrive.errors)} />
+            </form>
+        );
+    }
+
+    if (session.status === 'MENUNGGU' && !session.chair_number) {
+        return (
+            <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    call.post(`/jururawat/sesi/${session.id}/panggil`);
+                }}
+            >
+                <p className="text-3xl font-black text-amber-200">Giliran {session.queue_label}</p>
+                <button type="submit" disabled={call.processing} className="inline-flex min-h-16 w-full items-center justify-center rounded-2xl bg-cyan-400 px-4 text-xl font-black text-slate-950">
+                    Panggil ke kerusi kosong
+                </button>
+                <InputError message={formStatus(call.errors)} />
+            </form>
+        );
+    }
+
+    if (session.status === 'MENUNGGU') {
+        return (
+            <form
                 className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
                 onSubmit={(event) => {
                     event.preventDefault();
                     checkIn.post(`/jururawat/sesi/${session.id}/daftar-masuk`);
                 }}
             >
+                <p className="sm:col-span-3 text-lg font-black">Giliran {session.queue_label} · Kerusi {session.chair_number}</p>
                 <label className="space-y-1">
                     <span className="text-sm font-bold">Berat sebelum (kg)</span>
                     <input className={fieldClass} inputMode="decimal" value={checkIn.data.pre_weight_kg} onChange={(event) => checkIn.setData('pre_weight_kg', event.target.value)} required />
@@ -107,7 +148,7 @@ export default function SessionActions({ session }: { session: SessionCard }) {
                     <InputError message={checkIn.errors.pre_bp} />
                 </label>
                 <button type="submit" className="inline-flex min-h-12 items-center justify-center self-end rounded-xl bg-amber-400 px-4 font-black text-slate-950">
-                    Daftar masuk
+                    Simpan di kerusi
                 </button>
                 <InputError message={formStatus(checkIn.errors)} />
             </form>

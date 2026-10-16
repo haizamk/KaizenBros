@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ShiftSlot;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ClinicDocumentController;
 use App\Http\Controllers\DashboardController;
@@ -15,6 +16,10 @@ use Inertia\Inertia;
 Route::get('/', function () {
     return Inertia::render('welcome', [
         'centre' => config('kaizenbros.centre'),
+        'shifts' => collect(ShiftSlot::cases())->map(fn (ShiftSlot $shift): array => [
+            'label' => $shift->label(),
+            'time_range' => $shift->timeRange(),
+        ])->values(),
     ]);
 })->name('home');
 
@@ -39,6 +44,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/jururawat/darah', [MedicalRecordController::class, 'index'])->name('nurse.records.index');
         Route::post('/jururawat/darah', [MedicalRecordController::class, 'store'])->name('nurse.records.store');
         Route::get('/jururawat/laporan/{report}', [MedicalReportController::class, 'download'])->name('nurse.reports.download');
+        Route::post('/jururawat/sesi/{session}/tiba', [NurseSessionController::class, 'arrive'])->name('nurse.sessions.arrive');
+        Route::post('/jururawat/sesi/{session}/panggil', [NurseSessionController::class, 'call'])->name('nurse.sessions.call');
         Route::post('/jururawat/sesi/{session}/daftar-masuk', [NurseSessionController::class, 'checkIn'])->name('nurse.sessions.check-in');
         Route::post('/jururawat/sesi/{session}/mula', [NurseSessionController::class, 'start'])->name('nurse.sessions.start');
         Route::post('/jururawat/sesi/{session}/selesai', [NurseSessionController::class, 'complete'])->name('nurse.sessions.complete');
@@ -63,6 +70,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/admin/permohonan/{registration}/tolak', [AdminController::class, 'rejectRegistration'])->name('admin.registrations.reject');
         Route::post('/admin/permohonan/{registration}/dokumen', [ClinicDocumentController::class, 'storeForRegistration'])->name('admin.documents.store');
         Route::post('/admin/pesakit/{patient}/dokumen', [ClinicDocumentController::class, 'storeForPatient'])->name('admin.patients.documents.store');
+        Route::post('/admin/pesakit/{patient}/syif', [AdminController::class, 'updateShift'])->name('admin.patients.shift');
         Route::get('/admin/dokumen/{document}', [ClinicDocumentController::class, 'download'])->name('admin.documents.download');
     });
 });

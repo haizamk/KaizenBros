@@ -6,6 +6,7 @@ type SessionCard = {
     id: number;
     date_label: string;
     status_label: string;
+    queue_label?: string | null;
     chair_number: string | null;
     chair_visible: boolean;
     pre_weight_kg: string | null;

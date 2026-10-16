@@ -1,28 +1,27 @@
 import { useMemo, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { NursePage } from '@/components/nurse-nav';
-import { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
+import SessionActions, { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
 
 const stages = [
-    { key: 'BELUM_HADIR', count: 'belum' as const, step: '1', title: 'Tiba di klinik', detail: 'Dijadualkan dan belum daftar masuk di kaunter.' },
-    { key: 'SUDAH_HADIR', count: 'hadir' as const, step: '2', title: 'Check-in dan triage', detail: 'Sudah timbang dan BP. Menunggu mesin.' },
-    { key: 'SEDANG_DIALISIS', count: 'sedang' as const, step: '3', title: 'Sedang dialisis', detail: 'Rawatan aktif. Pemasa 4 jam berjalan.' },
-    { key: 'SUDAH_SELESAI', count: 'selesai' as const, step: '4', title: 'Tamat dan discaj', detail: 'Berat selepas dan BP sudah direkod.' },
+    { key: 'BELUM_HADIR', count: 'belum' as const, step: '1', title: 'Belum tiba', detail: 'Tekan daftar ketibaan bila pesakit sampai di kaunter.' },
+    { key: 'MENUNGGU', count: 'menunggu' as const, step: '2', title: 'Menunggu panggilan', detail: 'Nombor giliran sudah ada. Panggil bila kerusi kosong.' },
+    { key: 'SUDAH_HADIR', count: 'hadir' as const, step: '3', title: 'Di kerusi', detail: 'Berat dan tekanan darah sudah direkod.' },
+    { key: 'SEDANG_DIALISIS', count: 'sedang' as const, step: '4', title: 'Sedang dialisis', detail: 'Rawatan aktif. Pemasa 4 jam berjalan.' },
+    { key: 'SUDAH_SELESAI', count: 'selesai' as const, step: '5', title: 'Selesai', detail: 'Kerusi ini kosong semula untuk pesakit seterusnya.' },
 ];
 
 const filters = [
     { key: 'SEMUA', label: 'Semua' },
-    { key: 'BELUM_HADIR', label: 'Belum hadir' },
-    { key: 'SUDAH_HADIR', label: 'Sudah hadir' },
+    { key: 'BELUM_HADIR', label: 'Belum tiba' },
+    { key: 'MENUNGGU', label: 'Menunggu' },
+    { key: 'SUDAH_HADIR', label: 'Di kerusi' },
     { key: 'SEDANG_DIALISIS', label: 'Sedang dialisis' },
     { key: 'SUDAH_SELESAI', label: 'Selesai' },
 ];
 
-function actionLabel(status: string): string {
-    if (status === 'BELUM_HADIR') return 'Daftar masuk / Check-in';
-    if (status === 'SUDAH_HADIR') return 'Mula sesi';
-    if (status === 'SEDANG_DIALISIS') return 'Pantau stesen';
-    return 'Lihat rekod';
+function needsCounter(session: SessionCard): boolean {
+    return session.status === 'BELUM_HADIR' || (session.status === 'MENUNGGU' && !session.chair_number);
 }
 
 export default function HariIni({
@@ -76,7 +75,7 @@ export default function HariIni({
                         <div className="h-full rounded-full bg-teal-500" style={{ width: `${counts.percent}%` }} />
                     </div>
                     <p className="mt-3 text-base text-slate-200">
-                        Klik satu peringkat untuk tapis senarai. Rekod berat dan tekanan darah dibuat di halaman Sesi Dialisis supaya data tidak bercampur di sini.
+                        Syif 1 ialah 6:00 pagi hingga 10:00 pagi. Syif 2 ialah 10:30 pagi hingga 2:30 petang. Syif 3 ialah 3:00 petang hingga 7:00 malam. Kerusi kosong sekarang: {counts.kerusi_kosong}.
                     </p>
                 </section>
 
@@ -143,7 +142,11 @@ export default function HariIni({
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div>
                                         <h2 className="text-2xl font-black">{session.patient.name}</h2>
-                                        <p className="text-base text-slate-200">{session.patient.patient_id_code} · Stesen {session.chair_number}</p>
+                                        <p className="text-base text-slate-200">
+                                            {session.patient.patient_id_code}
+                                            {session.queue_label ? ` · Giliran ${session.queue_label}` : ''}
+                                            {session.chair_number ? ` · Kerusi ${session.chair_number}` : ' · Kerusi belum ditetapkan'}
+                                        </p>
                                     </div>
                                     <span className={`rounded-full border px-3 py-2 text-sm font-black ${statusClass(session.status)}`}>{session.status_label}</span>
                                 </div>
@@ -152,13 +155,17 @@ export default function HariIni({
                                     <p>Berat kering<br /><span className="font-black">{session.patient.dry_weight_kg} kg</span></p>
                                     <p>Tekanan darah<br /><span className="font-black">{session.pre_bp ?? 'Belum direkod'}</span></p>
                                 </div>
-                                <div className="grid gap-3 sm:grid-cols-2">
+                                {needsCounter(session) ? (
+                                    <SessionActions session={session} />
+                                ) : (
                                     <Link
                                         href={`/jururawat/sesi?fokus=${session.id}`}
-                                        className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-amber-400 px-4 text-lg font-black text-slate-950"
+                                        className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-teal-500 px-4 text-lg font-black text-slate-950"
                                     >
-                                        {actionLabel(session.status)}
+                                        Teruskan aliran sesi
                                     </Link>
+                                )}
+                                <div className="grid gap-3 sm:grid-cols-2">
                                     {session.whatsapp_url ? (
                                         <a
                                             href={session.whatsapp_url}

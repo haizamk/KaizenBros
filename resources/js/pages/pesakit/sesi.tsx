@@ -12,6 +12,7 @@ type PatientCard = {
 
 type SessionCard = {
     date_label: string;
+    queue_label: string | null;
     chair_number: string | null;
     chair_visible: boolean;
     status: string;
@@ -53,6 +54,7 @@ export default function SesiPesakit({
                     ) : (
                         <section className="space-y-4 rounded-3xl border border-[#1F385C] bg-[#132238] p-4 sm:p-6">
                             <p className="text-2xl font-black leading-snug">{todaySession.status_label}</p>
+                            {todaySession.queue_label ? <p className="text-4xl font-black text-amber-200">Giliran {todaySession.queue_label}</p> : null}
                             <p className="text-lg">{todaySession.date_label}</p>
                             <p className="text-lg">{todaySession.shift_label} · {todaySession.time_range}</p>
                             {todaySession.chair_visible && todaySession.chair_number ? (
