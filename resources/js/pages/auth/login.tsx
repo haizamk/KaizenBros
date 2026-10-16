@@ -39,19 +39,25 @@ export default function Login({ status, canResetPassword, demoAccounts = [] }: P
                 }}
             >
                 <div className="grid gap-2">
-                    <Label htmlFor="email">Emel</Label>
+                    <Label htmlFor="email" className="text-base">Emel, telefon, nombor pesakit, atau kad pengenalan</Label>
                     <Input
                         id="email"
-                        type="email"
+                        type="text"
                         name="email"
                         required
                         autoFocus
                         autoComplete="username"
+                        inputMode="text"
+                        autoCapitalize="none"
+                        autoCorrect="off"
                         value={form.data.email}
                         onChange={(event) => form.setData('email', event.target.value)}
-                        placeholder="emel@kaizenbros.com.my"
-                        className="min-h-12 text-base"
+                        placeholder="0123456789, P-1001, atau kad pengenalan"
+                        className="min-h-14 text-lg"
                     />
+                    <p className="text-base leading-relaxed text-slate-300">
+                        Pesakit boleh masuk dengan nombor telefon, nombor pesakit, atau nombor kad pengenalan. Jururawat boleh masuk dengan emel, nombor telefon, atau nombor kad pengenalan.
+                    </p>
                     <InputError message={form.errors.email} />
                 </div>
 
@@ -72,7 +78,7 @@ export default function Login({ status, canResetPassword, demoAccounts = [] }: P
                         autoComplete="current-password"
                         value={form.data.password}
                         onChange={(event) => form.setData('password', event.target.value)}
-                        className="min-h-12 text-base"
+                        className="min-h-14 text-lg"
                     />
                     <InputError message={form.errors.password} />
                 </div>
@@ -120,5 +126,5 @@ export default function Login({ status, canResetPassword, demoAccounts = [] }: P
 
 Login.layout = {
     title: 'Log masuk KaizenBros',
-    description: 'Gunakan emel dan kata laluan yang diberikan oleh pusat.',
+    description: 'Pesakit masuk dengan telefon, nombor pesakit, atau kad pengenalan. Kakitangan juga boleh guna emel.',
 };

@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ApprovePatientRegistration;
 use App\Enums\DocumentCategory;
+use App\Enums\SchedulePattern;
 use App\Enums\SessionStatus;
 use App\Enums\ShiftSlot;
+use App\Http\Requests\ApproveRegistrationRequest;
 use App\Models\DialysisSession;
 use App\Models\NurseApplication;
 use App\Models\Patient;
@@ -69,6 +72,11 @@ class AdminController extends Controller
                 'label' => $shift->label(),
                 'time_range' => $shift->timeRange(),
             ])->values(),
+            'schedules' => collect(SchedulePattern::cases())->map(fn (SchedulePattern $pattern): array => [
+                'value' => $pattern->value,
+                'label' => $pattern->label(),
+            ])->values(),
+            'sponsors' => config('kaizenbros.centre.panels'),
             'documentCategories' => collect(DocumentCategory::cases())->map(fn (DocumentCategory $category): array => [
                 'value' => $category->value,
                 'label' => $category->label(),
@@ -98,11 +106,11 @@ class AdminController extends Controller
         return back()->with('status', 'Syif pesakit dikemas kini.');
     }
 
-    public function approveRegistration(Registration $registration): RedirectResponse
+    public function approveRegistration(ApproveRegistrationRequest $request, Registration $registration, ApprovePatientRegistration $enrolment): RedirectResponse
     {
-        $this->review($registration, 'DILULUSKAN');
+        $patient = $enrolment->open($registration, $request->user(), $request->validated());
 
-        return back()->with('status', 'Permohonan pesakit diluluskan.');
+        return back()->with('status', "Permohonan diluluskan. Nombor pesakit {$patient->patient_id_code}. Pesakit boleh log masuk dengan nombor telefon, nombor pesakit, atau kad pengenalan, bersama kata laluan yang ditetapkan.");
     }
 
     public function rejectRegistration(Registration $registration): RedirectResponse

@@ -94,10 +94,14 @@ export default function PapanAdmin({
     patientDocuments,
     documentCategories,
     shifts,
+    schedules,
+    sponsors,
     notice,
 }: {
     today: TodayCounts;
     shifts: ShiftOption[];
+    schedules: Option[];
+    sponsors: string[];
     patients: PatientRow[];
     registrations: RegistrationRow[];
     nurseApplications: NurseApplicationRow[];
@@ -221,13 +225,13 @@ export default function PapanAdmin({
 
                 {section === 'permohonan' && <section className="space-y-3">
                     <h2 className="text-2xl font-black">Permohonan pesakit baru</h2>
-                    <p className="text-base text-slate-200">Permohonan menunggu pengesahan pentadbir. Kelulusan tidak membuka akaun portal.</p>
+                    <p className="text-base text-slate-200">Kelulusan membuka akaun portal. Pesakit kemudian log masuk dengan nombor telefon, nombor pesakit, atau kad pengenalan.</p>
                     {registrations.length === 0 ? (
                         <p className="rounded-2xl border border-[#1F385C] bg-[#132238] p-5">Tiada permohonan.</p>
                     ) : (
                         <ul className="grid gap-3">
                             {registrations.map((registration) => (
-                                <RegistrationCard key={registration.id} registration={registration} categories={documentCategories} />
+                                <RegistrationCard key={registration.id} registration={registration} categories={documentCategories} shifts={shifts} schedules={schedules} sponsors={sponsors} />
                             ))}
                         </ul>
                     )}
@@ -256,8 +260,16 @@ export default function PapanAdmin({
     );
 }
 
-function RegistrationCard({ registration, categories }: { registration: RegistrationRow; categories: Option[] }) {
-    const approve = useForm({});
+function RegistrationCard({ registration, categories, shifts, schedules, sponsors }: { registration: RegistrationRow; categories: Option[]; shifts: ShiftOption[]; schedules: Option[]; sponsors: string[] }) {
+    const approve = useForm({
+        password: '',
+        dry_weight_kg: '',
+        preferred_shift: shifts[0]?.value ?? 'SYIF_1',
+        schedule_pattern: schedules[0]?.value ?? 'ISNIN_RABU_JUMAAT',
+        vascular_access: 'AVF',
+        access_location: '',
+        sponsor: sponsors[0] ?? '',
+    });
     const reject = useForm({});
     const upload = useForm<{ category: string; document: File | null }>({
         category: 'KAD_PENGENALAN',
@@ -320,25 +332,73 @@ function RegistrationCard({ registration, categories }: { registration: Registra
                 </form>
             </div>
             {registration.can_review && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <button
-                        type="button"
-                        disabled={approve.processing}
-                        onClick={() => approve.post(`/admin/permohonan/${registration.id}/lulus`)}
-                        className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-teal-500 text-lg font-black text-slate-950"
-                    >
-                        Luluskan permohonan
-                    </button>
-                    <button
-                        type="button"
-                        disabled={reject.processing}
-                        onClick={() => reject.post(`/admin/permohonan/${registration.id}/tolak`)}
-                        className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-rose-700 text-lg font-black text-rose-100"
-                    >
-                        Tolak permohonan
-                    </button>
-                    <InputStatus message={approve.errors.status || reject.errors.status} />
-                </div>
+                <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        approve.post(`/admin/permohonan/${registration.id}/lulus`);
+                    }}
+                >
+                    <p className="text-lg font-black">Buka akaun portal</p>
+                    <label className="block space-y-1">
+                        <span className="text-sm font-bold">Kata laluan awal</span>
+                        <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" type="text" value={approve.data.password} onChange={(event) => approve.setData('password', event.target.value)} required minLength={6} />
+                        <InputError message={approve.errors.password} />
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1">
+                            <span className="text-sm font-bold">Berat kering (kg)</span>
+                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" inputMode="decimal" value={approve.data.dry_weight_kg} onChange={(event) => approve.setData('dry_weight_kg', event.target.value)} required />
+                            <InputError message={approve.errors.dry_weight_kg} />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-sm font-bold">Syif</span>
+                            <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.preferred_shift} onChange={(event) => approve.setData('preferred_shift', event.target.value)}>
+                                {shifts.map((shift) => (
+                                    <option key={shift.value} value={shift.value}>{shift.label}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-sm font-bold">Jadual</span>
+                            <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.schedule_pattern} onChange={(event) => approve.setData('schedule_pattern', event.target.value)}>
+                                {schedules.map((schedule) => (
+                                    <option key={schedule.value} value={schedule.value}>{schedule.label}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-sm font-bold">Penaja</span>
+                            <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.sponsor} onChange={(event) => approve.setData('sponsor', event.target.value)}>
+                                {sponsors.map((sponsor) => (
+                                    <option key={sponsor} value={sponsor}>{sponsor}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-sm font-bold">Akses dialisis</span>
+                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.vascular_access} onChange={(event) => approve.setData('vascular_access', event.target.value)} required />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-sm font-bold">Lokasi akses</span>
+                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.access_location} onChange={(event) => approve.setData('access_location', event.target.value)} required />
+                        </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <button type="submit" disabled={approve.processing} className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-teal-500 text-lg font-black text-slate-950">
+                            Luluskan dan buka akaun
+                        </button>
+                        <button
+                            type="button"
+                            disabled={reject.processing}
+                            onClick={() => reject.post(`/admin/permohonan/${registration.id}/tolak`)}
+                            className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-rose-700 text-lg font-black text-rose-100"
+                        >
+                            Tolak permohonan
+                        </button>
+                    </div>
+                    <InputError message={approve.errors.status || approve.errors.ic_number || reject.errors.status} />
+                </form>
             )}
         </li>
     );
@@ -413,12 +473,4 @@ function ShiftForm({ patientId, value, shifts }: { patientId: number; value: str
             <InputError message={form.errors.preferred_shift} />
         </form>
     );
-}
-
-function InputStatus({ message }: { message?: string }) {
-    if (!message) {
-        return null;
-    }
-
-    return <p className="text-base font-bold text-rose-200 sm:col-span-2">{message}</p>;
 }

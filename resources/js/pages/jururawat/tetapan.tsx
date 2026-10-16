@@ -1,4 +1,5 @@
-import { Head } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
+import InputError from '@/components/input-error';
 import { NursePage } from '@/components/nurse-nav';
 import { useAppearance } from '@/hooks/use-appearance';
 import { useTextSize, type TextSize } from '@/hooks/use-text-size';
@@ -23,23 +24,57 @@ const sizes: Array<{ id: TextSize; label: string }> = [
 export default function Tetapan({
     nurseName,
     role,
+    phone,
+    icNumber,
     centre,
+    status,
 }: {
     nurseName: string;
     role: string;
+    phone: string | null;
+    icNumber: string | null;
     centre: Centre;
+    status?: string | null;
 }) {
     const { resolvedAppearance, updateAppearance } = useAppearance();
     const { textSize, updateTextSize } = useTextSize();
+    const identity = useForm({
+        phone: phone ?? '',
+        ic_number: icNumber ?? '',
+    });
 
     return (
         <>
             <Head title="Tetapan" />
-            <NursePage title="Tetapan" intro="Tetapan paparan ini disimpan pada peranti anda. Rekod klinikal tidak diubah di halaman ini.">
+            <NursePage title="Tetapan" intro="Simpan nombor telefon dan kad pengenalan supaya log masuk jururawat tidak bergantung pada emel sahaja.">
+                {status && <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{status}</p>}
                 <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
                     <h2 className="text-2xl font-black">{nurseName}</h2>
                     <p className="text-lg text-slate-200">{role}</p>
                 </section>
+                <form
+                    className="space-y-3 rounded-3xl border border-[#1F385C] bg-[#132238] p-5"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        identity.post('/jururawat/tetapan');
+                    }}
+                >
+                    <h2 className="text-2xl font-black">Log masuk kakitangan</h2>
+                    <p className="text-base leading-relaxed text-slate-200">Emel sedia ada masih boleh digunakan. Tambah nombor telefon dan kad pengenalan untuk pilihan lain.</p>
+                    <label className="block space-y-1">
+                        <span className="text-sm font-bold">Nombor telefon</span>
+                        <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 text-lg" inputMode="tel" value={identity.data.phone} onChange={(event) => identity.setData('phone', event.target.value)} />
+                        <InputError message={identity.errors.phone} />
+                    </label>
+                    <label className="block space-y-1">
+                        <span className="text-sm font-bold">Nombor kad pengenalan</span>
+                        <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3 text-lg" inputMode="numeric" value={identity.data.ic_number} onChange={(event) => identity.setData('ic_number', event.target.value)} />
+                        <InputError message={identity.errors.ic_number} />
+                    </label>
+                    <button type="submit" disabled={identity.processing} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-500 px-4 font-black text-slate-950">
+                        Simpan maklumat log masuk
+                    </button>
+                </form>
                 <section className="space-y-3 rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
                     <h2 className="text-2xl font-black">Saiz tulisan</h2>
                     <div className="flex flex-wrap gap-2">

@@ -9,6 +9,7 @@ use App\Http\Requests\CheckInSessionRequest;
 use App\Http\Requests\CompleteSessionRequest;
 use App\Http\Requests\RecordIntraBpRequest;
 use App\Http\Requests\RestoreChairRequest;
+use App\Http\Requests\UpdateStaffIdentityRequest;
 use App\Models\DialysisSession;
 use App\Models\User;
 use App\Services\DialysisSessionWorkflow;
@@ -95,8 +96,21 @@ class NurseSessionController extends Controller
         return Inertia::render('jururawat/tetapan', [
             'nurseName' => $user->name,
             'role' => $user->role->label(),
+            'phone' => $user->phone,
+            'icNumber' => $user->ic_number,
             'centre' => config('kaizenbros.centre'),
+            'status' => $request->session()->get('status'),
         ]);
+    }
+
+    public function updateIdentity(UpdateStaffIdentityRequest $request): RedirectResponse
+    {
+        $request->user()->forceFill([
+            'phone' => $request->validated('phone'),
+            'ic_number' => $request->validated('ic_number'),
+        ])->save();
+
+        return back()->with('status', 'Nombor telefon dan kad pengenalan untuk log masuk disimpan.');
     }
 
     public function arrive(ArriveSessionRequest $request, DialysisSession $session): RedirectResponse

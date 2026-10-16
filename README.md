@@ -34,7 +34,7 @@ Akaun ini hanya untuk pembangunan.
 | Pentadbir | admin@kaizenbros.com.my | Admin@2026 |
 | Pesakit | tan.ahkow@demo.kaizenbros.my | Pesakit@2026 |
 
-Pesakit demo Tan Ah Kow mempunyai sesi hari ini, sejarah berat dan tekanan darah, keputusan darah, dan dua ubat aktif. Portal pesakit dipecahkan kepada sesi, jadual, ubat, timbang, rekod dialisis, dan rekod darah. Graf darah boleh dibanding selama 6, 12, 24 bulan, dan sepanjang masa. Graf berat serta tekanan darah boleh dibanding selama 6, 12, atau 24 bulan. Berat dan tekanan darah, termasuk bacaan semasa dialisis, hanya direkodkan oleh jururawat atau pentadbir. Jururawat boleh daftar masuk, mula, dan tamat sesi, serta menyimpan rekod darah. Butang WhatsApp hanya membuka perbualan. Ia tidak menghantar mesej sendiri. Pesakit hanya melihat rekod sendiri.
+Pesakit log masuk dengan nombor telefon, nombor pesakit, atau nombor kad pengenalan. Jururawat log masuk dengan emel, nombor telefon, atau nombor kad pengenalan. Pentadbir yang meluluskan permohonan menetapkan kata laluan awal dan nombor pesakit. Arahan `php artisan clinic:clear-patients` mengosongkan data pesakit dan mengekalkan akaun jururawat serta pentadbir. Portal pesakit dipecahkan kepada sesi, jadual, ubat, timbang, rekod dialisis, dan rekod darah. Graf darah boleh dibanding selama 6, 12, 24 bulan, dan sepanjang masa. Graf berat serta tekanan darah boleh dibanding selama 6, 12, atau 24 bulan. Berat dan tekanan darah, termasuk bacaan semasa dialisis, hanya direkodkan oleh jururawat atau pentadbir. Jururawat boleh daftar masuk, mula, dan tamat sesi, serta menyimpan rekod darah. Butang WhatsApp hanya membuka perbualan. Ia tidak menghantar mesej sendiri. Pesakit hanya melihat rekod sendiri.
 
 ## Ujian
 

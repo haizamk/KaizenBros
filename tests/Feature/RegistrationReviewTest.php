@@ -51,7 +51,7 @@ class RegistrationReviewTest extends TestCase
         ]);
     }
 
-    public function test_admin_approves_a_registration_without_opening_a_portal_account(): void
+    public function test_admin_approval_opens_a_portal_login_for_phone_patient_number_or_identity_card(): void
     {
         $this->travelTo('2026-10-16 08:00:00');
         $admin = User::factory()->create(['role' => 'admin']);
@@ -61,19 +61,45 @@ class RegistrationReviewTest extends TestCase
         $registration = Registration::query()->firstOrFail();
 
         $this->actingAs($patient)
-            ->post(route('admin.registrations.approve', $registration))
+            ->post(route('admin.registrations.approve', $registration), $this->approval())
             ->assertForbidden();
 
         $this->actingAs($admin)
-            ->post(route('admin.registrations.approve', $registration))
+            ->post(route('admin.registrations.approve', $registration), $this->approval())
             ->assertRedirect();
 
         $registration->refresh();
         $this->assertSame('DILULUSKAN', $registration->status);
         $this->assertSame($admin->id, $registration->reviewed_by);
-        $this->assertDatabaseMissing('users', [
+        $this->assertDatabaseHas('users', [
             'email' => 'pesakit@demo.test',
+            'role' => 'patient',
+            'phone' => '0123001999',
         ]);
+        $this->assertDatabaseHas('patients', [
+            'patient_id_code' => 'P-1001',
+            'ic_number' => '580101-10-1231',
+            'phone' => '0123001999',
+        ]);
+
+        $this->post(route('login.store'), [
+            'email' => '012-300 1999',
+            'password' => 'Pesakit1',
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $this->post(route('logout'));
+
+        $this->post(route('login.store'), [
+            'email' => 'P-1001',
+            'password' => 'Pesakit1',
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $this->post(route('logout'));
+
+        $this->post(route('login.store'), [
+            'email' => '580101101231',
+            'password' => 'Pesakit1',
+        ])->assertRedirect(route('dashboard', absolute: false));
 
         $this->actingAs($admin)
             ->get(route('admin.home'))
@@ -106,6 +132,22 @@ class RegistrationReviewTest extends TestCase
             'nok_name' => 'Aminah Hassan',
             'nok_relationship' => 'IBU_BAPA',
             'nok_phone' => '011-23456789',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function approval(): array
+    {
+        return [
+            'password' => 'Pesakit1',
+            'dry_weight_kg' => '62.5',
+            'preferred_shift' => 'SYIF_1',
+            'schedule_pattern' => 'ISNIN_RABU_JUMAAT',
+            'vascular_access' => 'AVF',
+            'access_location' => 'Lengan kiri',
+            'sponsor' => 'PERKESO / SOCSO',
         ];
     }
 }
