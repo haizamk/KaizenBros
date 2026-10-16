@@ -37,10 +37,9 @@ class RegistrationReviewTest extends TestCase
     {
         $this->travelTo('2026-10-16 08:00:00');
 
-        $this->post(route('registrations.store'), $this->payload('900615-08-2468'))
-            ->assertRedirect(route('registrations.create'));
-
+        $stored = $this->post(route('registrations.store'), $this->payload('900615-08-2468'));
         $registration = Registration::query()->firstOrFail();
+        $stored->assertRedirect(route('registrations.received', $registration->reference));
         $this->assertSame('900615-08-2468', $registration->ic_number);
         $this->assertSame('PEREMPUAN', $registration->gender);
         $this->assertSame(36, $registration->age_years);
@@ -80,6 +79,9 @@ class RegistrationReviewTest extends TestCase
             'patient_id_code' => 'P-1001',
             'ic_number' => '580101-10-1231',
             'phone' => '0123001999',
+            'sponsor' => 'PERKESO / SOCSO',
+            'vascular_access' => 'Fistula (AVF)',
+            'access_location' => 'Lengan kiri',
         ]);
 
         $this->post(route('login.store'), [
@@ -115,6 +117,51 @@ class RegistrationReviewTest extends TestCase
             ->post(route('admin.registrations.reject', $registration))
             ->assertRedirect(route('admin.home'))
             ->assertSessionHasErrors('status');
+    }
+
+    public function test_other_sponsor_and_access_are_stored_as_the_typed_text(): void
+    {
+        $this->travelTo('2026-10-16 08:00:00');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->post(route('registrations.store'), $this->payload('580101-10-1231'));
+        $registration = Registration::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.registrations.approve', $registration), [
+                ...$this->approval(),
+                'sponsor' => 'LAIN',
+                'sponsor_other' => 'Majlis agama',
+                'vascular_access' => 'LAIN',
+                'vascular_access_other' => 'Graft paha',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('patients', [
+            'sponsor' => 'Majlis agama',
+            'vascular_access' => 'Graft paha',
+        ]);
+    }
+
+    public function test_approval_without_access_location_does_not_open_an_account(): void
+    {
+        $this->travelTo('2026-10-16 08:00:00');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->post(route('registrations.store'), $this->payload('580101-10-1231'));
+        $registration = Registration::query()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->from(route('admin.home'))
+            ->post(route('admin.registrations.approve', $registration), [
+                ...$this->approval(),
+                'access_location' => ' ',
+            ])
+            ->assertRedirect(route('admin.home'))
+            ->assertSessionHasErrors('access_location');
+
+        $this->assertDatabaseCount('patients', 0);
+        $this->assertSame('BARU', $registration->refresh()->status);
     }
 
     /**

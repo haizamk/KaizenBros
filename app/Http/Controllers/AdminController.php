@@ -13,6 +13,7 @@ use App\Models\NurseApplication;
 use App\Models\Patient;
 use App\Models\PatientDocument;
 use App\Models\Registration;
+use App\Support\EnrolmentOptions;
 use App\Support\NurseBoard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,7 +77,8 @@ class AdminController extends Controller
                 'value' => $pattern->value,
                 'label' => $pattern->label(),
             ])->values(),
-            'sponsors' => config('kaizenbros.centre.panels'),
+            'sponsors' => EnrolmentOptions::sponsorChoices(),
+            'accesses' => EnrolmentOptions::accessChoices(),
             'documentCategories' => collect(DocumentCategory::cases())->map(fn (DocumentCategory $category): array => [
                 'value' => $category->value,
                 'label' => $category->label(),
@@ -109,8 +111,11 @@ class AdminController extends Controller
     public function approveRegistration(ApproveRegistrationRequest $request, Registration $registration, ApprovePatientRegistration $enrolment): RedirectResponse
     {
         $patient = $enrolment->open($registration, $request->user(), $request->validated());
+        $today = in_array(today()->dayOfWeek, $patient->schedule_pattern->weekdays(), true)
+            ? 'Pesakit dimasukkan dalam senarai hari ini.'
+            : 'Hari ini bukan hari rawatan jadual ini. Pesakit muncul pada hari rawatan yang seterusnya.';
 
-        return back()->with('status', "Permohonan diluluskan. Nombor pesakit {$patient->patient_id_code}. Pesakit boleh log masuk dengan nombor telefon, nombor pesakit, atau kad pengenalan, bersama kata laluan yang ditetapkan.");
+        return back()->with('status', "Permohonan diluluskan. Nombor pesakit {$patient->patient_id_code}. Pesakit boleh log masuk dengan nombor telefon, nombor pesakit, atau kad pengenalan, bersama kata laluan yang ditetapkan. {$today}");
     }
 
     public function rejectRegistration(Registration $registration): RedirectResponse

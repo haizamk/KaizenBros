@@ -31,21 +31,41 @@ class ClinicalDocumentsTest extends TestCase
 
         $this->post(route('registrations.store'), [
             ...$this->payload(),
-            'surat_doktor' => UploadedFile::fake()->createWithContent('nota.txt', 'bukan dokumen'),
-        ])->assertSessionHasErrors('surat_doktor');
+            'dokumen' => [
+                UploadedFile::fake()->createWithContent('nota.txt', 'bukan dokumen'),
+            ],
+        ])->assertSessionHasErrors('dokumen.0');
 
         $this->assertDatabaseCount('registrations', 0);
 
+        $tooMany = [];
+
+        for ($index = 1; $index <= 6; $index++) {
+            $tooMany[] = $this->png("fail-{$index}.png");
+        }
+
         $this->post(route('registrations.store'), [
             ...$this->payload(),
-            'kad_pengenalan' => $this->png('kad-pengenalan.png'),
-            'lain' => $this->pdf('rujukan.pdf'),
-        ])->assertRedirect(route('registrations.create'));
+            'dokumen' => $tooMany,
+        ])->assertSessionHasErrors('dokumen');
+
+        $this->assertDatabaseCount('registrations', 0);
+
+        $stored = $this->post(route('registrations.store'), [
+            ...$this->payload(),
+            'dokumen' => [
+                $this->png('kad-pengenalan.png'),
+                $this->pdf('rujukan.pdf'),
+            ],
+        ]);
 
         $registration = Registration::query()->firstOrFail();
+        $stored->assertRedirect(route('registrations.received', $registration->reference));
         $this->assertCount(2, $registration->documents);
-        $identity = $registration->documents->firstWhere('category', DocumentCategory::KadPengenalan);
+        $identity = $registration->documents->firstWhere('original_name', 'kad-pengenalan.png');
         $this->assertNotNull($identity);
+        $this->assertSame(DocumentCategory::Lain, $identity->category);
+        $this->assertSame(DocumentCategory::Lain, $registration->documents->firstWhere('original_name', 'rujukan.pdf')?->category);
         $this->assertSame('patient_documents', $identity->disk);
         $this->assertSame('kad-pengenalan.png', $identity->original_name);
         Storage::disk('patient_documents')->assertExists($identity->path);
@@ -70,6 +90,18 @@ class ClinicalDocumentsTest extends TestCase
             ->assertRedirect();
 
         $this->assertCount(3, $registration->documents()->get());
+
+        $this->get(route('registrations.received', $registration->reference))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('daftar/selesai')
+                ->where('reference', $registration->reference)
+                ->where('whatsappUrl', fn (string $url) => str_starts_with($url, 'https://wa.me/'))
+                ->where('callUrl', fn (string $url) => str_starts_with($url, 'tel:'))
+                ->where('emailUrl', fn (string $url) => str_starts_with($url, 'mailto:'))
+            );
+
+        $this->get('/daftar/selesai/bukan-rujukan')->assertNotFound();
     }
 
     public function test_scanned_report_is_private_and_blood_records_cannot_be_deleted(): void

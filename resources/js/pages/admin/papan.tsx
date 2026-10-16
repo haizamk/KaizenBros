@@ -96,12 +96,14 @@ export default function PapanAdmin({
     shifts,
     schedules,
     sponsors,
+    accesses,
     notice,
 }: {
     today: TodayCounts;
     shifts: ShiftOption[];
     schedules: Option[];
-    sponsors: string[];
+    sponsors: Option[];
+    accesses: Option[];
     patients: PatientRow[];
     registrations: RegistrationRow[];
     nurseApplications: NurseApplicationRow[];
@@ -231,7 +233,7 @@ export default function PapanAdmin({
                     ) : (
                         <ul className="grid gap-3">
                             {registrations.map((registration) => (
-                                <RegistrationCard key={registration.id} registration={registration} categories={documentCategories} shifts={shifts} schedules={schedules} sponsors={sponsors} />
+                                <RegistrationCard key={registration.id} registration={registration} categories={documentCategories} shifts={shifts} schedules={schedules} sponsors={sponsors} accesses={accesses} />
                             ))}
                         </ul>
                     )}
@@ -260,15 +262,17 @@ export default function PapanAdmin({
     );
 }
 
-function RegistrationCard({ registration, categories, shifts, schedules, sponsors }: { registration: RegistrationRow; categories: Option[]; shifts: ShiftOption[]; schedules: Option[]; sponsors: string[] }) {
+function RegistrationCard({ registration, categories, shifts, schedules, sponsors, accesses }: { registration: RegistrationRow; categories: Option[]; shifts: ShiftOption[]; schedules: Option[]; sponsors: Option[]; accesses: Option[] }) {
     const approve = useForm({
         password: '',
         dry_weight_kg: '',
         preferred_shift: shifts[0]?.value ?? 'SYIF_1',
         schedule_pattern: schedules[0]?.value ?? 'ISNIN_RABU_JUMAAT',
         vascular_access: 'AVF',
+        vascular_access_other: '',
         access_location: '',
-        sponsor: sponsors[0] ?? '',
+        sponsor: sponsors[0]?.value ?? '',
+        sponsor_other: '',
     });
     const reject = useForm({});
     const upload = useForm<{ category: string; document: File | null }>({
@@ -334,21 +338,53 @@ function RegistrationCard({ registration, categories, shifts, schedules, sponsor
             {registration.can_review && (
                 <form
                     className="space-y-3"
+                    noValidate
                     onSubmit={(event) => {
                         event.preventDefault();
-                        approve.post(`/admin/permohonan/${registration.id}/lulus`);
+                        const problems: Record<string, string> = {};
+
+                        if (approve.data.password.trim().length < 6) {
+                            problems.password = 'Kata laluan awal sekurang-kurangnya 6 aksara.';
+                        }
+
+                        const weight = Number(approve.data.dry_weight_kg.trim().replace(',', '.'));
+
+                        if (approve.data.dry_weight_kg.trim() === '' || Number.isNaN(weight) || weight < 20 || weight > 200) {
+                            problems.dry_weight_kg = 'Berat kering mestilah antara 20 dan 200 kg.';
+                        }
+
+                        if (approve.data.access_location.trim() === '') {
+                            problems.access_location = 'Lokasi akses diperlukan. Contohnya lengan kiri.';
+                        }
+
+                        if (approve.data.sponsor === 'LAIN' && approve.data.sponsor_other.trim() === '') {
+                            problems.sponsor_other = 'Nyatakan penaja.';
+                        }
+
+                        if (approve.data.vascular_access === 'LAIN' && approve.data.vascular_access_other.trim() === '') {
+                            problems.vascular_access_other = 'Nyatakan jenis akses dialisis.';
+                        }
+
+                        if (Object.keys(problems).length > 0) {
+                            approve.setError(problems);
+
+                            return;
+                        }
+
+                        approve.clearErrors();
+                        approve.post(`/admin/permohonan/${registration.id}/lulus`, { preserveScroll: true });
                     }}
                 >
                     <p className="text-lg font-black">Buka akaun portal</p>
                     <label className="block space-y-1">
                         <span className="text-sm font-bold">Kata laluan awal</span>
-                        <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" type="text" value={approve.data.password} onChange={(event) => approve.setData('password', event.target.value)} required minLength={6} />
+                        <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" type="text" autoComplete="new-password" value={approve.data.password} onChange={(event) => approve.setData('password', event.target.value)} />
                         <InputError message={approve.errors.password} />
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <label className="space-y-1">
                             <span className="text-sm font-bold">Berat kering (kg)</span>
-                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" inputMode="decimal" value={approve.data.dry_weight_kg} onChange={(event) => approve.setData('dry_weight_kg', event.target.value)} required />
+                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" inputMode="decimal" value={approve.data.dry_weight_kg} onChange={(event) => approve.setData('dry_weight_kg', event.target.value)} />
                             <InputError message={approve.errors.dry_weight_kg} />
                         </label>
                         <label className="space-y-1">
@@ -371,17 +407,38 @@ function RegistrationCard({ registration, categories, shifts, schedules, sponsor
                             <span className="text-sm font-bold">Penaja</span>
                             <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.sponsor} onChange={(event) => approve.setData('sponsor', event.target.value)}>
                                 {sponsors.map((sponsor) => (
-                                    <option key={sponsor} value={sponsor}>{sponsor}</option>
+                                    <option key={sponsor.value} value={sponsor.value}>{sponsor.label}</option>
                                 ))}
                             </select>
+                            <InputError message={approve.errors.sponsor} />
                         </label>
+                        {approve.data.sponsor === 'LAIN' && (
+                            <label className="space-y-1 sm:col-span-2">
+                                <span className="text-sm font-bold">Nyatakan penaja</span>
+                                <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.sponsor_other} onChange={(event) => approve.setData('sponsor_other', event.target.value)} />
+                                <InputError message={approve.errors.sponsor_other} />
+                            </label>
+                        )}
                         <label className="space-y-1">
                             <span className="text-sm font-bold">Akses dialisis</span>
-                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.vascular_access} onChange={(event) => approve.setData('vascular_access', event.target.value)} required />
+                            <select className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.vascular_access} onChange={(event) => approve.setData('vascular_access', event.target.value)}>
+                                {accesses.map((access) => (
+                                    <option key={access.value} value={access.value}>{access.label}</option>
+                                ))}
+                            </select>
+                            <InputError message={approve.errors.vascular_access} />
                         </label>
+                        {approve.data.vascular_access === 'LAIN' && (
+                            <label className="space-y-1 sm:col-span-2">
+                                <span className="text-sm font-bold">Nyatakan jenis akses dialisis</span>
+                                <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.vascular_access_other} onChange={(event) => approve.setData('vascular_access_other', event.target.value)} />
+                                <InputError message={approve.errors.vascular_access_other} />
+                            </label>
+                        )}
                         <label className="space-y-1">
                             <span className="text-sm font-bold">Lokasi akses</span>
-                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" value={approve.data.access_location} onChange={(event) => approve.setData('access_location', event.target.value)} required />
+                            <input className="min-h-12 w-full rounded-xl border border-[#1F385C] bg-[#0B132B] px-3" placeholder="Contohnya lengan kiri" value={approve.data.access_location} onChange={(event) => approve.setData('access_location', event.target.value)} />
+                            <InputError message={approve.errors.access_location} />
                         </label>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -397,7 +454,7 @@ function RegistrationCard({ registration, categories, shifts, schedules, sponsor
                             Tolak permohonan
                         </button>
                     </div>
-                    <InputError message={approve.errors.status || approve.errors.ic_number || reject.errors.status} />
+                    <InputError message={approve.errors.password || approve.errors.dry_weight_kg || approve.errors.access_location || approve.errors.sponsor || approve.errors.sponsor_other || approve.errors.vascular_access || approve.errors.vascular_access_other || approve.errors.status || approve.errors.ic_number || reject.errors.status} />
                 </form>
             )}
         </li>

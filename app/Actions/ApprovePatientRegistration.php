@@ -11,6 +11,7 @@ use App\Models\Patient;
 use App\Models\PatientDocument;
 use App\Models\Registration;
 use App\Models\User;
+use App\Support\EnrolmentOptions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -61,9 +62,9 @@ class ApprovePatientRegistration
                 'email' => $registration->email,
                 'address' => $registration->address,
                 'dry_weight_kg' => $clinical['dry_weight_kg'],
-                'vascular_access' => $clinical['vascular_access'],
+                'vascular_access' => EnrolmentOptions::accessLabel($clinical['vascular_access'], $clinical['vascular_access_other'] ?? null),
                 'access_location' => $clinical['access_location'],
-                'sponsor' => $clinical['sponsor'],
+                'sponsor' => EnrolmentOptions::sponsorLabel($clinical['sponsor'], $clinical['sponsor_other'] ?? null),
                 'schedule_pattern' => $pattern,
                 'preferred_shift' => $shift,
                 'allergies' => null,

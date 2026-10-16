@@ -25,6 +25,7 @@ Route::get('/', function () {
 
 Route::get('/daftar', [RegistrationController::class, 'create'])->name('registrations.create');
 Route::post('/daftar', [RegistrationController::class, 'store'])->name('registrations.store');
+Route::get('/daftar/selesai/{reference}', [RegistrationController::class, 'received'])->name('registrations.received');
 
 Route::get('/promosi/pesakit-baru', [PromotionController::class, 'patients'])->name('promotions.patients');
 Route::get('/promosi/pengangkutan', [PromotionController::class, 'transport'])->name('promotions.transport');

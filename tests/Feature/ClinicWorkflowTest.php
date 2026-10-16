@@ -11,6 +11,7 @@ use App\Models\DialysisSession;
 use App\Models\MedicalRecord;
 use App\Models\MedicalReport;
 use App\Models\Patient;
+use App\Models\Registration;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -637,7 +638,7 @@ class ClinicWorkflowTest extends TestCase
     {
         $this->travelTo('2026-10-16 08:00:00');
 
-        $this->post(route('registrations.store'), [
+        $stored = $this->post(route('registrations.store'), [
             'full_name' => 'Ahmad Zulkifli',
             'ic_number' => '710303101123',
             'phone_number' => '012-3001999',
@@ -649,7 +650,10 @@ class ClinicWorkflowTest extends TestCase
             'nok_name' => 'Farah Ahmad',
             'nok_relationship' => 'ANAK',
             'nok_phone' => '012-3001888',
-        ])->assertRedirect(route('registrations.create'));
+        ]);
+
+        $registration = Registration::query()->where('full_name', 'Ahmad Zulkifli')->firstOrFail();
+        $stored->assertRedirect(route('registrations.received', $registration->reference));
 
         $this->assertDatabaseHas('registrations', [
             'full_name' => 'Ahmad Zulkifli',

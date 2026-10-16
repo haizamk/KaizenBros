@@ -31,11 +31,12 @@ export default function Daftar({
         nok_relationship: '',
         nok_phone: '',
         nok_email: '',
-        kad_pengenalan: null as File | null,
-        surat_doktor: null as File | null,
-        lain: null as File | null,
+        dokumen: [] as File[],
     });
     const identity = parseMalaysianIc(form.data.ic_number, today);
+    const documentErrors = Object.entries(form.errors).flatMap(([key, message]) =>
+        (key === 'dokumen' || key.startsWith('dokumen.')) && message ? [message] : [],
+    );
 
     return (
         <>
@@ -144,23 +145,43 @@ export default function Daftar({
                     <section className="space-y-4 border-t border-border pt-6">
                         <h2 className="text-2xl font-black">4. Dokumen sokongan</h2>
                         <p className="text-lg leading-relaxed">
-                            Muat naik salinan kad pengenalan, surat doktor, atau dokumen lain. Setiap fail mestilah PDF atau gambar, dan saiznya tidak melebihi 8 MB. Dokumen ini disimpan di pelayan pusat dan hanya dibuka oleh pentadbir.
+                            Muat naik sehingga 5 fail. Setiap fail mestilah PDF atau gambar, dan saiznya tidak melebihi 8 MB. Contohnya salinan kad pengenalan, surat doktor, atau dokumen sokongan lain. Dokumen ini disimpan di pelayan pusat dan hanya dibuka oleh pentadbir.
                         </p>
-                        <FileField
-                            label="Salinan kad pengenalan"
-                            error={form.errors.kad_pengenalan}
-                            onChange={(file) => form.setData('kad_pengenalan', file)}
-                        />
-                        <FileField
-                            label="Surat doktor"
-                            error={form.errors.surat_doktor}
-                            onChange={(file) => form.setData('surat_doktor', file)}
-                        />
-                        <FileField
-                            label="Dokumen lain"
-                            error={form.errors.lain}
-                            onChange={(file) => form.setData('lain', file)}
-                        />
+                        <label className="block space-y-2">
+                            <span className="text-lg font-bold">PDF atau gambar (Tidak wajib, paling banyak 5)</span>
+                            <input
+                                className={`${fieldClass} py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-primary-foreground`}
+                                type="file"
+                                multiple
+                                accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
+                                onChange={(event) => {
+                                    const files = Array.from(event.target.files ?? []);
+
+                                    if (files.length > 5) {
+                                        form.setData('dokumen', []);
+                                        form.setError('dokumen', 'Pilih paling banyak 5 fail.');
+                                        event.target.value = '';
+
+                                        return;
+                                    }
+
+                                    form.clearErrors('dokumen');
+                                    form.setData('dokumen', files);
+                                }}
+                            />
+                            {form.data.dokumen.length > 0 && (
+                                <ul className="space-y-1">
+                                    {form.data.dokumen.map((file) => (
+                                        <li key={`${file.name}-${file.size}`} className="text-lg">
+                                            {file.name} ({Math.max(1, Math.round(file.size / 1024))} KB)
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {documentErrors.map((message) => (
+                                <InputError key={message} message={message} />
+                            ))}
+                        </label>
                     </section>
 
                     <button type="submit" disabled={form.processing || !identity.valid} className="inline-flex min-h-16 w-full items-center justify-center rounded-2xl bg-primary text-xl font-black text-primary-foreground disabled:opacity-60">
@@ -195,27 +216,6 @@ function Field({
             {children}
             <InputError message={error} />
         </label>
-    );
-}
-
-function FileField({
-    label,
-    error,
-    onChange,
-}: {
-    label: string;
-    error?: string;
-    onChange: (file: File | null) => void;
-}) {
-    return (
-        <Field label={label} hint="Tidak wajib. PDF atau gambar" error={error}>
-            <input
-                className={`${fieldClass} py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-base file:font-bold file:text-primary-foreground`}
-                type="file"
-                accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
-                onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-            />
-        </Field>
     );
 }
 

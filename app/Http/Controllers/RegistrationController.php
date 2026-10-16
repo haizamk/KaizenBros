@@ -31,7 +31,7 @@ class RegistrationController extends Controller
 
         $registration = DB::transaction(function () use ($request, $parsed): Registration {
             $registration = Registration::query()->create([
-                ...$request->safe()->except(['ic_number', 'kad_pengenalan', 'surat_doktor', 'lain']),
+                ...$request->safe()->except(['ic_number', 'dokumen']),
                 'ic_number' => $parsed['formatted'],
                 'gender' => $parsed['gender'],
                 'birth_date' => $parsed['birth_date'],
@@ -46,27 +46,36 @@ class RegistrationController extends Controller
             return $registration;
         });
 
-        return redirect()
-            ->route('registrations.create')
-            ->with('reference', $registration->reference);
+        return redirect()->route('registrations.received', ['reference' => $registration->reference]);
+    }
+
+    public function received(string $reference): Response
+    {
+        abort_unless(preg_match('/^KB-REG-\d{6}$/', $reference) === 1, 404);
+
+        $centre = config('kaizenbros.centre');
+        $phone = preg_replace('/\D+/', '', (string) $centre['phone_main']) ?? '';
+        $message = 'Salam, saya baru menghantar permohonan pesakit. Nombor rujukan saya ialah '.$reference.'.';
+
+        return Inertia::render('daftar/selesai', [
+            'reference' => $reference,
+            'centreName' => $centre['name'],
+            'address' => $centre['address'],
+            'phoneLabel' => $centre['phone_main'],
+            'email' => $centre['email'],
+            'hours' => $centre['operating_hours'],
+            'whatsappUrl' => 'https://wa.me/'.$centre['whatsapp_number'].'?text='.rawurlencode($message),
+            'callUrl' => 'tel:'.$phone,
+            'emailUrl' => 'mailto:'.$centre['email'].'?subject='.rawurlencode('Permohonan pesakit '.$reference),
+        ]);
     }
 
     private function storeUploads(StoreRegistrationRequest $request, Registration $registration): void
     {
-        $files = [
-            'kad_pengenalan' => DocumentCategory::KadPengenalan,
-            'surat_doktor' => DocumentCategory::SuratDoktor,
-            'lain' => DocumentCategory::Lain,
-        ];
-
-        foreach ($files as $field => $category) {
-            if (! $request->hasFile($field)) {
-                continue;
-            }
-
-            ClinicFiles::storePatientDocument($request->file($field), [
+        foreach ($request->file('dokumen', []) as $file) {
+            ClinicFiles::storePatientDocument($file, [
                 'registration_id' => $registration->id,
-                'category' => $category,
+                'category' => DocumentCategory::Lain,
             ]);
         }
     }
