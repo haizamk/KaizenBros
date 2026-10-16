@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { useAppearance } from '@/hooks/use-appearance';
+import PromoBanner from '@/components/promo-banner';
 
 type Centre = {
     name: string;
@@ -30,65 +30,14 @@ function digits(phone: string): string {
     return phone.replace(/\s+/g, '');
 }
 
-function ThemeChoice() {
-    const { resolvedAppearance, updateAppearance } = useAppearance();
-
-    return (
-        <div className="flex items-center gap-2" role="group" aria-label="Pilihan paparan">
-            <span className="text-base font-bold">Paparan</span>
-            <button
-                type="button"
-                aria-pressed={resolvedAppearance === 'dark'}
-                onClick={() => updateAppearance('dark')}
-                className={`inline-flex min-h-12 items-center rounded-xl px-4 text-base font-black ${
-                    resolvedAppearance === 'dark'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border-2 border-border bg-card text-foreground'
-                }`}
-            >
-                Gelap
-            </button>
-            <button
-                type="button"
-                aria-pressed={resolvedAppearance === 'light'}
-                onClick={() => updateAppearance('light')}
-                className={`inline-flex min-h-12 items-center rounded-xl px-4 text-base font-black ${
-                    resolvedAppearance === 'light'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border-2 border-border bg-card text-foreground'
-                }`}
-            >
-                Cerah
-            </button>
-        </div>
-    );
-}
-
 export default function Welcome({ centre }: { centre: Centre }) {
     const whatsappHref = `https://wa.me/${centre.whatsapp_number}?text=${encodeURIComponent(whatsappMessage)}`;
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <>
             <Head title="Pusat Dialisis" />
-            <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur">
-                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-                    <div>
-                        <p className="text-base font-bold text-primary">{centre.kkm_license}</p>
-                        <p className="text-xl font-black leading-tight">{centre.name}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <ThemeChoice />
-                        <a
-                            href={`tel:${digits(centre.hotline_24h)}`}
-                            className="inline-flex min-h-14 items-center rounded-2xl bg-rose-700 px-5 text-lg font-black text-white"
-                        >
-                            Kecemasan {centre.hotline_24h}
-                        </a>
-                    </div>
-                </div>
-            </header>
-
             <main>
+                <PromoBanner />
                 <section className="border-b border-border bg-card">
                     <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[1.3fr_0.7fr] lg:py-14">
                         <div className="space-y-6">
@@ -164,7 +113,10 @@ export default function Welcome({ centre }: { centre: Centre }) {
                             <h2 className="text-3xl font-black">Rawatan</h2>
                             <p className="text-xl leading-relaxed">{centre.water_system}.</p>
                             <p className="text-xl leading-relaxed">
-                                Pengangkutan pergi dan balik disediakan secara percuma di kawasan Beranang dan Semenyih.
+                                Pengangkutan pergi dan balik disediakan secara percuma di kawasan Beranang dan Semenyih.{' '}
+                                <Link href="/promosi/pengangkutan" className="font-black text-primary">
+                                    Lihat maklumat van
+                                </Link>
                             </p>
                         </div>
                         <div className="space-y-3">
@@ -257,6 +209,6 @@ export default function Welcome({ centre }: { centre: Centre }) {
                     <p>No. pendaftaran KKM: {centre.kkm_license}</p>
                 </div>
             </footer>
-        </div>
+        </>
     );
 }

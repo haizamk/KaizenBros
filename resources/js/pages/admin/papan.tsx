@@ -21,12 +21,25 @@ type RegistrationRow = {
     created_at: string;
 };
 
+type NurseApplicationRow = {
+    id: number;
+    reference: string;
+    full_name: string;
+    phone_number: string;
+    nursing_board_no: string;
+    preferred_shift: string | null;
+    status: string;
+    created_at: string;
+};
+
 export default function PapanAdmin({
     patients,
     registrations,
+    nurseApplications,
 }: {
     patients: PatientRow[];
     registrations: RegistrationRow[];
+    nurseApplications: NurseApplicationRow[];
 }) {
     return (
         <>
@@ -79,6 +92,25 @@ export default function PapanAdmin({
                                         {registration.reference} · {registration.ic_number} · {registration.phone_number}
                                     </p>
                                     <p className="text-sm text-teal-200">{registration.status} · {registration.created_at}</p>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
+
+                <section className="space-y-3">
+                    <h2 className="text-2xl font-black">Permohonan jururawat</h2>
+                    {nurseApplications.length === 0 ? (
+                        <p className="rounded-2xl border border-[#1F385C] bg-[#132238] p-5">Tiada permohonan jururawat.</p>
+                    ) : (
+                        <ul className="grid gap-3">
+                            {nurseApplications.map((application) => (
+                                <li key={application.id} className="rounded-2xl border border-[#1F385C] bg-[#132238] p-4">
+                                    <p className="text-xl font-black">{application.full_name}</p>
+                                    <p className="text-base text-slate-200">
+                                        {application.reference} · {application.phone_number} · Lembaga {application.nursing_board_no}
+                                    </p>
+                                    <p className="text-sm text-teal-200">{application.preferred_shift} · {application.status} · {application.created_at}</p>
                                 </li>
                             ))}
                         </ul>

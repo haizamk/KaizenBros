@@ -24,6 +24,14 @@ class HandleAppearance
 
         View::share('appearance', $appearance);
 
+        $textSize = $request->cookie('text_size', 'md');
+
+        if (! in_array($textSize, ['sm', 'md', 'lg', 'xl'], true)) {
+            $textSize = 'md';
+        }
+
+        View::share('textSize', $textSize);
+
         return $next($request);
     }
 }

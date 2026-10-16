@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\NurseSessionController;
 use App\Http\Controllers\PatientPortalController;
+use App\Http\Controllers\PromotionController;
 use App\Http\Controllers\RegistrationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -17,6 +18,11 @@ Route::get('/', function () {
 
 Route::get('/daftar', [RegistrationController::class, 'create'])->name('registrations.create');
 Route::post('/daftar', [RegistrationController::class, 'store'])->name('registrations.store');
+
+Route::get('/promosi/pesakit-baru', [PromotionController::class, 'patients'])->name('promotions.patients');
+Route::get('/promosi/pengangkutan', [PromotionController::class, 'transport'])->name('promotions.transport');
+Route::get('/promosi/jururawat', [PromotionController::class, 'nurses'])->name('promotions.nurses');
+Route::post('/promosi/jururawat', [PromotionController::class, 'storeNurse'])->name('promotions.nurses.store');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');

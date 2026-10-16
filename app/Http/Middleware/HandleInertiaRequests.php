@@ -42,6 +42,8 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'reference' => $request->session()->get('reference'),
+            'nurseReference' => $request->session()->get('nurse_reference'),
+            'centre' => config('kaizenbros.centre'),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

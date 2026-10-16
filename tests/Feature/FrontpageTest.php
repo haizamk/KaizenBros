@@ -15,6 +15,7 @@ class FrontpageTest extends TestCase
         $this->get(route('home'))
             ->assertOk()
             ->assertSee('class="dark"', false)
+            ->assertSee('data-text="md"', false)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('welcome')
                 ->where('centre.map.embed_url', 'https://maps.google.com/maps?q=2.92592,101.86000+(Pusat+Dialisis+KaizenBros)&z=19&output=embed')
@@ -30,5 +31,13 @@ class FrontpageTest extends TestCase
             ->get(route('home'))
             ->assertOk()
             ->assertDontSee('class="dark"', false);
+    }
+
+    public function test_text_size_cookie_is_applied_on_the_frontpage(): void
+    {
+        $this->withUnencryptedCookie('text_size', 'xl')
+            ->get(route('home'))
+            ->assertOk()
+            ->assertSee('data-text="xl"', false);
     }
 }

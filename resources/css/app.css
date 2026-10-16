@@ -61,6 +61,22 @@
     --color-sidebar-ring: var(--sidebar-ring);
 }
 
+html[data-text='sm'] {
+    font-size: 15px;
+}
+
+html[data-text='md'] {
+    font-size: 16px;
+}
+
+html[data-text='lg'] {
+    font-size: 19px;
+}
+
+html[data-text='xl'] {
+    font-size: 22px;
+}
+
 :root {
     --background: #f4f7fb;
     --foreground: #0b132b;

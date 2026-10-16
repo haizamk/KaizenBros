@@ -2,6 +2,8 @@ import { createInertiaApp } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
+import { initializeTextSize } from '@/hooks/use-text-size';
+import PublicLayout from '@/layouts/public-layout';
 import ClinicLayout from '@/layouts/clinic-layout';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
@@ -14,8 +16,9 @@ void createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'welcome':
-                return null;
             case name === 'daftar':
+            case name.startsWith('promosi/'):
+                return PublicLayout;
             case name.startsWith('jururawat/'):
             case name.startsWith('pesakit/'):
             case name.startsWith('admin/'):
@@ -44,3 +47,4 @@ void createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+initializeTextSize();
