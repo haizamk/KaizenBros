@@ -225,6 +225,19 @@ class ClinicWorkflowTest extends TestCase
         $this->assertTrue(Storage::disk('medical_reports')->exists($report->path));
 
         $this->actingAs($nurse)
+            ->from(route('nurse.records.index'))
+            ->post(route('nurse.records.store'), [
+                'patient_id' => $patient->id,
+                'examination_type' => ExaminationType::Berkala->value,
+                'report' => LabPdfFixture::file('darah-duplikat.pdf', "Tarikh Ujian: 2026-09-01\nHemoglobin (Hb) 9.0 g/dL"),
+            ])
+            ->assertRedirect(route('nurse.records.index'))
+            ->assertSessionHasErrors('examination_date');
+
+        $this->assertDatabaseCount('medical_records', 1);
+        $this->assertDatabaseCount('medical_reports', 1);
+
+        $this->actingAs($nurse)
             ->get(route('nurse.records.index', ['pesakit' => $patient->id]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page

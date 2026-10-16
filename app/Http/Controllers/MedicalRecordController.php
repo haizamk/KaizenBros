@@ -107,6 +107,15 @@ class MedicalRecordController extends Controller
             ]);
         }
 
+        if (MedicalRecord::query()
+            ->where('patient_id', $patient->id)
+            ->whereDate('examination_date', $date)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'examination_date' => 'Rekod darah untuk tarikh ini sudah wujud bagi pesakit ini. Muat naik laporan tarikh lain atau semak senarai rekod di bawah.',
+            ]);
+        }
+
         DB::transaction(function () use ($request, $parsed, $date): void {
             $record = MedicalRecord::query()->create([
                 'patient_id' => $request->integer('patient_id'),

@@ -71,7 +71,7 @@ export default function Darah({
                     <p className="text-sm font-bold text-teal-300">Portal jururawat</p>
                     <h1 className="text-3xl font-black">Rekod darah</h1>
                     <p className="text-base leading-relaxed text-slate-200">
-                        Muat naik PDF laporan makmal, termasuk imbasan CamScanner. Sistem membaca teks digital atau menjalankan OCR pada imbasan, kemudian menyimpan nombor yang benar-benar tercetak. Jika sesuatu ujian tiada dalam PDF, ruangan itu dikosongkan. Fail disimpan dalam folder pesakit dan tidak dipadam.
+                        Muat naik PDF laporan makmal, termasuk imbasan CamScanner. Sistem membaca teks digital atau menjalankan OCR pada imbasan, kemudian menyimpan nombor yang benar-benar tercetak. Satu tarikh sampel hanya boleh ada satu rekod bagi setiap pesakit. Jika sesuatu ujian tiada dalam PDF, ruangan itu dikosongkan. Fail disimpan dalam folder pesakit dan tidak dipadam.
                     </p>
                 </div>
 
