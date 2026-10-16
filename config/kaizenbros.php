@@ -26,6 +26,13 @@ return [
         'panels' => ['PERKESO / SOCSO', 'JPA / KWAP', 'Zakat Selangor', 'BAITULMAL', 'NKF'],
         'medical_director' => 'Dr. Ahmad Farhan bin Mohamad (Nefrologi)',
         'head_nurse' => 'Sister Siti Fatimah binti Rosli (SRN)',
+        'map' => [
+            'latitude' => '2.92592',
+            'longitude' => '101.86000',
+            'embed_url' => 'https://maps.google.com/maps?q=2.92592,101.86000+(Pusat+Dialisis+KaizenBros)&z=19&output=embed',
+            'google_url' => 'https://maps.google.com/?q=2.92592,101.86000',
+            'waze_url' => 'https://waze.com/ul?ll=2.92592,101.86000&navigate=yes',
+        ],
     ],
 
     'demo_accounts' => [

@@ -31,10 +31,16 @@ const setCookie = (name: string, value: string, days = 365): void => {
 
 const getStoredAppearance = (): Appearance => {
     if (typeof window === 'undefined') {
-        return 'system';
+        return 'dark';
     }
 
-    return (localStorage.getItem('appearance') as Appearance) || 'system';
+    const stored = localStorage.getItem('appearance');
+
+    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        return stored;
+    }
+
+    return 'dark';
 };
 
 const isDarkMode = (appearance: Appearance): boolean => {
@@ -75,13 +81,14 @@ export function initializeTheme(): void {
         return;
     }
 
+    currentAppearance = getStoredAppearance();
+
     if (!localStorage.getItem('appearance')) {
         localStorage.setItem('appearance', 'dark');
         setCookie('appearance', 'dark');
     }
 
-    currentAppearance = 'dark';
-    applyTheme('dark');
+    applyTheme(currentAppearance);
 
     // Set up system theme change listener
     mediaQuery()?.addEventListener('change', handleSystemThemeChange);
@@ -91,7 +98,7 @@ export function useAppearance(): UseAppearanceReturn {
     const appearance: Appearance = useSyncExternalStore(
         subscribe,
         () => currentAppearance,
-        () => 'system',
+        () => 'dark',
     );
 
     const resolvedAppearance: ResolvedAppearance = isDarkMode(appearance)
