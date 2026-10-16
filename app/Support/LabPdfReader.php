@@ -9,28 +9,59 @@ use Throwable;
 
 class LabPdfReader
 {
+    public function __construct(
+        private LabPdfOcr $ocr = new LabPdfOcr,
+    ) {}
+
     /**
-     * @return array{values: array<string, float|null>, date: string|null, found: int, has_text: bool}
+     * @return array{
+     *     values: array<string, float|null>,
+     *     date: string|null,
+     *     found: int,
+     *     has_text: bool,
+     *     patient_name: string|null,
+     *     patient_ic: string|null,
+     *     read_method: 'text'|'ocr',
+     *     ocr_attempted: bool,
+     *     ocr_available: bool
+     * }
      */
     public function read(UploadedFile $file): array
     {
         $path = $file->getRealPath() ?: '';
-        $parsed = $this->parseText($this->smalotText($path));
-        $layout = $this->parseText($this->popplerText($path));
+        $candidates = [
+            $this->withMethod($this->parseText($this->smalotText($path)), 'text'),
+            $this->withMethod($this->parseText($this->popplerText($path)), 'text'),
+        ];
 
-        if ($layout['found'] > $parsed['found']) {
-            return $layout;
+        $best = $this->pickBest(...$candidates);
+        $ocrAvailable = $this->ocr->available();
+
+        if ($best['found'] === 0 && $ocrAvailable) {
+            $ocrText = $this->ocr->extract($path);
+            $ocrParsed = $this->withMethod($this->parseText($ocrText), 'ocr');
+            $ocrParsed['ocr_attempted'] = true;
+            $best = $this->pickBest($best, $ocrParsed);
         }
 
-        if ($parsed['found'] === 0 && $layout['has_text']) {
-            return $layout;
-        }
+        $best['ocr_available'] = $ocrAvailable;
+        $best['ocr_attempted'] = $best['ocr_attempted'] || ($best['found'] === 0 && $ocrAvailable);
 
-        return $parsed;
+        return $best;
     }
 
     /**
-     * @return array{values: array<string, float|null>, date: string|null, found: int, has_text: bool}
+     * @return array{
+     *     values: array<string, float|null>,
+     *     date: string|null,
+     *     found: int,
+     *     has_text: bool,
+     *     patient_name: string|null,
+     *     patient_ic: string|null,
+     *     read_method: 'text'|'ocr',
+     *     ocr_attempted: bool,
+     *     ocr_available: bool
+     * }
      */
     public function parseText(string $text): array
     {
@@ -42,6 +73,7 @@ class LabPdfReader
         foreach (LabCatalog::fields() as $key => $meta) {
             $value = $this->findInLines($lines, $meta['aliases'], $meta['units'])
                 ?? $this->findValue($flat, $meta['aliases'], $meta['units']);
+            $value = $this->sanitizeValue($key, $value);
             $values[$key] = $value;
 
             if ($value !== null) {
@@ -54,7 +86,87 @@ class LabPdfReader
             'date' => $this->findDate($flat),
             'found' => $found,
             'has_text' => $flat !== '',
+            'patient_name' => $this->findPatientName($flat),
+            'patient_ic' => $this->findPatientIc($flat),
+            'read_method' => 'text',
+            'ocr_attempted' => false,
+            'ocr_available' => false,
         ];
+    }
+
+    /**
+     * @param  array{
+     *     values: array<string, float|null>,
+     *     date: string|null,
+     *     found: int,
+     *     has_text: bool,
+     *     patient_name: string|null,
+     *     patient_ic: string|null,
+     *     read_method: 'text'|'ocr',
+     *     ocr_attempted: bool,
+     *     ocr_available: bool
+     * }  $parsed
+     * @return array{
+     *     values: array<string, float|null>,
+     *     date: string|null,
+     *     found: int,
+     *     has_text: bool,
+     *     patient_name: string|null,
+     *     patient_ic: string|null,
+     *     read_method: 'text'|'ocr',
+     *     ocr_attempted: bool,
+     *     ocr_available: bool
+     * }
+     */
+    private function withMethod(array $parsed, string $method): array
+    {
+        $parsed['read_method'] = $method;
+
+        return $parsed;
+    }
+
+    /**
+     * @param  array{
+     *     values: array<string, float|null>,
+     *     date: string|null,
+     *     found: int,
+     *     has_text: bool,
+     *     patient_name: string|null,
+     *     patient_ic: string|null,
+     *     read_method: 'text'|'ocr',
+     *     ocr_attempted: bool,
+     *     ocr_available: bool
+     * }  ...$candidates
+     * @return array{
+     *     values: array<string, float|null>,
+     *     date: string|null,
+     *     found: int,
+     *     has_text: bool,
+     *     patient_name: string|null,
+     *     patient_ic: string|null,
+     *     read_method: 'text'|'ocr',
+     *     ocr_attempted: bool,
+     *     ocr_available: bool
+     * }
+     */
+    private function pickBest(array ...$candidates): array
+    {
+        usort($candidates, function (array $left, array $right): int {
+            if ($left['found'] !== $right['found']) {
+                return $right['found'] <=> $left['found'];
+            }
+
+            $leftDate = $left['date'] !== null ? 1 : 0;
+            $rightDate = $right['date'] !== null ? 1 : 0;
+
+            if ($leftDate !== $rightDate) {
+                return $rightDate <=> $leftDate;
+            }
+
+            return 0;
+        });
+
+        return $candidates[0];
     }
 
     /**
@@ -79,7 +191,7 @@ class LabPdfReader
 
             $next = $lines[$index + 1] ?? null;
 
-            if (is_string($next) && preg_match('/^\s*[0-9]/', $next) === 1) {
+            if (is_string($next) && preg_match('/^\s*[0-9LH]/', $next) === 1) {
                 $value = $this->findValue($this->normalize($line.' '.$next), $aliases, $units);
 
                 if ($value !== null) {
@@ -112,7 +224,7 @@ class LabPdfReader
             }
 
             $start = $match[0][1] + strlen($match[0][0]);
-            $value = $this->numberWithUnit(substr($text, $start, 90), $unitPattern);
+            $value = $this->numberWithUnit(substr($text, $start, 120), $unitPattern);
 
             if ($value !== null) {
                 return $value;
@@ -122,9 +234,26 @@ class LabPdfReader
         return null;
     }
 
+    private function sanitizeValue(string $key, ?float $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($key === 'sodium' && $value > 200) {
+            $mod = fmod($value, 1000);
+
+            if ($mod >= 120 && $mod <= 160) {
+                return $mod;
+            }
+        }
+
+        return $value;
+    }
+
     private function numberWithUnit(string $window, string $unitPattern): ?float
     {
-        $pattern = '/(?<![\d.])([0-9]+(?:[.,][0-9]+)?)\s*(?:'.$unitPattern.')/iu';
+        $pattern = '/(?:\b(?:L+|H+|HH)\s*)*(?<![\d.])([0-9]+(?:[.,][0-9]+)?)\s*(?:'.$unitPattern.')/iu';
 
         if (preg_match_all($pattern, $window, $matches, PREG_OFFSET_CAPTURE) < 1) {
             return null;
@@ -132,7 +261,7 @@ class LabPdfReader
 
         foreach ($matches[1] as $found) {
             $offset = $found[1];
-            $prefix = substr($window, max(0, $offset - 8), min(8, $offset));
+            $prefix = substr($window, max(0, $offset - 10), min(10, $offset));
 
             if (preg_match('/[<>]\s*$/', $prefix) === 1 || preg_match('/\d\s*-\s*$/', $prefix) === 1) {
                 continue;
@@ -160,9 +289,30 @@ class LabPdfReader
         return false;
     }
 
+    private function findPatientName(string $text): ?string
+    {
+        if (preg_match('/Name\s*:\s*(.+?)\s+No\.?\s*IC/i', $text, $matches) !== 1) {
+            return null;
+        }
+
+        $name = trim($matches[1]);
+
+        return $name === '' ? null : preg_replace('/\s+/u', ' ', $name);
+    }
+
+    private function findPatientIc(string $text): ?string
+    {
+        if (preg_match('/No\.?\s*IC\s*[:\s]*([0-9]{6,12})/i', $text, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
     private function findDate(string $text): ?string
     {
         $labels = [
+            'Sample',
             'Tarikh Ujian',
             'Tarikh Sampel',
             'Tarikh Diambil',
@@ -249,6 +399,12 @@ class LabPdfReader
         $text = str_replace(["\u{00B5}", "\u{03BC}"], 'u', $text);
         $text = str_replace("\u{00B2}", '2', $text);
         $text = str_replace(['×', '✕'], 'x', $text);
+        $text = preg_replace('/\b1043\/uL/i', '10^3/uL', $text) ?? $text;
+        $text = preg_replace('/\b1046\/uL/i', '10^6/uL', $text) ?? $text;
+        $text = preg_replace('/\b10\s*4\s*3\s*\/\s*uL/i', '10^3/uL', $text) ?? $text;
+        $text = preg_replace('/\b10\s*[\^x]\s*0?\s*3\s*\/\s*uL/i', '10^3/uL', $text) ?? $text;
+        $text = preg_replace('/\b10\s*[\^x]\s*0?\s*6\s*\/\s*uL/i', '10^6/uL', $text) ?? $text;
+        $text = preg_replace('/\b(\d{1,2})\s+(\d)\s*(mmol\/L|umol\/L|g\/dL|g\/L|%)/i', '$1.$2 $3', $text) ?? $text;
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = preg_replace('/x\s*10\s*\^/iu', 'x10^', $text) ?? $text;
 

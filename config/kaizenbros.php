@@ -36,6 +36,16 @@ return [
         ],
     ],
 
+    'lab_pdf_ocr' => [
+        'enabled' => env('LAB_PDF_OCR', true),
+        'dpi' => 160,
+        'max_pages' => 6,
+        'timeout_seconds' => 120,
+        'language' => 'eng',
+        'pdftoppm' => env('LAB_PDF_PDFTOPPM', '/usr/bin/pdftoppm'),
+        'tesseract' => env('LAB_PDF_TESSERACT', '/usr/bin/tesseract'),
+    ],
+
     'demo_accounts' => [
         [
             'role' => 'Jururawat',

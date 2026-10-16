@@ -12,6 +12,7 @@ use App\Support\BloodReportAnalysis;
 use App\Support\ClinicCharts;
 use App\Support\ClinicFiles;
 use App\Support\LabCatalog;
+use App\Support\LabPdfPatientMatch;
 use App\Support\LabPdfReader;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -77,14 +78,20 @@ class MedicalRecordController extends Controller
         $parsed = $reader->read($request->file('report'));
 
         if ($parsed['found'] === 0) {
-            $message = $parsed['has_text']
-                ? 'Tiada keputusan darah dibaca daripada PDF ini. Tiada nombor diandaikan.'
-                : 'PDF ini tidak mengandungi teks yang boleh dibaca. Ia mungkin imbasan gambar. Tiada nombor diandaikan.';
+            $message = match (true) {
+                $parsed['ocr_attempted'] && ! $parsed['ocr_available'] => 'PDF imbasan tidak dapat dibaca kerana OCR belum dipasang pada pelayan.',
+                $parsed['ocr_attempted'] => 'Tiada keputusan darah dibaca walaupun OCR dijalankan. Semak kualiti imbasan atau isi tarikh dan semak semula.',
+                $parsed['has_text'] => 'Tiada keputusan darah dibaca daripada PDF ini. Tiada nombor diandaikan.',
+                default => 'PDF ini tidak mengandungi teks yang boleh dibaca. Ia mungkin imbasan gambar. Tiada nombor diandaikan.',
+            };
 
             throw ValidationException::withMessages([
                 'report' => $message,
             ]);
         }
+
+        $patient = Patient::query()->findOrFail($request->integer('patient_id'));
+        LabPdfPatientMatch::assertMatches($patient, $parsed['patient_name'], $parsed['patient_ic']);
 
         $date = $parsed['date'] ?? $request->validated('examination_date');
 
@@ -113,11 +120,12 @@ class MedicalRecordController extends Controller
             ClinicFiles::storeMedicalReport($request->file('report'), $record, $request->user()->id);
         });
 
-        $source = $parsed['date'] === null ? 'Tarikh diisi oleh kakitangan.' : 'Tarikh diambil daripada PDF.';
+        $source = $parsed['date'] === null ? 'Tarikh diisi oleh kakitangan.' : 'Tarikh sampel diambil daripada PDF.';
+        $method = $parsed['read_method'] === 'ocr' ? ' OCR.' : '.';
 
         return redirect()
             ->route('nurse.records.index', ['pesakit' => $request->integer('patient_id')])
-            ->with('status', "Rekod darah disimpan. {$parsed['found']} bacaan dibaca. Nilai yang tiada dibiarkan kosong. {$source}");
+            ->with('status', "Rekod darah disimpan. {$parsed['found']} bacaan dibaca{$method} Nilai yang tiada dibiarkan kosong. {$source}");
     }
 
     public function storeDoctorNote(StoreDoctorNoteRequest $request, MedicalRecord $record): RedirectResponse

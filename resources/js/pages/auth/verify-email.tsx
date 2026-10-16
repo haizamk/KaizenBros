@@ -1,46 +1,32 @@
-// Components
-import { Form, Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import { logout } from '@/routes';
-import { send } from '@/routes/verification';
+import { dashboard } from '@/routes';
 
-export default function VerifyEmail({ status }: { status?: string }) {
+export default function VerifyEmail() {
     return (
         <>
-            <Head title="Email verification" />
+            <Head title="Pengesahan emel" />
 
-            {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
-                    A new verification link has been sent to the email address
-                    you provided during registration.
-                </div>
-            )}
-
-            <Form {...send.form()} className="space-y-6 text-center">
-                {({ processing }) => (
-                    <>
-                        <Button disabled={processing} variant="secondary">
-                            {processing && <Spinner />}
-                            Resend verification email
-                        </Button>
-
-                        <TextLink
-                            href={logout()}
-                            className="mx-auto block text-sm"
-                        >
-                            Log out
-                        </TextLink>
-                    </>
-                )}
-            </Form>
+            <div className="space-y-6 text-center">
+                <p className="text-base leading-relaxed">
+                    Pengesahan emel dimatikan untuk portal ini. Anda boleh terus ke papan pemuka.
+                </p>
+                <Link
+                    href={dashboard()}
+                    className="inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-6 text-base font-bold text-primary-foreground"
+                >
+                    Ke papan pemuka
+                </Link>
+                <TextLink href={logout()} className="mx-auto block text-sm">
+                    Log keluar
+                </TextLink>
+            </div>
         </>
     );
 }
 
 VerifyEmail.layout = {
-    title: 'Email verification',
-    description:
-        'Please verify your email address by clicking on the link we just emailed to you.',
+    title: 'Pengesahan emel',
+    description: 'Pengesahan emel tidak diperlukan untuk portal KaizenBros.',
 };

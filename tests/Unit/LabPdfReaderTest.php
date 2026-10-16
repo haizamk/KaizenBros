@@ -109,4 +109,34 @@ class LabPdfReaderTest extends TestCase
         $this->assertNull($parsed['values']['cholesterol']);
         $this->assertTrue($parsed['has_text']);
     }
+
+    public function test_prima_lab_ocr_text_reads_sample_date_name_and_flagged_results(): void
+    {
+        $parsed = (new LabPdfReader)->parseText(<<<'TEXT'
+            Name : KHAIRUL HAIZAM BIN MD RADZI No.IC : 781129105503
+            Test Selected : BMC19A Sample : 01/10/2026 15:00:12
+            Haemoglobin EH L11.4 g/db (12.0 - 18.0)
+            White Cell Count mae 5.5 1043/uL (4.0- 11.0)
+            Platelet MUR 194 1043/uL (150-450)
+            Glucose ste 5.6 mmol/L (3.9-6.0)
+            Sodium A 2133 mmol/L (136-145)
+            Potassium # HH6.1 mmol/L (3.5-5.1)
+            Creatinine AU RET # 808 umol/L (59-116)
+            Phosphate FAR H2.73 mmol/L (0.65 - 1.60 )
+            Urea RR H17.4 mmol/L (2.8-8.1)
+            TEXT);
+
+        $this->assertSame('2026-10-01', $parsed['date']);
+        $this->assertSame('KHAIRUL HAIZAM BIN MD RADZI', $parsed['patient_name']);
+        $this->assertSame('781129105503', $parsed['patient_ic']);
+        $this->assertSame(11.4, $parsed['values']['hemoglobin']);
+        $this->assertSame(5.5, $parsed['values']['wbc']);
+        $this->assertSame(194.0, $parsed['values']['platelet']);
+        $this->assertSame(5.6, $parsed['values']['glucose']);
+        $this->assertSame(133.0, $parsed['values']['sodium']);
+        $this->assertSame(6.1, $parsed['values']['potassium']);
+        $this->assertSame(808.0, $parsed['values']['creatinine']);
+        $this->assertSame(2.73, $parsed['values']['phosphate']);
+        $this->assertSame(17.4, $parsed['values']['urea']);
+    }
 }
