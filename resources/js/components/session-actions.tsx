@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import { useForm } from '@inertiajs/react';
+import DialysisTimer from '@/components/dialysis-timer';
 import InputError from '@/components/input-error';
 
 export type SessionCard = {
@@ -54,32 +54,6 @@ function formStatus(errors: object): string | undefined {
     }
 
     return undefined;
-}
-
-function formatClock(totalSeconds: number): string {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
-}
-
-function DialysisTimer({ startedAt }: { startedAt: string }) {
-    const [now, setNow] = useState(() => Date.now());
-
-    useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now()), 1000);
-        return () => window.clearInterval(timer);
-    }, []);
-
-    const elapsed = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
-    const remaining = Math.max(0, 4 * 3600 - elapsed);
-
-    return (
-        <p className="font-mono text-3xl font-black text-cyan-200" aria-live="polite">
-            {formatClock(remaining)}
-            <span className="ml-2 text-sm font-bold text-slate-300">baki daripada 4 jam</span>
-        </p>
-    );
 }
 
 export function statusClass(status: string): string {

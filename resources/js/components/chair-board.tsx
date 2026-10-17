@@ -1,4 +1,5 @@
 import { Link, useForm } from '@inertiajs/react';
+import DialysisTimer from '@/components/dialysis-timer';
 import InputError from '@/components/input-error';
 
 export type ChairTile = {
@@ -9,6 +10,7 @@ export type ChairTile = {
     reason_label: string | null;
     session_id: number | null;
     session_status: string | null;
+    dialysis_started_at: string | null;
 };
 
 const stateClass: Record<ChairTile['state'], string> = {
@@ -65,6 +67,9 @@ export default function ChairBoard({ chairs }: { chairs: ChairTile[] }) {
                             <p className="text-sm font-bold">{chair.reason_label ?? stateLabel[chair.state]}</p>
                         </div>
                         <p className="min-h-12 text-base">{chair.patient_name ?? (chair.state === 'kosong' ? 'Sedia untuk giliran seterusnya' : 'Dilepaskan daripada giliran automatik')}</p>
+                        {chair.session_status === 'SEDANG_DIALISIS' && chair.dialysis_started_at ? (
+                            <DialysisTimer startedAt={chair.dialysis_started_at} compact />
+                        ) : null}
                         {chair.state === 'kosong' ? (
                             <div className="grid gap-2">
                                 <button type="button" disabled={block.processing} onClick={() => mark(chair.number, 'ROSAK')} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-rose-500 px-3 font-black text-slate-950">

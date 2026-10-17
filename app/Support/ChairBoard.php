@@ -35,7 +35,7 @@ class ChairBoard
     }
 
     /**
-     * @return array<int, array{number: string, state: string, patient_name: string|null, reason: string|null, reason_label: string|null, session_id: int|null, session_status: string|null}>
+     * @return array<int, array{number: string, state: string, patient_name: string|null, reason: string|null, reason_label: string|null, session_id: int|null, session_status: string|null, dialysis_started_at: string|null}>
      */
     public static function tiles(?CarbonInterface $date = null): array
     {
@@ -54,6 +54,7 @@ class ChairBoard
                     'reason_label' => $blocked[$number]['reason_label'],
                     'session_id' => null,
                     'session_status' => null,
+                    'dialysis_started_at' => null,
                 ];
 
                 continue;
@@ -71,6 +72,7 @@ class ChairBoard
                         : $session['status']->label(),
                     'session_id' => $session['session_id'],
                     'session_status' => $session['status']->value,
+                    'dialysis_started_at' => $session['dialysis_started_at'],
                 ];
 
                 continue;
@@ -84,6 +86,7 @@ class ChairBoard
                 'reason_label' => null,
                 'session_id' => null,
                 'session_status' => null,
+                'dialysis_started_at' => null,
             ];
         }
 
@@ -105,7 +108,7 @@ class ChairBoard
     }
 
     /**
-     * @return array<string, array{session_id: int, patient_name: string, status: SessionStatus}>
+     * @return array<string, array{session_id: int, patient_name: string, status: SessionStatus, dialysis_started_at: string|null}>
      */
     private static function occupiedSessions(CarbonInterface $date, ?int $exceptSessionId = null): array
     {
@@ -134,6 +137,9 @@ class ChairBoard
                 'session_id' => $session->id,
                 'patient_name' => $session->patient->name,
                 'status' => $session->status,
+                'dialysis_started_at' => $session->status === SessionStatus::SedangDialisis
+                    ? $session->started_at?->toIso8601String()
+                    : null,
             ];
         }
 
