@@ -351,6 +351,11 @@ class ClinicWorkflowTest extends TestCase
                 ->where('arrivals.0.can_register', true)
             );
 
+        $this->actingAs($nurse)
+            ->get(route('nurse.sessions', ['tapisan' => 'DAFTAR']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('jururawat/sesi'));
+
         $this->actingAs($admin)
             ->from(route('nurse.home'))
             ->post(route('nurse.sessions.arrive', $first), [

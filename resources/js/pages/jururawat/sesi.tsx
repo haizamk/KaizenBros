@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { NursePage } from '@/components/nurse-nav';
 import ChairBoard, { type ChairTile } from '@/components/chair-board';
 import SessionActions, { statusClass, type SessionCard, type ShiftCounts } from '@/components/session-actions';
@@ -8,12 +8,37 @@ const steps = ['Daftar dan berat', 'Panggil kerusi', 'Mula dialisis', 'Tamat raw
 
 const filters = [
     { key: 'SEMUA', label: 'Semua' },
+    { key: 'DAFTAR', label: 'Daftar & mula' },
     { key: 'BELUM_HADIR', label: 'Belum tiba' },
     { key: 'MENUNGGU', label: 'Menunggu' },
     { key: 'SUDAH_HADIR', label: 'Di kerusi' },
     { key: 'SEDANG_DIALISIS', label: 'Sedang dialisis' },
     { key: 'SUDAH_SELESAI', label: 'Selesai' },
 ];
+
+const filterKeys = new Set(filters.map((item) => item.key));
+
+function initialFilterFromUrl(url: string): string {
+    const tapisan = new URLSearchParams(url.split('?')[1] ?? '').get('tapisan');
+
+    return tapisan && filterKeys.has(tapisan) ? tapisan : 'SEMUA';
+}
+
+function matchesFilter(session: SessionCard, filter: string, focus: number | null): boolean {
+    if (session.id === focus) {
+        return true;
+    }
+
+    if (filter === 'SEMUA') {
+        return true;
+    }
+
+    if (filter === 'DAFTAR') {
+        return session.status === 'MENUNGGU' || session.status === 'SUDAH_HADIR';
+    }
+
+    return session.status === filter;
+}
 
 export default function Sesi({
     sessions,
@@ -28,16 +53,29 @@ export default function Sesi({
     focus: number | null;
     status?: string | null;
 }) {
-    const [filter, setFilter] = useState('SEMUA');
+    const pageUrl = usePage().url;
+    const [filter, setFilter] = useState(() => initialFilterFromUrl(pageUrl));
     const visible = useMemo(
-        () => sessions.filter((session) => filter === 'SEMUA' || session.status === filter || session.id === focus),
+        () => sessions.filter((session) => matchesFilter(session, filter, focus)),
         [sessions, filter, focus],
     );
 
     useEffect(() => {
-        if (!focus) return;
+        setFilter(initialFilterFromUrl(pageUrl));
+    }, [pageUrl]);
+
+    useEffect(() => {
+        if (filter === 'DAFTAR') {
+            document.getElementById('papan-kerusi')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+
+        if (!focus) {
+            return;
+        }
+
         document.getElementById(`sesi-${focus}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, [focus]);
+    }, [focus, filter]);
 
     return (
         <>
@@ -54,7 +92,9 @@ export default function Sesi({
                     ))}
                 </ol>
                 <p className="text-base text-slate-200">Kerusi yang boleh digunakan: {counts.kerusi_kosong}. Kerusi rosak atau tidak sesuai: {counts.kerusi_rosak}. Syif 1 6:00–10:00 pagi, Syif 2 10:30 pagi–2:30 petang, Syif 3 3:00–7:00 petang. Yang sampai dahulu dipanggil dahulu.</p>
-                <ChairBoard chairs={chairs} />
+                <div id="papan-kerusi">
+                    <ChairBoard chairs={chairs} />
+                </div>
                 {status ? <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{status}</p> : null}
                 <div className="flex gap-2 overflow-x-auto pb-1">
                     {filters.map((item) => (

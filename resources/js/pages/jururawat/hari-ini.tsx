@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import { NursePage } from '@/components/nurse-nav';
 import type { ShiftCounts } from '@/components/session-actions';
@@ -48,6 +48,23 @@ export default function HariIni({
 
                 <section className="rounded-3xl border border-[#1F385C] bg-[#132238] p-5">
                     <ArrivalButton arrivals={arrivals} />
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <Link
+                            href="/jururawat/sesi?tapisan=DAFTAR"
+                            className="inline-flex min-h-16 items-center justify-center rounded-2xl bg-teal-500 px-4 text-center text-lg font-black text-slate-950"
+                        >
+                            Daftar sesi dialisis
+                        </Link>
+                        <Link
+                            href="/jururawat/sesi?tapisan=SEDANG_DIALISIS"
+                            className="inline-flex min-h-16 items-center justify-center rounded-2xl border-2 border-teal-400 bg-[#0B132B] px-4 text-center text-lg font-black text-teal-100"
+                        >
+                            Tamat rawatan
+                        </Link>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-slate-300">
+                        Daftar sesi membuka papan kerusi untuk panggil pesakit, simpan di kerusi, dan mula dialisis. Tamat rawatan membuka senarai pesakit yang sedang dialisis untuk isi berat selepas, tekanan darah, dan nota.
+                    </p>
                     <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
                         <h2 className="text-2xl font-black">Papan giliran ketibaan hari ini</h2>
                         <p className="text-lg font-black text-teal-200">{counts.percent}% selesai</p>
