@@ -138,11 +138,9 @@ export default function Sesi({
                         ))}
                     </div>
                 )}
-                <section id="papan-kerusi" className="space-y-3 pt-2">
-                    <h2 className="text-2xl font-black">Papan kerusi</h2>
-                    <p className="text-base text-slate-200">Rujukan kerusi kosong, sedang digunakan, atau ditanda tidak sesuai. Tandakan rosak di sini jika kerusi tidak boleh dipakai.</p>
+                <div id="papan-kerusi" className="pt-2">
                     <ChairBoard chairs={chairs} />
-                </section>
+                </div>
             </NursePage>
         </>
     );
