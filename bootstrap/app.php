@@ -8,6 +8,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -34,4 +35,23 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->render(function (TokenMismatchException $e, Request $request) {
+            if ($request->header('X-Inertia')) {
+                return redirect()
+                    ->route('login')
+                    ->with('status', 'Sesi tamat tempoh. Sila log masuk semula.');
+            }
+
+            if ($request->is('login') || $request->is('login/*')) {
+                return redirect()
+                    ->route('login')
+                    ->with('status', 'Sesi tamat tempoh. Muat semula halaman dan cuba log masuk semula.');
+            }
+
+            return redirect()
+                ->back()
+                ->withInput($request->except('password', '_token'))
+                ->withErrors(['email' => 'Sesi tamat tempoh. Muat semula halaman dan cuba semula.']);
+        });
     })->create();

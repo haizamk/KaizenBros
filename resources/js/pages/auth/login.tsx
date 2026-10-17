@@ -1,4 +1,4 @@
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -24,10 +24,12 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword, demoAccounts = [] }: Props) {
+    const csrfToken = (usePage().props as { csrf_token?: string }).csrf_token ?? '';
     const form = useForm({
         email: '',
         password: '',
         remember: false,
+        _token: csrfToken,
     });
 
     return (
@@ -98,10 +100,11 @@ export default function Login({ status, canResetPassword, demoAccounts = [] }: P
                     Log masuk
                 </Button>
 
-                <Button type="button" variant="outline" className="min-h-12 w-full text-base font-bold" asChild>
-                    <Link href="/">Tutup</Link>
-                </Button>
             </form>
+
+            <Button type="button" variant="outline" className="min-h-12 w-full text-base font-bold" asChild>
+                <Link href="/">Tutup</Link>
+            </Button>
 
             {status && <div className="text-center text-sm font-medium text-green-400">{status}</div>}
 
