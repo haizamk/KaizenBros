@@ -65,17 +65,12 @@ export default function Sesi({
     }, [pageUrl]);
 
     useEffect(() => {
-        if (filter === 'DAFTAR') {
-            document.getElementById('papan-kerusi')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return;
-        }
-
         if (!focus) {
             return;
         }
 
         document.getElementById(`sesi-${focus}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, [focus, filter]);
+    }, [focus]);
 
     return (
         <>
@@ -92,9 +87,6 @@ export default function Sesi({
                     ))}
                 </ol>
                 <p className="text-base text-slate-200">Kerusi yang boleh digunakan: {counts.kerusi_kosong}. Kerusi rosak atau tidak sesuai: {counts.kerusi_rosak}. Syif 1 6:00–10:00 pagi, Syif 2 10:30 pagi–2:30 petang, Syif 3 3:00–7:00 petang. Yang sampai dahulu dipanggil dahulu.</p>
-                <div id="papan-kerusi">
-                    <ChairBoard chairs={chairs} />
-                </div>
                 {status ? <p className="rounded-2xl border border-teal-700 bg-teal-950 p-4 text-lg font-bold text-teal-100" role="status">{status}</p> : null}
                 <div className="flex gap-2 overflow-x-auto pb-1">
                     {filters.map((item) => (
@@ -146,6 +138,11 @@ export default function Sesi({
                         ))}
                     </div>
                 )}
+                <section id="papan-kerusi" className="space-y-3 pt-2">
+                    <h2 className="text-2xl font-black">Papan kerusi</h2>
+                    <p className="text-base text-slate-200">Rujukan kerusi kosong, sedang digunakan, atau ditanda tidak sesuai. Tandakan rosak di sini jika kerusi tidak boleh dipakai.</p>
+                    <ChairBoard chairs={chairs} />
+                </section>
             </NursePage>
         </>
     );
