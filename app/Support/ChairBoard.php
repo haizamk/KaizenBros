@@ -35,12 +35,12 @@ class ChairBoard
     }
 
     /**
-     * @return array<int, array{number: string, state: string, patient_name: string|null, reason: string|null, reason_label: string|null}>
+     * @return array<int, array{number: string, state: string, patient_name: string|null, reason: string|null, reason_label: string|null, session_id: int|null, session_status: string|null}>
      */
     public static function tiles(?CarbonInterface $date = null): array
     {
         $date ??= today();
-        $occupied = self::occupiedNames($date);
+        $occupied = self::occupiedSessions($date);
         $blocked = self::blocked($date);
         $tiles = [];
 
@@ -52,18 +52,25 @@ class ChairBoard
                     'patient_name' => null,
                     'reason' => $blocked[$number]['reason'],
                     'reason_label' => $blocked[$number]['reason_label'],
+                    'session_id' => null,
+                    'session_status' => null,
                 ];
 
                 continue;
             }
 
             if (isset($occupied[$number])) {
+                $session = $occupied[$number];
                 $tiles[] = [
                     'number' => $number,
                     'state' => 'digunakan',
-                    'patient_name' => $occupied[$number],
+                    'patient_name' => $session['patient_name'],
                     'reason' => null,
-                    'reason_label' => null,
+                    'reason_label' => $session['status'] === SessionStatus::SedangDialisis
+                        ? SessionStatus::SedangDialisis->label()
+                        : $session['status']->label(),
+                    'session_id' => $session['session_id'],
+                    'session_status' => $session['status']->value,
                 ];
 
                 continue;
@@ -75,6 +82,8 @@ class ChairBoard
                 'patient_name' => null,
                 'reason' => null,
                 'reason_label' => null,
+                'session_id' => null,
+                'session_status' => null,
             ];
         }
 
@@ -85,6 +94,20 @@ class ChairBoard
      * @return array<string, string>
      */
     private static function occupiedNames(CarbonInterface $date, ?int $exceptSessionId = null): array
+    {
+        $names = [];
+
+        foreach (self::occupiedSessions($date, $exceptSessionId) as $chair => $session) {
+            $names[$chair] = $session['patient_name'];
+        }
+
+        return $names;
+    }
+
+    /**
+     * @return array<string, array{session_id: int, patient_name: string, status: SessionStatus}>
+     */
+    private static function occupiedSessions(CarbonInterface $date, ?int $exceptSessionId = null): array
     {
         $query = DialysisSession::query()
             ->with('patient')
@@ -100,15 +123,21 @@ class ChairBoard
             $query->whereKeyNot($exceptSessionId);
         }
 
-        $names = [];
+        $sessions = [];
 
         foreach ($query->get() as $session) {
-            if ($session->chair_number !== null) {
-                $names[$session->chair_number] = $session->patient->name;
+            if ($session->chair_number === null) {
+                continue;
             }
+
+            $sessions[$session->chair_number] = [
+                'session_id' => $session->id,
+                'patient_name' => $session->patient->name,
+                'status' => $session->status,
+            ];
         }
 
-        return $names;
+        return $sessions;
     }
 
     /**

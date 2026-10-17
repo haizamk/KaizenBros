@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 
 export type ChairTile = {
@@ -7,6 +7,8 @@ export type ChairTile = {
     patient_name: string | null;
     reason: string | null;
     reason_label: string | null;
+    session_id: number | null;
+    session_status: string | null;
 };
 
 const stateClass: Record<ChairTile['state'], string> = {
@@ -72,6 +74,14 @@ export default function ChairBoard({ chairs }: { chairs: ChairTile[] }) {
                                     Tidak sesuai
                                 </button>
                             </div>
+                        ) : null}
+                        {chair.state === 'digunakan' && chair.session_status === 'SEDANG_DIALISIS' && chair.session_id ? (
+                            <Link
+                                href={`/jururawat/sesi?tapisan=SEDANG_DIALISIS&fokus=${chair.session_id}`}
+                                className="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-teal-500 px-3 text-center font-black text-slate-950"
+                            >
+                                Tamatkan sesi
+                            </Link>
                         ) : null}
                         {chair.state === 'rosak' ? (
                             <button type="button" disabled={restore.processing} onClick={() => restoreChair(chair.number)} className="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-teal-500 px-3 font-black text-slate-950">
