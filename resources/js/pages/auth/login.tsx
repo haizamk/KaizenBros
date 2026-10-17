@@ -1,8 +1,9 @@
-import { useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import PasswordInput from '@/components/password-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -70,9 +71,8 @@ export default function Login({ status, canResetPassword, demoAccounts = [] }: P
                             </TextLink>
                         )}
                     </div>
-                    <Input
+                    <PasswordInput
                         id="password"
-                        type="password"
                         name="password"
                         required
                         autoComplete="current-password"
@@ -96,6 +96,10 @@ export default function Login({ status, canResetPassword, demoAccounts = [] }: P
                 <Button type="submit" className="mt-2 min-h-12 w-full text-base font-black" disabled={form.processing} data-test="login-button">
                     {form.processing && <Spinner />}
                     Log masuk
+                </Button>
+
+                <Button type="button" variant="outline" className="min-h-12 w-full text-base font-bold" asChild>
+                    <Link href="/">Tutup</Link>
                 </Button>
             </form>
 
